@@ -3,27 +3,31 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import path from "path";
 import { fileURLToPath } from 'url';
+import express from 'express';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Servir archivos estáticos del ticker desde el directorio raíz
-  app.use('/ticker', (req, res, next) => {
-    if (req.path === '/' || req.path === '/index.html') {
-      res.sendFile(path.join(__dirname, '../index.html'));
-    } else if (req.path === '/style.css') {
-      res.sendFile(path.join(__dirname, '../style.css'));
-    } else if (req.path === '/script.js') {
-      res.sendFile(path.join(__dirname, '../script.js'));
-    } else {
-      next();
-    }
+  // Servir archivos estáticos desde el directorio raíz del proyecto
+  const projectRoot = path.join(__dirname, '..');
+  
+  // Servir CSS
+  app.get('/style.css', (req, res) => {
+    res.setHeader('Content-Type', 'text/css');
+    res.sendFile(path.join(projectRoot, 'style.css'));
   });
-
-  // Redirigir la raíz al ticker
+  
+  // Servir JavaScript
+  app.get('/script.js', (req, res) => {
+    res.setHeader('Content-Type', 'application/javascript');
+    res.sendFile(path.join(projectRoot, 'script.js'));
+  });
+  
+  // Servir HTML en la raíz
   app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, '../index.html'));
+    res.setHeader('Content-Type', 'text/html');
+    res.sendFile(path.join(projectRoot, 'index.html'));
   });
 
   const httpServer = createServer(app);
