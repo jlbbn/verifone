@@ -65,23 +65,24 @@ export default function POSPage() {
         <CardContent>
           <div className="space-y-4">
             {[
-              { id: "POS-001", location: "Sucursal Centro", status: "Activa", transactions: 234 },
-              { id: "POS-002", location: "Sucursal Norte", status: "Activa", transactions: 189 },
-              { id: "POS-003", location: "Sucursal Sur", status: "Activa", transactions: 156 },
-              { id: "POS-004", location: "Sucursal Este", status: "Mantenimiento", transactions: 0 },
-              { id: "POS-005", location: "Sucursal Oeste", status: "Activa", transactions: 201 },
+              { id: "T1001", model: "Verifone VX 690", status: "Online", transactions: 542, amount: 230450.78, efficiency: 98 },
+              { id: "T1002", model: "Ingenico iCT220", status: "Online", transactions: 321, amount: 101240.25, efficiency: 95 },
+              { id: "T1003", model: "PAX S920", status: "Offline", transactions: 198, amount: 67430.50, efficiency: 82 },
+              { id: "T1004", model: "Verifone VX 520", status: "Online", transactions: 456, amount: 178600.30, efficiency: 96 },
+              { id: "T1005", model: "Ingenico iWL250", status: "Online", transactions: 330, amount: 145380.67, efficiency: 94 },
             ].map((pos, i) => (
               <div key={i} className="flex items-center justify-between pb-4 border-b last:border-0">
                 <div className="flex items-center gap-4">
-                  <div className={`w-3 h-3 rounded-full ${pos.status === 'Activa' ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
+                  <div className={`w-3 h-3 rounded-full ${pos.status === 'Online' ? 'bg-green-500' : 'bg-red-500'}`}></div>
                   <div>
                     <p className="font-medium">{pos.id}</p>
-                    <p className="text-sm text-muted-foreground">{pos.location}</p>
+                    <p className="text-sm text-muted-foreground">{pos.model}</p>
                   </div>
                 </div>
                 <div className="text-right">
                   <p className="font-semibold">{pos.transactions} transacciones</p>
-                  <p className={`text-sm ${pos.status === 'Activa' ? 'text-green-600' : 'text-yellow-600'}`}>
+                  <p className="text-sm text-muted-foreground">${pos.amount.toLocaleString()}</p>
+                  <p className={`text-sm ${pos.status === 'Online' ? 'text-green-600' : 'text-red-600'}`}>
                     {pos.status}
                   </p>
                 </div>
