@@ -1,0 +1,344 @@
+/* ====================================================================
+   BANXICO PLUS - ESTILOS DEL TICKER FINANCIERO
+   
+   Este archivo contiene todos los estilos visuales del ticker.
+   Puedes modificar colores, tama\u00f1os y espaciados aqu\u00ed.
+   ==================================================================== */
+
+/* Reset y configuraci\u00f3n base */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+    color: #ffffff;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+}
+
+.app-container {
+    width: 100%;
+    max-width: 100%;
+    margin: 0 auto;
+}
+
+/* ====================================================================
+   HEADER - Branding de Banxico Plus
+   ==================================================================== */
+.header {
+    background: linear-gradient(135deg, #c8322b 0%, #e85d4a 100%);
+    padding: 1rem 2rem;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: #ffffff;
+}
+
+.logo svg {
+    width: 28px;
+    height: 28px;
+}
+
+.logo h1 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+}
+
+/* ====================================================================
+   TICKER CONTAINER - Barra negra del ticker
+   
+   CONFIGURACI\u00d3N PRINCIPAL:
+   - Fondo: #000000 (negro puro)
+   - Altura: 50px
+   - Ancho: 100% de la pantalla
+   ==================================================================== */
+.ticker-container {
+    background-color: #000000;
+    height: 50px;
+    width: 100%;
+    overflow: hidden;
+    position: relative;
+    border-top: 1px solid #333333;
+    border-bottom: 1px solid #333333;
+}
+
+/* Contenedor de los mensajes del ticker */
+.ticker-content {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    white-space: nowrap;
+    position: absolute;
+    left: 0;
+    top: 0;
+}
+
+/* ====================================================================
+   TICKER ITEMS - Mensajes individuales del ticker
+   
+   CONFIGURACI\u00d3N:
+   - Color texto: #FFFFFF (blanco puro)
+   - Fuente: Arial
+   - Tama\u00f1o: 20px
+   - Separaci\u00f3n: 30px entre mensajes
+   ==================================================================== */
+.ticker-item {
+    display: inline-flex;
+    align-items: center;
+    color: #FFFFFF;
+    font-family: Arial, sans-serif;
+    font-size: 20px;
+    font-weight: 400;
+    padding: 0 15px;
+    transition: opacity 0.3s ease;
+}
+
+/* Efecto hover opcional - opacidad sutil */
+.ticker-item:hover {
+    opacity: 0.85;
+}
+
+/* Separador entre mensajes (30px de espacio) */
+.ticker-item::after {
+    content: '';
+    display: inline-block;
+    width: 30px;
+}
+
+/* S\u00edmbolo decorativo entre mensajes */
+.ticker-item::before {
+    content: '\u25cf';
+    color: #c8322b;
+    margin-right: 15px;
+    font-size: 10px;
+}
+
+/* ====================================================================
+   PANEL DE CONTROLES - Botones y slider
+   ==================================================================== */
+.controls-panel {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    margin: 2rem;
+    padding: 1.5rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.controls-content {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2rem;
+    align-items: center;
+    justify-content: center;
+}
+
+.control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+/* Bot\u00f3n de pausa/reproducci\u00f3n */
+.control-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    min-width: 120px;
+    justify-content: center;
+}
+
+.control-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.3);
+    transform: translateY(-1px);
+}
+
+.control-btn:active {
+    transform: translateY(0);
+}
+
+/* Label del control de velocidad */
+.control-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+}
+
+.speed-value {
+    color: #c8322b;
+    font-weight: 600;
+}
+
+/* ====================================================================
+   SLIDER DE VELOCIDAD
+   
+   Control deslizante para ajustar la velocidad del ticker
+   en tiempo real (0.5x a 5.0x)
+   ==================================================================== */
+.speed-slider {
+    width: 200px;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    outline: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+}
+
+/* Thumb del slider - Chrome/Safari */
+.speed-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    background: #c8322b;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.speed-slider::-webkit-slider-thumb:hover {
+    background: #e85d4a;
+    transform: scale(1.15);
+}
+
+/* Thumb del slider - Firefox */
+.speed-slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    background: #c8322b;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.speed-slider::-moz-range-thumb:hover {
+    background: #e85d4a;
+    transform: scale(1.15);
+}
+
+/* Marcadores de velocidad m\u00ednima y m\u00e1xima */
+.speed-markers {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.5);
+    margin-top: 0.25rem;
+}
+
+/* ====================================================================
+   INDICADOR DE ESTADO
+   ==================================================================== */
+.status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 20px;
+    font-size: 13px;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #6b7280;
+    transition: background-color 0.3s ease;
+}
+
+.status-dot.active {
+    background: #10b981;
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+}
+
+/* ====================================================================
+   FOOTER - Informaci\u00f3n del proyecto
+   ==================================================================== */
+.footer {
+    text-align: center;
+    padding: 2rem;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 14px;
+}
+
+.footer p {
+    margin: 0.25rem 0;
+}
+
+.footer-note {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.4);
+    font-style: italic;
+}
+
+/* ====================================================================
+   RESPONSIVE DESIGN - Adaptaci\u00f3n a pantallas peque\u00f1as
+   ==================================================================== */
+@media (max-width: 768px) {
+    .header {
+        padding: 0.75rem 1rem;
+    }
+    
+    .logo h1 {
+        font-size: 1.25rem;
+    }
+    
+    .ticker-item {
+        font-size: 16px;
+    }
+    
+    .ticker-container {
+        height: 40px;
+    }
+    
+    .controls-content {
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+    
+    .speed-slider {
+        width: 100%;
+        max-width: 300px;
+    }
+}
+
+@media (max-width: 480px) {
+    .controls-panel {
+        margin: 1rem;
+        padding: 1rem;
+    }
+    
+    .ticker-item {
+        font-size: 14px;
+    }
+}

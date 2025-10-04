@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Banxico Plus - Ticker Financiero</title>
+    <meta name="description" content="Ticker financiero en tiempo real con datos de divisas, criptomonedas y tasas de inter\u00e9s de Banxico">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Contenedor principal del proyecto -->
+    <div class="app-container">
+        
+        <!-- Header con branding -->
+        <header class="header">
+            <div class="logo">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="currentColor"/>
+                    <path d="M2 17L12 22L22 17M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <h1>Banxico Plus</h1>
+            </div>
+        </header>
+
+        <!-- Barra de ticker con animaci\u00f3n horizontal -->
+        <div class="ticker-container" id="tickerContainer">
+            <div class="ticker-content" id="tickerContent">
+                <!-- Los mensajes se generar\u00e1n din\u00e1micamente con JavaScript -->
+            </div>
+        </div>
+
+        <!-- Panel de controles interactivos -->
+        <div class="controls-panel">
+            <div class="controls-content">
+                
+                <!-- Bot\u00f3n de pausa/reanudaci\u00f3n -->
+                <div class="control-group">
+                    <button id="playPauseBtn" class="control-btn" data-testid="button-play-pause" aria-label="Pausar ticker">
+                        <svg id="pauseIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M10 4H6V20H10V4Z" fill="currentColor"/>
+                            <path d="M18 4H14V20H18V4Z" fill="currentColor"/>
+                        </svg>
+                        <svg id="playIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                            <path d="M8 5V19L19 12L8 5Z" fill="currentColor"/>
+                        </svg>
+                        <span id="playPauseText">Pausar</span>
+                    </button>
+                </div>
+
+                <!-- Control de velocidad con slider -->
+                <div class="control-group">
+                    <label for="speedSlider" class="control-label">
+                        <span>Velocidad</span>
+                        <span id="speedValue" class="speed-value" data-testid="text-speed-value">2.0x</span>
+                    </label>
+                    <input 
+                        type="range" 
+                        id="speedSlider" 
+                        class="speed-slider" 
+                        min="0.5" 
+                        max="5" 
+                        step="0.5" 
+                        value="2"
+                        data-testid="input-speed-slider"
+                        aria-label="Control de velocidad del ticker"
+                    >
+                    <div class="speed-markers">
+                        <span>0.5x</span>
+                        <span>5.0x</span>
+                    </div>
+                </div>
+
+                <!-- Indicador de estado -->
+                <div class="status-indicator">
+                    <div id="statusDot" class="status-dot active" data-testid="indicator-status"></div>
+                    <span id="statusText" data-testid="text-status">En reproducci\u00f3n</span>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Informaci\u00f3n adicional -->
+        <footer class="footer">
+            <p>Ticker financiero con datos de Banxico, divisas y criptomonedas</p>
+            <p class="footer-note">Los textos y velocidad son editables en script.js</p>
+        </footer>
+
+    </div>
+
+    <!-- Script principal con l\u00f3gica de animaci\u00f3n -->
+    <script src="script.js"></script>
+</body>
+</html>
