@@ -3,15 +3,15 @@ import { DollarSign, TrendingUp, Users, Activity } from "lucide-react";
 
 export default function Dashboard() {
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-4 md:p-6 space-y-4 md:space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground">Sistema Bancario Banxico Plus</p>
+          <h1 className="text-2xl md:text-3xl font-bold">Dashboard</h1>
+          <p className="text-sm md:text-base text-muted-foreground">Banking API POS</p>
         </div>
-        <div className="text-right">
-          <p className="text-sm text-muted-foreground">Saldo disponible</p>
-          <p className="text-2xl font-bold text-primary" data-testid="balance">$1,250,000.00 USD</p>
+        <div className="text-left md:text-right">
+          <p className="text-xs md:text-sm text-muted-foreground">Saldo disponible</p>
+          <p className="text-xl md:text-2xl font-bold text-primary" data-testid="balance">$1,250,000.00 USD</p>
         </div>
       </div>
 
