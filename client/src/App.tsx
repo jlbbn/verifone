@@ -3,7 +3,7 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { FinancialTicker } from "@/components/financial-ticker";
 import { CreditCard, Bell, User } from "lucide-react";
@@ -19,6 +19,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="flex flex-col flex-1 overflow-hidden">
         <header className="bg-[#c8322b] h-[60px] flex items-center justify-between px-4 md:px-6">
           <div className="flex items-center gap-2 md:gap-3 text-white">
+            <SidebarTrigger className="md:hidden text-white hover:bg-white/10" />
             <CreditCard className="w-5 h-5 md:w-6 md:h-6" />
             <h1 className="text-lg md:text-xl font-semibold">Banxico Plus</h1>
           </div>
