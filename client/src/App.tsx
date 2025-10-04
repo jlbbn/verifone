@@ -14,20 +14,20 @@ import NotFound from "@/pages/not-found";
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-screen w-full">
+    <div className="flex h-screen w-full flex-col md:flex-row">
       <AppSidebar />
       <div className="flex flex-col flex-1 overflow-hidden">
-        <header className="bg-[#c8322b] h-[60px] flex items-center justify-between px-6">
-          <div className="flex items-center gap-3 text-white">
-            <CreditCard className="w-6 h-6" />
-            <h1 className="text-xl font-semibold">Banxico Plus</h1>
+        <header className="bg-[#c8322b] h-[60px] flex items-center justify-between px-4 md:px-6">
+          <div className="flex items-center gap-2 md:gap-3 text-white">
+            <CreditCard className="w-5 h-5 md:w-6 md:h-6" />
+            <h1 className="text-lg md:text-xl font-semibold">Banxico Plus</h1>
           </div>
-          <div className="flex items-center gap-4 text-white">
+          <div className="flex items-center gap-2 md:gap-4 text-white">
             <button className="hover:bg-white/10 p-2 rounded-md transition-colors">
-              <Bell className="w-5 h-5" />
+              <Bell className="w-4 h-4 md:w-5 md:h-5" />
             </button>
             <button className="hover:bg-white/10 p-2 rounded-md transition-colors">
-              <User className="w-5 h-5" />
+              <User className="w-4 h-4 md:w-5 md:h-5" />
             </button>
           </div>
         </header>

@@ -36,15 +36,15 @@ export function AppSidebar() {
 
   return (
     <Sidebar className="border-r border-sidebar-border">
-      <SidebarHeader className="p-4 border-b border-sidebar-border">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#c8322b] font-bold text-lg">
+      <SidebarHeader className="p-3 md:p-4 border-b border-sidebar-border">
+        <div className="flex items-center gap-2 md:gap-3">
+          <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-white flex items-center justify-center text-[#c8322b] font-bold text-base md:text-lg">
             BP
           </div>
-          <div className="flex-1">
-            <h3 className="text-sm font-semibold text-sidebar-foreground">José Luis Barrientos</h3>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-xs md:text-sm font-semibold text-sidebar-foreground truncate">José Luis Barrientos</h3>
             <p className="text-xs text-[#c8322b] font-semibold">ADMIN</p>
-            <p className="text-xs text-sidebar-foreground/60">Software Engineer - 3 May 2025</p>
+            <p className="text-xs text-sidebar-foreground/60 hidden md:block">Software Engineer - 3 May 2025</p>
           </div>
         </div>
       </SidebarHeader>
