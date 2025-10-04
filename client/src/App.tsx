@@ -10,6 +10,11 @@ import { CreditCard, Bell, User } from "lucide-react";
 import LoginPage from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
 import NewTransactionPage from "@/pages/new-transaction";
+import CajaPage from "@/pages/caja";
+import POSPage from "@/pages/pos";
+import RegistrosPage from "@/pages/registros";
+import ExchangePage from "@/pages/exchange";
+import ClavesPage from "@/pages/claves";
 import NotFound from "@/pages/not-found";
 
 function AppLayout({ children }: { children: React.ReactNode }) {
@@ -58,23 +63,23 @@ function Router() {
       </Route>
       
       <Route path="/caja">
-        <AppLayout><div className="p-6"><h1 className="text-3xl font-bold">Caja</h1></div></AppLayout>
+        <AppLayout><CajaPage /></AppLayout>
       </Route>
       
       <Route path="/pos">
-        <AppLayout><div className="p-6"><h1 className="text-3xl font-bold">Enrutamiento POS</h1></div></AppLayout>
+        <AppLayout><POSPage /></AppLayout>
       </Route>
       
       <Route path="/registros">
-        <AppLayout><div className="p-6"><h1 className="text-3xl font-bold">Registros</h1></div></AppLayout>
+        <AppLayout><RegistrosPage /></AppLayout>
       </Route>
       
       <Route path="/exchange">
-        <AppLayout><div className="p-6"><h1 className="text-3xl font-bold">Exchange Crypto</h1></div></AppLayout>
+        <AppLayout><ExchangePage /></AppLayout>
       </Route>
       
       <Route path="/claves">
-        <AppLayout><div className="p-6"><h1 className="text-3xl font-bold">Claves Encriptadas</h1></div></AppLayout>
+        <AppLayout><ClavesPage /></AppLayout>
       </Route>
       
       <Route component={NotFound} />

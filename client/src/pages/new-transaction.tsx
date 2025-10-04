@@ -19,7 +19,7 @@ const transactionSchema = z.object({
 
 type TransactionForm = z.infer<typeof transactionSchema>;
 
-export default function NewTransactionPage() {
+function NewTransactionPage() {
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
   const [transactionCode, setTransactionCode] = useState<string | null>(null);
@@ -191,3 +191,5 @@ export default function NewTransactionPage() {
     </div>
   );
 }
+
+export default NewTransactionPage;
