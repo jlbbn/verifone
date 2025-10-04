@@ -60,7 +60,7 @@ export default function LoginPage() {
             <CreditCard className="w-10 h-10 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-white mb-2">Banxico Plus</h1>
-          <p className="text-gray-400">Sistema Bancario Seguro</p>
+          <p className="text-gray-400">Banking API POS</p>
         </div>
 
         <div className="bg-white rounded-lg shadow-xl p-8">
@@ -115,11 +115,6 @@ export default function LoginPage() {
               </Button>
             </form>
           </Form>
-
-          <div className="mt-6 text-center text-sm text-gray-500">
-            <p>Usuario de prueba: <span className="font-mono">Admin</span></p>
-            <p>Contraseña: <span className="font-mono">Keylog100$</span></p>
-          </div>
         </div>
       </div>
     </div>
