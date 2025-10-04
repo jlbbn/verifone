@@ -1,102 +1,246 @@
-# Banxico Plus - Ticker Financiero
+# Banxico Plus - Sistema Bancario Completo
 
-## Descripci\u00f3n del Proyecto
-Aplicaci\u00f3n web de ticker financiero con animaci\u00f3n horizontal continua que muestra datos de Banxico, divisas y criptomonedas en tiempo real. Incluye controles interactivos para pausar/reanudar y ajustar la velocidad de desplazamiento.
+## Descripción del Proyecto
+Plataforma bancaria completa con ticker financiero en tiempo real, POS virtual integrado, sistema de transacciones, generación de tokens de seguridad y protocolos bancarios EMV/PCI DSS simulados.
 
-## Caracter\u00edsticas Principales
+## Credenciales de Acceso
+- **Usuario**: Admin
+- **Contraseña**: Keylog100$
 
-### Ticker Animado
-- **Animaci\u00f3n suave**: Utiliza `requestAnimationFrame` para movimiento fluido a 60 FPS
-- **Direcci\u00f3n**: Desplazamiento continuo de derecha a izquierda
-- **Loop infinito**: Los mensajes se repiten autom\u00e1ticamente sin cortes visibles
-- **Dise\u00f1o**: Fondo negro (#000000), texto blanco (#FFFFFF), fuente Arial 20px
-- **Separaci\u00f3n**: 30px entre cada mensaje
+## Características Principales
 
-### Controles Interactivos
-1. **Bot\u00f3n Pausar/Reanudar**: Detiene o reanuda la animaci\u00f3n
-2. **Slider de Velocidad**: Ajusta la velocidad de 0.5x a 5.0x en tiempo real
-3. **Indicador de Estado**: Muestra si el ticker est\u00e1 en reproducci\u00f3n o pausado
-4. **Atajo de Teclado**: Barra espaciadora para pausar/reanudar
+### 1. Ticker Financiero en Tiempo Real
+- Animación horizontal continua de derecha a izquierda
+- Datos financieros actualizados: ON, CAD/MXN, BTC/USD, ETH/USD, XRP/USD, LTC/USD, DOT/USD, ADA/USD
+- Fondo negro (#000000), texto blanco (#FFFFFF)
+- Animación suave con requestAnimationFrame a 60 FPS
+- Loop infinito sin espacios visibles
 
-### Mensajes del Ticker
-El array de mensajes incluye:
-- **Tasas Banxico**: TIIE, Cetes, UDI, Inflaci\u00f3n
-- **Divisas**: D\u00f3lar Spot, EUR/MXN, GBP/MXN, JPY/MXN
-- **Criptomonedas**: BTC/USD, ETH/USD, XRP/USD, LTC/USD, DOT/USD, ADA/USD
+### 2. POS Virtual Integrado
+- Procesamiento simulado de pagos (VISA, Mastercard, AMEX, etc.)
+- Verificación de datos en tiempo real (CVV2, PIN, autorización)
+- Generación automática de códigos de autorización
+- Registro de transacciones rastreables
+- Controles interactivos: pausar, reanudar, ajustar velocidad
+
+### 3. Protocolos Bancarios
+**Protocolos de Transferencia (101.x):**
+- 101.1 - Transferencia básica
+- 101.2 - Transferencia con validación
+- 101.3 - Transferencia segura ✓ (recomendado)
+
+**Protocolos de Pago (201.x):**
+- 201.1 - Pago nacional
+- 201.2 - Pago internacional
+- 201.3 - Pago express
+
+**Protocolos de Depósito (301.x):**
+- 301.1 - Depósito cuenta
+- 301.2 - Depósito efectivo
+
+**Protocolos de Retiro (401.x):**
+- 401.1 - Retiro ATM
+
+### 4. Sistema de Tokens y Seguridad
+- Generación automática de tokens por transacción
+- Formato: TOK-{timestamp}-{hash}
+- Algoritmo de cifrado: AES-256 (simulado)
+- Validación de integridad
+- Cumplimiento EMV y PCI DSS (simulado)
+- Expiración automática (24 horas)
+
+### 5. Dashboard Unificado
+**Navegación del Sistema:**
+- Dashboard - Vista general del sistema
+- Transacciones - Nueva transacción bancaria
+- Caja - Gestión de efectivo
+- Enrutamiento POS - Terminal punto de venta
+- Registros - Historial completo
+- Exchange Crypto - Intercambio de criptomonedas
+- Claves Encriptadas - Gestión de seguridad
+
+**Usuario del Sistema:**
+- Nombre: José Luis Barrientos
+- Rol: ADMIN
+- Posición: Software Engineer
+- Fecha: 3 May 2025
+
+**Saldo Disponible:** $1,250,000.00 USD
 
 ## Estructura de Archivos
 
+### Frontend (React + TypeScript)
 ```
-/
-\u251c\u2500\u2500 index.html      # Estructura HTML del ticker y controles
-\u251c\u2500\u2500 style.css       # Estilos visuales y dise\u00f1o responsivo
-\u2514\u2500\u2500 script.js       # L\u00f3gica de animaci\u00f3n y controles
-```
-
-## Configuraci\u00f3n Editable
-
-### En `script.js`:
-
-**Array de Mensajes**:
-```javascript
-const mensajes = [
-    "TIIE 28 d\u00edas: 11.15%",
-    "D\u00f3lar Spot: $20.34",
-    // Agregar m\u00e1s mensajes aqu\u00ed
-];
+client/src/
+├── components/
+│   ├── financial-ticker.tsx    # Ticker animado
+│   ├── app-sidebar.tsx         # Barra lateral navegación
+│   └── ui/                     # Componentes shadcn
+├── pages/
+│   ├── login.tsx              # Página de login
+│   ├── dashboard.tsx          # Dashboard principal
+│   └── new-transaction.tsx    # Nueva transacción
+├── App.tsx                    # Router y layout
+└── index.css                  # Estilos globales
 ```
 
-**Velocidad Base**:
-```javascript
-let velocidad = 2; // p\u00edxeles por frame (1-10 recomendado)
+### Backend (Express + TypeScript)
+```
+server/
+├── routes.ts                  # API endpoints
+├── storage.ts                 # Almacenamiento en memoria
+└── index.ts                   # Servidor Express
 ```
 
-### En `style.css`:
-
-**Colores del Ticker**:
-```css
-.ticker-container {
-    background-color: #000000; /* Fondo */
-}
-
-.ticker-item {
-    color: #FFFFFF; /* Texto */
-    font-size: 20px; /* Tama\u00f1o */
-}
+### Schema y Tipos
+```
+shared/
+└── schema.ts                  # Modelos de datos compartidos
 ```
 
-## C\u00f3mo Usar
+## API Endpoints
 
-1. **Abrir el proyecto**: Ejecutar `index.html` en el navegador
-2. **Pausar/Reanudar**: Click en el bot\u00f3n o presionar Espacio
-3. **Ajustar velocidad**: Mover el slider de velocidad
-4. **Editar mensajes**: Modificar el array `mensajes` en `script.js`
+### Autenticación
+- `POST /api/login` - Iniciar sesión (Admin / Keylog100$)
 
-## Caracter\u00edsticas T\u00e9cnicas
+### Protocolos Bancarios
+- `GET /api/protocols` - Obtener todos los protocolos
+- `GET /api/protocols/:code` - Obtener protocolo específico
 
-- **Animaci\u00f3n**: `requestAnimationFrame` para rendimiento \u00f3ptimo
-- **Optimizaci\u00f3n**: Pausa autom\u00e1tica cuando la pesta\u00f1a est\u00e1 oculta
-- **Responsive**: Adaptaci\u00f3n autom\u00e1tica a m\u00f3viles y tablets
-- **Accesibilidad**: Atributos ARIA y `data-testid` para testing
-- **Compatibilidad**: Navegadores modernos (Chrome, Firefox, Safari, Edge)
+### Transacciones
+- `POST /api/transactions` - Crear nueva transacción
+- `GET /api/transactions` - Listar todas las transacciones
+- `GET /api/transactions/:id` - Obtener transacción por ID
+- `PATCH /api/transactions/:id/status` - Actualizar estado
 
-## Controles de Consola (Debugging)
+### Métodos de Pago
+- `POST /api/payment-methods` - Registrar método de pago
+- `GET /api/payment-methods/:id` - Obtener método de pago
 
-En la consola del navegador:
-```javascript
-window.tickerControls.pausar()           // Pausar
-window.tickerControls.reanudar()         // Reanudar
-window.tickerControls.reiniciar()        // Reiniciar posici\u00f3n
-window.tickerControls.agregarMensaje("Nuevo mensaje")
-window.tickerControls.setVelocidad(3)    // Cambiar velocidad base
-```
+### Tokens de Seguridad
+- `POST /api/security-tokens` - Generar token
+- `GET /api/security-tokens/:tokenId` - Verificar token
 
-## Notas de Implementaci\u00f3n
+### Logs
+- `GET /api/transaction-logs/:transactionId` - Obtener logs
 
-- El ticker duplica los mensajes 3 veces para crear el efecto de loop continuo
-- La posici\u00f3n se reinicia autom\u00e1ticamente cuando sale de vista
-- Todos los comentarios est\u00e1n en espa\u00f1ol para facilitar la comprensi\u00f3n
-- El c\u00f3digo es modular y f\u00e1cil de extender
+### POS Virtual
+- `POST /api/pos/process-payment` - Procesar pago
 
-## Fecha de Creaci\u00f3n
+## Modelos de Datos
+
+### User
+- id, username, password, fullName, role, position, avatar
+
+### Transaction
+- id, transactionId, protocol, type, amount, currency
+- status, fromAccount, toAccount, description
+- authCode, tokenId, createdAt
+
+### PaymentMethod
+- id, transactionId, cardType, cardNumber, cvv, pin
+- holderName, expiryDate, verified
+
+### SecurityToken
+- id, tokenId, transactionId, algorithm, hash
+- emvCompliant, pciCompliant, issuedAt, expiresAt
+
+### TransactionLog
+- id, transactionId, action, status, message, timestamp
+
+### BankingProtocol
+- id, code, name, description, category, requiresSecurity
+
+## Colores del Sistema
+
+### Branding
+- **Primario (Rojo Banxico)**: #c8322b
+- **Primario Hover**: #a62822
+- **Header**: #c8322b
+
+### Ticker
+- **Fondo**: #000000 (negro)
+- **Texto**: #FFFFFF (blanco)
+- **Punto decorativo**: #c8322b
+
+### Sidebar
+- **Fondo**: #1a1a1a (gris muy oscuro)
+- **Texto**: #e5e7eb (gris claro)
+- **Activo**: #c8322b
+- **Hover**: #2d2d2d
+
+### Dashboard
+- **Fondo**: #f5f5f5
+- **Cards**: #ffffff
+- **Bordes**: #e5e7eb
+
+## Funcionalidades Simuladas
+
+### Procesamiento de Pagos POS
+1. Validación de tarjeta (tipo, número, CVV, PIN)
+2. Generación de código de autorización
+3. Creación de transacción
+4. Generación de token de seguridad
+5. Actualización de estado a "completed"
+6. Registro en logs de transacciones
+
+### Seguridad EMV/PCI DSS
+- Cifrado AES-256 simulado
+- Validación de integridad de datos
+- Cumplimiento de protocolos bancarios
+- Tokens con expiración automática
+- Hash de seguridad por transacción
+
+## Cómo Usar
+
+1. **Iniciar Sesión**
+   - Usuario: Admin
+   - Contraseña: Keylog100$
+
+2. **Ver Dashboard**
+   - Estadísticas del sistema
+   - Transacciones recientes
+   - Saldo disponible
+
+3. **Nueva Transacción**
+   - Seleccionar protocolo bancario
+   - Ingresar datos de transferencia
+   - Continuar al testado de seguridad
+
+4. **Procesar Pago POS**
+   - Endpoint: POST /api/pos/process-payment
+   - Datos: cardType, cardNumber, amount, protocol
+   - Respuesta: authCode, tokenId, transaction
+
+## Tecnologías Utilizadas
+
+- **Frontend**: React, TypeScript, Wouter, TanStack Query
+- **Backend**: Express, TypeScript
+- **UI**: shadcn/ui, Tailwind CSS
+- **Storage**: In-Memory (MemStorage)
+- **Validación**: Zod
+
+## Estado del Desarrollo
+
+✅ Login con credenciales exactas (Admin / Keylog100$)
+✅ Ticker financiero animado en tiempo real
+✅ Dashboard con navegación completa
+✅ Protocolos bancarios (9 protocolos)
+✅ Sistema de transacciones
+✅ POS Virtual integrado
+✅ Generación de tokens de seguridad
+✅ Logs de transacciones
+✅ API completa funcional
+✅ Interfaz profesional y fluida
+
+## Próximos Pasos
+
+- Implementar páginas completas para cada sección
+- Agregar reportes detallados
+- Implementar controles de velocidad en POS
+- Visualización de transacciones en ticker en tiempo real
+- Exportación de reportes PDF
+- Gráficos de análisis de transacciones
+
+## Fecha de Última Actualización
 Octubre 2025

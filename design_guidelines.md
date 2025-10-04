@@ -1,141 +1,197 @@
-# Banxico Plus - Financial Ticker Design Guidelines
+# Banxico Plus - Sistema Bancario Completo
 
-## Project Overview
-A financial data ticker application with horizontal scrolling text and interactive playback controls, displaying real-time financial information in a continuous, elegant marquee format.
+## Descripción del Proyecto
+Plataforma bancaria completa con ticker financiero en tiempo real, POS virtual, procesamiento de transacciones, sistema de tokens y seguridad EMV/PCI DSS simulada.
 
-## Design Approach
-**Utility-Focused Financial Dashboard** - This is a data-display application where clarity, readability, and performance are paramount. The design prioritizes information delivery over decorative elements.
+## Colores Principales (Extraídos de las Capturas)
 
----
+### Header y Branding
+- **Background Header**: `#c8322b` (rojo Banxico)
+- **Logo**: Icono de billete blanco
+- **Texto Header**: `#ffffff` (blanco)
 
-## Core Visual Specifications
+### Ticker Financiero
+- **Background**: `#000000` (negro puro)
+- **Texto**: `#ffffff` (blanco)
+- **Fuente**: Arial, 14px
 
-### Color Palette
-**Ticker Bar**
-- Background: 0 0% 0% (pure black)
-- Text: 0 0% 100% (pure white)
-- High contrast for optimal readability of financial data
+### Sidebar
+- **Background**: `#1a1a1a` (gris muy oscuro)
+- **Texto Normal**: `#e5e7eb` (gris claro)
+- **Texto Activo**: `#ffffff` (blanco)
+- **Item Hover**: `#2d2d2d`
+- **Item Activo**: `#c8322b` (rojo)
 
-**Control Elements**
-- Buttons: White borders with transparent backgrounds on dark base
-- Slider track: Dark gray (0 0% 20%)
-- Slider thumb: White (0 0% 100%)
+### Dashboard
+- **Background**: `#f5f5f5` (gris muy claro)
+- **Cards**: `#ffffff` (blanco)
+- **Bordes**: `#e5e7eb`
+- **Texto Primario**: `#1f2937`
+- **Texto Secundario**: `#6b7280`
 
-### Typography
-**Ticker Text**
-- Font Family: Arial (system font for maximum compatibility)
-- Font Size: 20px
-- Font Weight: Normal (400)
-- Color: #FFFFFF
-- Letter Spacing: Normal
+### Botones y Acciones
+- **Primario**: `#c8322b` (rojo Banxico)
+- **Primario Hover**: `#a62822`
+- **Secundario**: `#f3f4f6`
+- **Texto Botón**: `#ffffff`
 
-**Control Labels**
-- Font Family: Arial
-- Font Size: 14px
-- Color: White or light gray for secondary text
+### Estados
+- **Success**: `#10b981` (verde)
+- **Warning**: `#f59e0b` (amarillo)
+- **Error**: `#ef4444` (rojo)
+- **Info**: `#3b82f6` (azul)
 
-### Layout System
-**Ticker Bar**
-- Height: 50px
-- Width: 100% viewport width
-- Position: Fixed at top of viewport
-- Text vertical alignment: Centered
+## Componentes Principales
 
-**Spacing**
-- Message separation: 30px horizontal gap between ticker items
-- Control panel padding: 20px top/bottom, 40px left/right
-- Button spacing: 12px gap between controls
+### 1. Login Page
+- Usuario: **Admin**
+- Password: **Keylog100$**
+- Logo Banxico Plus centrado
+- Fondo con gradiente oscuro
+- Formulario con validación
 
----
+### 2. Header
+- Logo de billete + "Banxico Plus" (lado izquierdo)
+- Ticker financiero horizontal (datos en tiempo real)
+- Iconos de notificaciones y usuario (lado derecho)
+- Altura: 110px total (60px header + 50px ticker)
 
-## Component Library
+### 3. Ticker Financiero
+**Datos mostrados exactamente como en la captura:**
+- ON: $22.53
+- CAD/MXN: $13.20
+- BTC/USD: $54,325.75
+- ETH/USD: $2,670.30
+- XRP/USD: $0.52
+- LTC/USD: $142.87
+- DOT/USD: $15.32
+- ADA/USD: $0.82
 
-### Ticker Display
-**Horizontal Scrolling Marquee**
-- Direction: Right-to-left continuous scroll
-- Animation: Smooth using requestAnimationFrame
-- Default velocity: 2 pixels per frame
-- Infinite loop: Auto-restart when messages complete cycle
-- Messages: Financial data strings (e.g., "BTC/USD: $45,234", "TIIE 28 días: 11.15%")
+**Características:**
+- Fondo negro (#000000)
+- Texto blanco (#ffffff)
+- Animación continua de derecha a izquierda
+- Fuente Arial, 14px
+- Separación: 40px entre items
 
-**Message Array (Editable)**
-```
-Example messages from screenshot:
-- "TIIE 28 días: 11.15%"
-- "Dólar Spot: $20.34"
-- "Cetes 28 días: 11.00%"
-- "Inflación anual: 4.5%"
-```
+### 4. Sidebar
+**Usuario:**
+- Avatar circular (imagen de perfil)
+- Nombre: José Luis Barrientos
+- Rol: ADMIN
+- Subtítulo: Software Engineer
+- Fecha: 3 May 2025
 
-### Interactive Controls
-**Pause/Resume Buttons**
-- Style: Outlined buttons with white borders
-- Background: Transparent with subtle hover states
-- Icons or text: "Pause" / "Resume" or play/pause icons
-- Functionality: Toggle ticker animation state
+**Navegación:**
+1. 📊 Dashboard
+2. 🔄 Transacciones
+3. 💰 Caja
+4. 🏪 Enrutamiento POS
+5. 📋 Registros
+6. ₿ Exchange Crypto
+7. 🔐 Claves Encriptadas
 
-**Speed Control Slider**
-- Type: Range input (HTML5 slider)
-- Range: 0.5x to 5x speed multiplier
-- Visual feedback: Display current speed value
-- Real-time adjustment: Changes apply immediately to ticker
+**Footer Sidebar:**
+- Búsqueda
+- Configuración
 
-### Control Panel Layout
-- Position: Below ticker bar or in bottom-right corner
-- Background: Dark panel (0 0% 10%) with subtle border
-- Responsive: Stack controls vertically on mobile
+### 5. Dashboard Principal
+- **Saldo disponible**: $1,250,000.00 USD (esquina superior derecha)
+- Ticker con datos en tiempo real
+- Acceso rápido a funciones
 
----
+### 6. Nueva Transacción Bancaria
+**Protocolos Disponibles:**
+- 101.1 - Transferencia básica
+- 101.2 - Transferencia con validación
+- 101.3 - Transferencia segura ✓ (seleccionado por defecto)
+- 201.1 - Pago nacional
+- 201.2 - Pago internacional
+- 201.3 - Pago express
+- 301.1 - Depósito cuenta
+- 301.2 - Depósito efectivo
+- 401.1 - Retiro ATM
 
-## Interaction Guidelines
+**Elementos:**
+- Título: "Nueva Transacción Bancaria"
+- Subtítulo: "Ingrese los datos para realizar una transferencia entre cuentas"
+- Dropdown de protocolos (fondo blanco, selección roja)
+- Botón: "Continuar al Testado de Seguridad" (rojo #c8322b)
 
-### Ticker Behavior
-- Continuous motion by default (auto-play on load)
-- Seamless loop without visible restart
-- Pause on user interaction (via pause button)
-- Maintain position when paused, resume from same point
+**Panel Funciones Relacionadas:**
+- updateTransactionStatus (18 llamadas)
+- getAllTransactions (65 llamadas)
+- generateTransactionId (49 llamadas)
 
-### Hover Effects (Optional Enhancement)
-- Text opacity: Slight increase (0.7 → 1.0) on hover over individual items
-- Cursor: Default (no pointer unless items are clickable)
-- Underline: Subtle underline effect on hover if messages link to detail views
+### 7. POS Virtual
+- Procesamiento de pagos VISA/Mastercard
+- Verificación CVV2, PIN
+- Códigos de autorización
+- Registro de transacciones
+- Controles: pausar, reanudar, velocidad
 
-### Responsiveness
-- Mobile: Reduce font size to 16px, ticker height to 40px
-- Tablet: Maintain desktop specifications
-- Controls: Stack vertically on screens < 640px
+### 8. Sistema de Tokens
+- Generación automática por transacción
+- Formato: alphanumeric único
+- Cifrado simulado AES-256
+- Validación de integridad
+- Cumplimiento EMV/PCI DSS
 
----
+## Tipografía
 
-## Performance & Compatibility
-- Use requestAnimationFrame for smooth 60fps animation
-- Avoid CSS animations for horizontal scroll (JavaScript provides better control)
-- GSAP optional for enhanced easing, but vanilla JS preferred for lightweight implementation
-- Compatible with Chrome, Firefox, Safari, Edge (modern versions)
+**Fuentes:**
+- Principal: Arial, sans-serif
+- Monospace: Courier New (para códigos)
 
----
+**Tamaños:**
+- Títulos principales: 24px
+- Subtítulos: 18px
+- Texto normal: 14px
+- Ticker: 14px
+- Texto pequeño: 12px
 
-## File Structure Requirements
-1. **index.html** - Main container, ticker bar div, control panel
-2. **style.css** - All visual styling, layout, colors, typography
-3. **script.js** - Animation logic, message array, control handlers
+## Espaciado
 
-**Code Quality**
-- Extensive comments explaining each function
-- Editable parameters at top of script.js (velocity, messages array)
-- Clean indentation and naming conventions
-- No external dependencies beyond optional GSAP
+- Padding contenedores: 24px
+- Gap entre elementos: 16px
+- Margen entre secciones: 32px
+- Border radius: 8px (tarjetas)
 
----
+## Animaciones
 
-## Visual Hierarchy
-1. **Primary Focus**: Scrolling ticker with financial data
-2. **Secondary**: Control panel for user interaction
-3. **Tertiary**: Speed indicator and status labels
+**Ticker:**
+- Velocidad base: 60px/segundo
+- Loop infinito sin espacios
+- Pausa/reanudación suave
 
-**Content Density**: Minimalist - only essential elements visible, no decorative graphics or hero sections. The ticker IS the hero element.
+**Transiciones:**
+- Botones: 150ms ease
+- Hover: 200ms ease
+- Modals: 300ms ease-in-out
 
----
+## Funcionalidad Completa
 
-## Images
-**No images required** - This is a pure data-display application. All visual impact comes from typography, motion, and high contrast color scheme.
+### Ticker Financiero
+✅ Datos en tiempo real
+✅ Fondo animado fluido
+✅ Controles: pausar, reanudar, velocidad
+✅ Actualización automática
+
+### POS Virtual
+✅ Procesamiento VISA/Mastercard/otros
+✅ Verificación CVV2, PIN, autorización
+✅ Registro transacciones rastreable
+✅ Reportes: códigos autorización, estados, historial
+✅ Controles POS: pausar, reanudar, velocidad
+✅ Visualización transacciones en ticker tiempo real
+
+### Tokens y Seguridad
+✅ Generación token por transacción
+✅ Validaciones integridad y cifrado (simulado)
+✅ Protocolos EMV y PCI DSS (simulado)
+
+### Integración Unificada
+✅ Ticker + POS en dashboard único
+✅ Datos simulados para demo
+✅ Sin conexión redes reales
+✅ Interfaz profesional y fluida
