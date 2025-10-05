@@ -84,6 +84,7 @@ export class MemStorage implements IStorage {
       avatar: null
     };
     this.users.set(id1, adminUser);
+    console.log('Admin user initialized:', adminUser.username);
 
     const id2 = randomUUID();
     const newUser: User = {
@@ -96,6 +97,8 @@ export class MemStorage implements IStorage {
       avatar: null
     };
     this.users.set(id2, newUser);
+    console.log('New user initialized:', newUser.username);
+    console.log('Total users in storage:', this.users.size);
   }
 
   // Users
