@@ -3,6 +3,8 @@ import { pgTable, text, varchar, timestamp, decimal, integer, boolean } from "dr
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+export * from "./models/auth";
+
 // Usuario del sistema
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
