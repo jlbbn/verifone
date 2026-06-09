@@ -6,8 +6,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { FinancialTicker } from "@/components/financial-ticker";
-import { CreditCard, Bell, User, Loader2 } from "lucide-react";
+import { CreditCard, User, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { NotificationsBell } from "@/components/notifications-bell";
 import LoginPage from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
 import NewTransactionPage from "@/pages/new-transaction";
@@ -44,9 +45,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
             <h1 className="text-lg md:text-xl font-semibold">Banxico Plus</h1>
           </div>
           <div className="flex items-center gap-2 md:gap-4 text-white">
-            <button className="hover:bg-white/10 p-2 rounded-md transition-colors">
-              <Bell className="w-4 h-4 md:w-5 md:h-5" />
-            </button>
+            <NotificationsBell />
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
                 <User className="w-4 h-4 md:w-5 md:h-5" />

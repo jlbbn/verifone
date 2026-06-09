@@ -8,6 +8,7 @@ export interface SessionUser {
   role: string;
   position: string | null;
   avatar: string | null;
+  subscriptionStart: string | null;
 }
 
 async function fetchSession(): Promise<SessionUser | null> {

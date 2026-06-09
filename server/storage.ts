@@ -4,7 +4,8 @@ import {
   type PaymentMethod, type InsertPaymentMethod,
   type SecurityToken, type InsertSecurityToken,
   type TransactionLog, type InsertTransactionLog,
-  type BankingProtocol, type InsertBankingProtocol
+  type BankingProtocol, type InsertBankingProtocol,
+  type Notification, type InsertNotification
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { hashPassword, maskCardNumber } from "./auth-utils";
@@ -37,6 +38,15 @@ export interface IStorage {
   // Banking Protocols
   getAllProtocols(): Promise<BankingProtocol[]>;
   getProtocol(code: string): Promise<BankingProtocol | undefined>;
+
+  // Notifications
+  createNotification(notification: InsertNotification): Promise<Notification>;
+  getNotificationsForUser(username: string, isAdmin: boolean): Promise<Notification[]>;
+  getNotification(id: string): Promise<Notification | undefined>;
+  markNotificationRead(id: string): Promise<Notification | undefined>;
+  markAllNotificationsRead(username: string, isAdmin: boolean): Promise<number>;
+  resolveNotification(id: string): Promise<Notification | undefined>;
+  hasPendingPosRequest(fromUser: string): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -46,6 +56,7 @@ export class MemStorage implements IStorage {
   private securityTokens: Map<string, SecurityToken>;
   private transactionLogs: Map<string, TransactionLog[]>;
   private protocols: Map<string, BankingProtocol>;
+  private notifications: Map<string, Notification>;
 
   constructor() {
     this.users = new Map();
@@ -54,10 +65,12 @@ export class MemStorage implements IStorage {
     this.securityTokens = new Map();
     this.transactionLogs = new Map();
     this.protocols = new Map();
+    this.notifications = new Map();
     
     this.initializeProtocols();
     this.initializeAdminUser();
     this.seedTransactions();
+    this.seedNotifications();
   }
 
   private initializeProtocols() {
@@ -85,6 +98,7 @@ export class MemStorage implements IStorage {
         role: "ADMIN",
         position: "Software Engineer",
         avatar: null,
+        subscriptionStart: null,
       },
       {
         username: "angoestradacontacto@gmail.com",
@@ -94,6 +108,7 @@ export class MemStorage implements IStorage {
         role: "USER",
         position: "Usuario",
         avatar: null,
+        subscriptionStart: new Date("2026-03-09T00:00:00Z"),
       },
       {
         username: "socemro2@gmail.com",
@@ -103,6 +118,8 @@ export class MemStorage implements IStorage {
         role: "USER",
         position: "Usuario",
         avatar: null,
+        // Suscripción iniciada "ayer" → plan de 12 meses, 364 días restantes
+        subscriptionStart: new Date("2026-06-08T00:00:00Z"),
       },
     ];
 
@@ -175,7 +192,8 @@ export class MemStorage implements IStorage {
       fullName: insertUser.fullName,
       role: insertUser.role || "USER",
       position: insertUser.position || null,
-      avatar: insertUser.avatar || null
+      avatar: insertUser.avatar || null,
+      subscriptionStart: insertUser.subscriptionStart ?? null
     };
     this.users.set(id, user);
     return user;
@@ -304,6 +322,99 @@ export class MemStorage implements IStorage {
 
   async getProtocol(code: string): Promise<BankingProtocol | undefined> {
     return this.protocols.get(code);
+  }
+
+  // Notifications
+  private seedNotifications() {
+    const now = Date.now();
+    const seeds: Array<Omit<Notification, "id" | "createdAt"> & { minsAgo: number }> = [
+      {
+        recipient: "ADMIN", type: "system", title: "Panel de administración activo",
+        message: "Bienvenido. Aquí verás las solicitudes y notificaciones de todos los usuarios.",
+        fromUser: null, status: "info", read: false, minsAgo: 120,
+      },
+      {
+        recipient: "ADMIN", type: "pos_request", title: "Solicitud de configuración de POS",
+        message: "Socemro (socemro2@gmail.com) no tiene una terminal activa y solicita la configuración (deploy) de un nuevo POS.",
+        fromUser: "socemro2@gmail.com", status: "pending", read: false, minsAgo: 30,
+      },
+      {
+        recipient: "socemro2@gmail.com", type: "info", title: "Suscripción activa",
+        message: "Tu suscripción de 12 meses está activa. Contacta al administrador para configurar tu terminal POS.",
+        fromUser: null, status: "info", read: false, minsAgo: 60,
+      },
+      {
+        recipient: "angoestradacontacto@gmail.com", type: "info", title: "Terminal en línea",
+        message: "Tu terminal T1005 (Ingenico iWL250) está operativa y lista para procesar pagos.",
+        fromUser: null, status: "info", read: false, minsAgo: 15,
+      },
+    ];
+
+    seeds.forEach((s) => {
+      const id = randomUUID();
+      const { minsAgo, ...rest } = s;
+      this.notifications.set(id, { ...rest, id, createdAt: new Date(now - minsAgo * 60000) });
+    });
+  }
+
+  async createNotification(insert: InsertNotification): Promise<Notification> {
+    const id = randomUUID();
+    const notification: Notification = {
+      id,
+      recipient: insert.recipient,
+      type: insert.type,
+      title: insert.title,
+      message: insert.message,
+      fromUser: insert.fromUser ?? null,
+      status: insert.status || "info",
+      read: insert.read ?? false,
+      createdAt: new Date(),
+    };
+    this.notifications.set(id, notification);
+    return notification;
+  }
+
+  async getNotificationsForUser(username: string, isAdmin: boolean): Promise<Notification[]> {
+    return Array.from(this.notifications.values())
+      .filter((n) => n.recipient === username || (isAdmin && n.recipient === "ADMIN"))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  async getNotification(id: string): Promise<Notification | undefined> {
+    return this.notifications.get(id);
+  }
+
+  async markNotificationRead(id: string): Promise<Notification | undefined> {
+    const n = this.notifications.get(id);
+    if (!n) return undefined;
+    const updated = { ...n, read: true };
+    this.notifications.set(id, updated);
+    return updated;
+  }
+
+  async markAllNotificationsRead(username: string, isAdmin: boolean): Promise<number> {
+    let count = 0;
+    for (const [id, n] of Array.from(this.notifications.entries())) {
+      if ((n.recipient === username || (isAdmin && n.recipient === "ADMIN")) && !n.read) {
+        this.notifications.set(id, { ...n, read: true });
+        count++;
+      }
+    }
+    return count;
+  }
+
+  async resolveNotification(id: string): Promise<Notification | undefined> {
+    const n = this.notifications.get(id);
+    if (!n) return undefined;
+    const updated = { ...n, status: "resolved", read: true };
+    this.notifications.set(id, updated);
+    return updated;
+  }
+
+  async hasPendingPosRequest(fromUser: string): Promise<boolean> {
+    return Array.from(this.notifications.values()).some(
+      (n) => n.type === "pos_request" && n.fromUser === fromUser && n.status === "pending",
+    );
   }
 }
 

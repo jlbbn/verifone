@@ -15,6 +15,7 @@ export const users = pgTable("users", {
   role: text("role").notNull().default("USER"),
   position: text("position"),
   avatar: text("avatar"),
+  subscriptionStart: timestamp("subscription_start"), // inicio de suscripción (plan 12 meses); null = sin suscripción
 });
 
 // Transacciones bancarias
@@ -81,8 +82,22 @@ export const bankingProtocols = pgTable("banking_protocols", {
   requiresSecurity: boolean("requires_security").default(true),
 });
 
+// Notificaciones y solicitudes (centro de notificaciones / panel admin)
+export const notifications = pgTable("notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  recipient: text("recipient").notNull(), // username destinatario, o "ADMIN" para todos los administradores
+  type: text("type").notNull(), // pos_request, request_sent, request_resolved, system, info
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  fromUser: text("from_user"), // username que originó la notificación (solicitante)
+  status: text("status").notNull().default("info"), // info | pending | resolved
+  read: boolean("read").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });
+export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
 export const insertTransactionSchema = createInsertSchema(transactions).omit({ id: true, createdAt: true });
 export const insertPaymentMethodSchema = createInsertSchema(paymentMethods).omit({ id: true });
 export const insertSecurityTokenSchema = createInsertSchema(securityTokens).omit({ id: true, issuedAt: true });
@@ -92,6 +107,9 @@ export const insertBankingProtocolSchema = createInsertSchema(bankingProtocols).
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
+
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 
 export type Transaction = typeof transactions.$inferSelect;
 export type InsertTransaction = z.infer<typeof insertTransactionSchema>;
