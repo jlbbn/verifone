@@ -37,6 +37,7 @@ interface POSTerminal {
   nfc: boolean;
   pinpad: boolean;
   configNote?: string;
+  owner?: string;
 }
 
 const initialTerminals: POSTerminal[] = [
@@ -65,10 +66,11 @@ const initialTerminals: POSTerminal[] = [
     signalStrength: 99, emv: true, nfc: true, pinpad: true
   },
   {
-    id: "T1005", model: "Ingenico iWL250", serial: "ING-IWL250-E5503", status: "Idle",
+    id: "T1005", model: "Ingenico iWL250", serial: "ING-IWL250-E5503", status: "Online",
     transactions: 330, amount: 1953806.75, efficiency: 94, location: "Sucursal Este",
     uptime: "99.3%", lastTx: "Hace 45 seg", firmware: "v3.0.2", ip: "192.168.1.105",
-    signalStrength: 72, emv: true, nfc: true, pinpad: true
+    signalStrength: 72, emv: true, nfc: true, pinpad: true,
+    owner: "angoestradacontacto@gmail.com"
   },
   {
     id: "T1006", model: "Verifone V660p", serial: "VFN-V660P-2024-001", status: "Reconfigured",
@@ -234,41 +236,76 @@ export default function POSPage() {
   }
 
   if (!isAdmin) {
+    const myTerminals = terminals.filter(t => t.owner === user?.username);
+
+    // Common user WITHOUT an assigned terminal → "no POS" legend
+    if (myTerminals.length === 0) {
+      return (
+        <div className="p-4 md:p-6 space-y-5">
+          {/* Header */}
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
+              <Terminal className="w-7 h-7 text-[#c8322b]" />
+              Enrutamiento POS
+            </h1>
+            <p className="text-sm text-muted-foreground mt-0.5">Terminal punto de venta · {user?.fullName ?? "Usuario"}</p>
+          </div>
+
+          {/* No active terminal legend */}
+          <Card className="border-2 border-dashed border-[#c8322b]/40">
+            <CardContent className="py-12 flex flex-col items-center text-center gap-4">
+              <div className="w-16 h-16 rounded-full bg-[#c8322b]/10 flex items-center justify-center">
+                <WifiOff className="w-8 h-8 text-[#c8322b]" />
+              </div>
+              <div className="space-y-1.5 max-w-md">
+                <h2 className="text-xl font-bold" data-testid="text-no-terminal-title">No POS running — Sin terminal POS activa</h2>
+                <p className="text-sm text-muted-foreground">
+                  Actualmente no cuentas con una terminal asignada a tu cuenta ni transacciones registradas. Contacta al administrador para que configure (deploy) un nuevo POS para tu usuario.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 text-xs font-medium text-yellow-700 bg-yellow-50 border border-yellow-200 px-3 py-1.5 rounded-md" data-testid="status-no-terminal">
+                <AlertTriangle className="w-3.5 h-3.5" />
+                Estado: Sin terminal configurada · Contact admin to deploy POS
+              </div>
+              <Button className="bg-[#c8322b] hover:bg-[#a62822]" onClick={handleRequestPos} data-testid="button-request-pos">
+                <Settings className="w-4 h-4 mr-2" /> Solicitar configuración de POS
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Limited info note */}
+          <Card className="hover-elevate">
+            <CardContent className="pt-4 pb-4 flex items-start gap-3">
+              <div className="w-9 h-9 rounded-md bg-blue-100 flex items-center justify-center flex-shrink-0">
+                <ShieldCheck className="w-4 h-4 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">Acceso limitado</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Como usuario estándar, solo puedes ver y operar tu propia terminal una vez configurada. La administración y el monitoreo global de terminales están reservados al administrador.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
+    // Common user WITH an assigned terminal → limited, read-only view of own terminal(s)
+    const myTx = recentTransactions.filter(rt => myTerminals.some(t => t.id === rt.terminal));
     return (
       <div className="p-4 md:p-6 space-y-5">
         {/* Header */}
         <div>
           <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
             <Terminal className="w-7 h-7 text-[#c8322b]" />
-            Enrutamiento POS
+            Mi Terminal POS
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">Terminal punto de venta · {user?.fullName ?? "Usuario"}</p>
         </div>
 
-        {/* No active terminal legend */}
-        <Card className="border-2 border-dashed border-[#c8322b]/40">
-          <CardContent className="py-12 flex flex-col items-center text-center gap-4">
-            <div className="w-16 h-16 rounded-full bg-[#c8322b]/10 flex items-center justify-center">
-              <WifiOff className="w-8 h-8 text-[#c8322b]" />
-            </div>
-            <div className="space-y-1.5 max-w-md">
-              <h2 className="text-xl font-bold" data-testid="text-no-terminal-title">No tienes una terminal POS activa</h2>
-              <p className="text-sm text-muted-foreground">
-                Actualmente no cuentas con una terminal asignada a tu cuenta. Es necesario configurar un nuevo POS para poder procesar pagos y consultar movimientos de terminal.
-              </p>
-            </div>
-            <div className="flex items-center gap-2 text-xs font-medium text-yellow-700 bg-yellow-50 border border-yellow-200 px-3 py-1.5 rounded-md">
-              <AlertTriangle className="w-3.5 h-3.5" />
-              Estado: Sin terminal configurada
-            </div>
-            <Button className="bg-[#c8322b] hover:bg-[#a62822]" onClick={handleRequestPos} data-testid="button-request-pos">
-              <Settings className="w-4 h-4 mr-2" /> Solicitar configuración de POS
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Limited info note */}
-        <Card className="hover-elevate">
+        {/* Limited access note */}
+        <Card>
           <CardContent className="pt-4 pb-4 flex items-start gap-3">
             <div className="w-9 h-9 rounded-md bg-blue-100 flex items-center justify-center flex-shrink-0">
               <ShieldCheck className="w-4 h-4 text-blue-600" />
@@ -276,9 +313,91 @@ export default function POSPage() {
             <div>
               <p className="text-sm font-semibold">Acceso limitado</p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Como usuario estándar, solo puedes ver y operar tu propia terminal una vez configurada. La administración y el monitoreo global de terminales están reservados al administrador.
+                Solo puedes consultar tu propia terminal. La configuración de terminales y el monitoreo global están reservados al administrador.
               </p>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* My terminals (read-only) */}
+        {myTerminals.map((t) => (
+          <Card key={t.id} data-testid={`card-my-terminal-${t.id}`}>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-md bg-[#c8322b]/10 flex items-center justify-center">
+                    <Terminal className="w-5 h-5 text-[#c8322b]" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      {t.id}
+                      <span className={`w-2 h-2 rounded-full ${getStatusColor(t.status)}`} />
+                    </CardTitle>
+                    <CardDescription>{t.model} · {t.location}</CardDescription>
+                  </div>
+                </div>
+                {getStatusBadge(t.status)}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <p className="text-xs text-muted-foreground">Transacciones</p>
+                  <p className="text-lg font-bold" data-testid={`text-tx-count-${t.id}`}>{t.transactions}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Monto procesado</p>
+                  <p className="text-lg font-bold">${t.amount.toLocaleString("es-MX", { minimumFractionDigits: 2 })}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Eficiencia</p>
+                  <p className="text-lg font-bold">{t.efficiency}%</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Uptime</p>
+                  <p className="text-lg font-bold">{t.uptime}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap text-xs">
+                <span className="flex items-center gap-1 bg-muted px-2 py-1 rounded-md"><Signal className="w-3 h-3" /> Señal {t.signalStrength}%</span>
+                <span className="bg-muted px-2 py-1 rounded-md">Firmware {t.firmware}</span>
+                <span className="bg-muted px-2 py-1 rounded-md">Última TX: {t.lastTx}</span>
+                {t.emv && <Badge className="bg-green-100 text-green-700 border-green-200 no-default-active-elevate">EMV</Badge>}
+                {t.nfc && <Badge className="bg-green-100 text-green-700 border-green-200 no-default-active-elevate">NFC</Badge>}
+                {t.pinpad && <Badge className="bg-green-100 text-green-700 border-green-200 no-default-active-elevate">PIN Pad</Badge>}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+
+        {/* My recent transactions */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Mis Transacciones Recientes</CardTitle>
+            <CardDescription>Movimientos de tu terminal</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {myTx.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-6 text-center" data-testid="text-no-my-tx">Sin transacciones recientes en tu terminal.</p>
+            ) : (
+              <div className="space-y-2">
+                {myTx.map((tx, i) => (
+                  <div key={i} className="flex items-center justify-between gap-3 flex-wrap py-2 border-b border-border last:border-0" data-testid={`row-my-tx-${i}`}>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-mono text-muted-foreground">{tx.terminal}</span>
+                      <span className="text-sm font-medium">{tx.type}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-semibold">${tx.amount.toLocaleString("es-MX", { minimumFractionDigits: 2 })}</span>
+                      <Badge className={tx.status === "Aprobada"
+                        ? "bg-green-100 text-green-700 border-green-200 no-default-active-elevate"
+                        : "bg-red-100 text-red-700 border-red-200 no-default-active-elevate"}>{tx.status}</Badge>
+                      <span className="text-[10px] text-muted-foreground w-16 text-right hidden sm:block">{tx.time}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

@@ -129,10 +129,7 @@ export class MemStorage implements IStorage {
       { owner: "angoestradacontacto@gmail.com", type: "transfer", protocol: "101.2", amount: "2100.00", currency: "USD", status: "completed", description: "Transferencia con validación", minsAgo: 21 },
       { owner: "angoestradacontacto@gmail.com", type: "payment", protocol: "201.3", amount: "890.00", currency: "MXN", status: "processing", description: "Pago con Mastercard - ****4459", minsAgo: 33 },
       { owner: "angoestradacontacto@gmail.com", type: "deposit", protocol: "301.1", amount: "12500.00", currency: "USD", status: "pending", description: "Depósito a cuenta", minsAgo: 55 },
-      // Socemro
-      { owner: "socemro2@gmail.com", type: "deposit", protocol: "301.2", amount: "8900.00", currency: "USD", status: "completed", description: "Depósito efectivo", minsAgo: 9 },
-      { owner: "socemro2@gmail.com", type: "payment", protocol: "201.2", amount: "12500.00", currency: "USD", status: "failed", description: "Pago con Mastercard - ****9913", minsAgo: 26 },
-      { owner: "socemro2@gmail.com", type: "transfer", protocol: "101.3", amount: "45000.00", currency: "USD", status: "completed", description: "Transferencia segura", minsAgo: 48 },
+      // Socemro — sin terminal POS asignada y sin transacciones registradas
     ];
 
     seeds.forEach((s, i) => {
