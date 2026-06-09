@@ -31,6 +31,7 @@ export const transactions = pgTable("transactions", {
   description: text("description"),
   authCode: text("auth_code"),
   tokenId: text("token_id"),
+  createdBy: text("created_by"), // username del propietario de la transacción
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

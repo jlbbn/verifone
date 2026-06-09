@@ -1,58 +1,122 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { useAuth } from "@/hooks/use-auth";
+import type { Transaction } from "@shared/schema";
 import {
-  DollarSign, TrendingUp, TrendingDown, Users, Activity,
-  ArrowRightLeft, CreditCard, ShieldCheck, Zap, Bell,
+  DollarSign, Users, Activity,
+  ArrowRightLeft, ShieldCheck, Zap, Bell,
   Clock, CheckCircle, XCircle, AlertTriangle, BarChart2,
-  Store, RefreshCw, ChevronRight, Cpu, Globe
+  Store, ChevronRight, Cpu, Globe, Inbox
 } from "lucide-react";
 
-const recentActivity = [
-  { id: "TXN-8821", amount: 680000, protocol: "101.3", name: "Transferencia segura", time: "Hace 2 min", status: "completed", type: "transfer", card: "VISA" },
-  { id: "TXN-8820", amount: 1200000, protocol: "201.2", name: "Pago internacional", time: "Hace 5 min", status: "completed", type: "payment", card: "AMEX" },
-  { id: "TXN-8819", amount: 450000, protocol: "101.2", name: "Transferencia con validación", time: "Hace 8 min", status: "completed", type: "transfer", card: "Mastercard" },
-  { id: "TXN-8818", amount: 890000, protocol: "201.3", name: "Pago express", time: "Hace 12 min", status: "completed", type: "payment", card: "VISA" },
-  { id: "TXN-8817", amount: 1500000, protocol: "101.3", name: "Transferencia segura", time: "Hace 15 min", status: "failed", type: "transfer", card: "Mastercard" },
-  { id: "TXN-8816", amount: 320000, protocol: "301.1", name: "Depósito cuenta", time: "Hace 18 min", status: "completed", type: "deposit", card: "Débito" },
-  { id: "TXN-8815", amount: 750000, protocol: "401.1", name: "Retiro ATM", time: "Hace 21 min", status: "completed", type: "withdrawal", card: "VISA" },
-];
+const TYPE_LABEL: Record<string, string> = {
+  payment: "Pago",
+  transfer: "Transferencia",
+  deposit: "Depósito",
+  withdrawal: "Retiro",
+};
 
-const protocolStats = [
-  { code: "101.x", label: "Transferencias", count: 847, pct: 46, color: "bg-blue-500" },
-  { code: "201.x", label: "Pagos", count: 621, pct: 34, color: "bg-[#c8322b]" },
-  { code: "301.x", label: "Depósitos", count: 248, pct: 13, color: "bg-green-500" },
-  { code: "401.x", label: "Retiros", count: 131, pct: 7, color: "bg-yellow-500" },
+const PROTOCOL_GROUPS = [
+  { label: "Transferencias", prefix: "101", color: "bg-blue-500" },
+  { label: "Pagos", prefix: "201", color: "bg-[#c8322b]" },
+  { label: "Depósitos", prefix: "301", color: "bg-green-500" },
+  { label: "Retiros", prefix: "401", color: "bg-yellow-500" },
 ];
 
 const hourlyData = [42, 58, 71, 65, 89, 94, 108, 127, 143, 138, 156, 172];
 
+function relativeTime(iso: string | Date): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Hace instantes";
+  if (mins < 60) return `Hace ${mins} min`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `Hace ${hrs} h`;
+  const days = Math.floor(hrs / 24);
+  return `Hace ${days} d`;
+}
+
+function cardFromDescription(desc: string | null): string {
+  if (!desc) return "";
+  const m = desc.match(/Pago con (.+?) -/);
+  return m ? m[1].trim() : "";
+}
+
 export default function Dashboard() {
   const [, setLocation] = useLocation();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
   const [currentTime, setCurrentTime] = useState(new Date());
-  const { data: transactions = [] } = useQuery<any[]>({ queryKey: ["/api/transactions"] });
+  const { data: transactions = [] } = useQuery<Transaction[]>({ queryKey: ["/api/transactions"] });
 
   useEffect(() => {
     const t = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
 
-  const completedToday = transactions.filter(t => t.status === "completed").length;
-  const totalVolume = transactions.reduce((s, t) => s + parseFloat(t.amount || "0"), 0);
+  const stats = useMemo(() => {
+    const total = transactions.length;
+    const completed = transactions.filter(t => t.status === "completed").length;
+    const pending = transactions.filter(t => t.status === "pending" || t.status === "processing").length;
+    const failed = transactions.filter(t => t.status === "failed").length;
+    const volume = transactions.reduce((s, t) => s + parseFloat(t.amount || "0"), 0);
+    const completedPct = total ? Math.round((completed / total) * 100) : 0;
+    return { total, completed, pending, failed, volume, completedPct };
+  }, [transactions]);
+
+  const protocolStats = useMemo(() => {
+    const total = transactions.length || 1;
+    return PROTOCOL_GROUPS.map(g => {
+      const count = transactions.filter(t => (t.protocol || "").startsWith(g.prefix)).length;
+      return { ...g, count, pct: Math.round((count / total) * 100) };
+    });
+  }, [transactions]);
+
+  const recentActivity = useMemo(() => transactions.slice(0, 7), [transactions]);
+
+  const firstName = user?.fullName?.split(" ")[0] || user?.username || "Usuario";
+
+  const fmtMoney = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const kpis = [
+    {
+      title: "Transacciones", value: stats.total.toString(),
+      sub: `${stats.completed} completadas`, icon: <ArrowRightLeft className="w-4 h-4" />,
+      iconBg: "bg-blue-100", iconColor: "text-blue-600", valueColor: "",
+    },
+    {
+      title: "Volumen Total", value: fmtMoney(stats.volume),
+      sub: "USD acumulado", icon: <DollarSign className="w-4 h-4" />,
+      iconBg: "bg-emerald-100", iconColor: "text-emerald-600", valueColor: "text-emerald-600",
+    },
+    {
+      title: "Completadas", value: stats.completed.toString(),
+      sub: `${stats.completedPct}% del total`, icon: <CheckCircle className="w-4 h-4" />,
+      iconBg: "bg-green-100", iconColor: "text-green-600", valueColor: "text-green-600",
+    },
+    {
+      title: "Pendientes", value: stats.pending.toString(),
+      sub: stats.pending > 0 ? "requieren revisión" : "todo al día", icon: <Clock className="w-4 h-4" />,
+      iconBg: "bg-yellow-100", iconColor: "text-yellow-600", valueColor: stats.pending > 0 ? "text-yellow-600" : "",
+    },
+  ];
 
   return (
     <div className="p-4 md:p-6 space-y-5">
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
+          <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2" data-testid="text-greeting">
             <BarChart2 className="w-7 h-7 text-[#c8322b]" />
-            Dashboard
+            Hola, {firstName}
+            {isAdmin && <Badge className="bg-[#c8322b] text-white no-default-active-elevate ml-1">ADMIN</Badge>}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
+            {isAdmin ? "Vista global del sistema · " : "Tu actividad bancaria · "}
             {currentTime.toLocaleDateString("es-MX", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
             {" · "}{currentTime.toLocaleTimeString("es-MX")}
           </p>
@@ -68,42 +132,21 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* KPI Row 1 */}
+      {/* KPI Row */}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {[
-          {
-            title: "Transacciones Hoy", value: "1,847", sub: "+12% vs ayer",
-            up: true, icon: <ArrowRightLeft className="w-4 h-4" />, color: "blue", bg: "bg-blue-100"
-          },
-          {
-            title: "Volumen Total", value: "$2.4M", sub: "+8% vs ayer",
-            up: true, icon: <DollarSign className="w-4 h-4" />, color: "emerald", bg: "bg-emerald-100"
-          },
-          {
-            title: "Terminales Activas", value: "4 / 6", sub: "1 re-configurada",
-            up: null, icon: <Store className="w-4 h-4" />, color: "purple", bg: "bg-purple-100"
-          },
-          {
-            title: "Estado Sistema", value: "Online", sub: "Uptime 99.9%",
-            up: null, icon: <Activity className="w-4 h-4" />, color: "green", bg: "bg-green-100"
-          },
-        ].map((kpi, i) => (
+        {kpis.map((kpi, i) => (
           <Card key={i} className="hover-elevate">
             <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">{kpi.title}</CardTitle>
-              <div className={`w-8 h-8 rounded-md ${kpi.bg} flex items-center justify-center text-${kpi.color}-600`}>
+              <div className={`w-8 h-8 rounded-md ${kpi.iconBg} flex items-center justify-center ${kpi.iconColor}`}>
                 {kpi.icon}
               </div>
             </CardHeader>
             <CardContent>
-              <div className={`text-2xl font-bold ${kpi.color === "green" ? "text-green-600" : kpi.color === "emerald" ? "text-emerald-600" : ""}`}>
+              <div className={`text-2xl font-bold ${kpi.valueColor}`} data-testid={`kpi-${i}`}>
                 {kpi.value}
               </div>
-              <p className={`text-xs mt-0.5 flex items-center gap-1 ${kpi.up === true ? "text-green-600" : kpi.up === false ? "text-red-600" : "text-muted-foreground"}`}>
-                {kpi.up === true && <TrendingUp className="w-3 h-3" />}
-                {kpi.up === false && <TrendingDown className="w-3 h-3" />}
-                {kpi.sub}
-              </p>
+              <p className="text-xs mt-0.5 text-muted-foreground">{kpi.sub}</p>
             </CardContent>
           </Card>
         ))}
@@ -114,12 +157,12 @@ export default function Dashboard() {
         {/* Hourly chart (simulated bars) */}
         <Card className="hover-elevate lg:col-span-2">
           <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <div>
                 <CardTitle className="flex items-center gap-2">
-                  <BarChart2 className="w-4 h-4 text-[#c8322b]" /> Transacciones por Hora
+                  <BarChart2 className="w-4 h-4 text-[#c8322b]" /> Actividad por Hora
                 </CardTitle>
-                <CardDescription>Últimas 12 horas</CardDescription>
+                <CardDescription>Tendencia simulada · últimas 12 horas</CardDescription>
               </div>
               <Badge className="bg-green-100 text-green-700 no-default-active-elevate">En vivo</Badge>
             </div>
@@ -152,19 +195,21 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Protocol breakdown */}
+        {/* Protocol breakdown (real data) */}
         <Card className="hover-elevate">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-sm">
               <Cpu className="w-4 h-4 text-[#c8322b]" /> Distribución Protocolos
             </CardTitle>
-            <CardDescription>Uso de hoy</CardDescription>
+            <CardDescription>{isAdmin ? "Sistema completo" : "Tus operaciones"}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {protocolStats.map((p, i) => (
+            {stats.total === 0 ? (
+              <p className="text-xs text-muted-foreground py-4 text-center">Sin datos todavía</p>
+            ) : protocolStats.map((p, i) => (
               <div key={i}>
                 <div className="flex items-center justify-between text-xs mb-1">
-                  <span className="font-semibold">{p.code} — {p.label}</span>
+                  <span className="font-semibold">{p.prefix}.x — {p.label}</span>
                   <span className="text-muted-foreground">{p.count}</span>
                 </div>
                 <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -179,15 +224,15 @@ export default function Dashboard() {
 
       {/* Bottom grid */}
       <div className="grid gap-4 lg:grid-cols-3">
-        {/* Recent Activity */}
+        {/* Recent Activity (real data) */}
         <Card className="hover-elevate lg:col-span-2">
           <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <div>
                 <CardTitle className="flex items-center gap-2">
                   <Activity className="w-4 h-4" /> Actividad Reciente
                 </CardTitle>
-                <CardDescription>Últimas transacciones procesadas</CardDescription>
+                <CardDescription>{isAdmin ? "Últimas transacciones del sistema" : "Tus últimas transacciones"}</CardDescription>
               </div>
               <Button variant="ghost" size="sm" onClick={() => setLocation("/registros")} data-testid="link-all-records">
                 Ver todo <ChevronRight className="w-3 h-3 ml-1" />
@@ -195,24 +240,41 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="divide-y">
-              {recentActivity.map((tx) => (
-                <div key={tx.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors" data-testid={`row-activity-${tx.id}`}>
-                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${tx.status === "completed" ? "bg-green-500" : "bg-red-500"}`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold truncate">{tx.id}</p>
-                    <p className="text-xs text-muted-foreground">{tx.protocol} · {tx.name} · {tx.card}</p>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-sm font-bold">${(tx.amount / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
-                    <p className={`text-xs font-medium ${tx.status === "completed" ? "text-green-600" : "text-red-600"}`}>
-                      {tx.status === "completed" ? "Completada" : "Fallida"}
-                    </p>
-                  </div>
-                  <span className="text-[10px] text-muted-foreground hidden sm:block w-20 text-right">{tx.time}</span>
-                </div>
-              ))}
-            </div>
+            {recentActivity.length === 0 ? (
+              <div className="py-12 text-center text-muted-foreground" data-testid="empty-activity">
+                <Inbox className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">Aún no tienes transacciones.</p>
+                <Button variant="outline" size="sm" className="mt-3" onClick={() => setLocation("/transacciones")} data-testid="button-first-tx">
+                  Crear primera transacción
+                </Button>
+              </div>
+            ) : (
+              <div className="divide-y">
+                {recentActivity.map((tx) => {
+                  const card = cardFromDescription(tx.description);
+                  const isOk = tx.status === "completed";
+                  const isFail = tx.status === "failed";
+                  return (
+                    <div key={tx.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors" data-testid={`row-activity-${tx.transactionId}`}>
+                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isOk ? "bg-green-500" : isFail ? "bg-red-500" : "bg-yellow-500"}`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold truncate">{tx.transactionId}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {tx.protocol} · {TYPE_LABEL[tx.type] ?? tx.type}{card ? ` · ${card}` : ""}
+                        </p>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-sm font-bold whitespace-nowrap">{fmtMoney(parseFloat(tx.amount || "0"))} <span className="text-[10px] font-normal text-muted-foreground">{tx.currency}</span></p>
+                        <p className={`text-xs font-medium ${isOk ? "text-green-600" : isFail ? "text-red-600" : "text-yellow-600"}`}>
+                          {isOk ? "Completada" : isFail ? "Rechazada" : tx.status === "processing" ? "Procesando" : "Pendiente"}
+                        </p>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground hidden sm:block w-20 text-right">{relativeTime(tx.createdAt)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -288,8 +350,12 @@ export default function Dashboard() {
         <CardContent>
           <div className="grid gap-2 sm:grid-cols-3">
             {[
-              { msg: "Terminal T1003 (PAX S920) desconectada en Sucursal Sur", type: "error" },
-              { msg: "3 transacciones pendientes de revisión manual", type: "warn" },
+              stats.pending > 0
+                ? { msg: `${stats.pending} ${stats.pending === 1 ? "transacción pendiente" : "transacciones pendientes"} de revisión`, type: "warn" }
+                : { msg: "No hay transacciones pendientes de revisión", type: "info" },
+              stats.failed > 0
+                ? { msg: `${stats.failed} ${stats.failed === 1 ? "transacción rechazada" : "transacciones rechazadas"} recientemente`, type: "error" }
+                : { msg: "Sin rechazos recientes en tus operaciones", type: "info" },
               { msg: "Rotación de claves programada para mañana 00:00 hrs", type: "info" },
             ].map((alert, i) => (
               <div key={i} className={`flex items-start gap-2 p-2.5 rounded-md text-xs ${alert.type === "error" ? "bg-red-100 text-red-700" : alert.type === "warn" ? "bg-yellow-100 text-yellow-700" : "bg-blue-100 text-blue-700"}`}>

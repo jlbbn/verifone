@@ -11,7 +11,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   CreditCard, Check, ArrowRightLeft, ShieldCheck, Lock,
   Cpu, Clock, Copy, RefreshCw, ChevronRight, Zap,
@@ -131,6 +131,8 @@ export default function NewTransactionPage() {
       };
       setResult(txResult);
       setStep("result");
+      // Refrescar listados (Dashboard/Registros) tras una nueva transacción.
+      queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
       toast({ title: "Transacción Autorizada", description: `Auth Code: ${data.authCode}` });
     },
     onError: () => {
