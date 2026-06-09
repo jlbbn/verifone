@@ -5,7 +5,7 @@ import { storage } from "./storage";
 import { randomBytes } from "crypto";
 import { z } from "zod";
 import { verifyPassword, maskCardNumber, hashPassword } from "./auth-utils";
-import { insertPaymentMethodSchema, insertTransactionSchema, type User } from "@shared/schema";
+import { insertPaymentMethodSchema, insertTransactionSchema, type User, type Transaction } from "@shared/schema";
 
 declare module "express-session" {
   interface SessionData {
@@ -60,6 +60,14 @@ function publicUser(user: User) {
     position: user.position,
     avatar: user.avatar,
   };
+}
+
+// ¿Puede el usuario ver/usar esta transacción? ADMIN sí; USER solo las suyas.
+function canAccessTransaction(
+  tx: Transaction | undefined,
+  user: User,
+): tx is Transaction {
+  return !!tx && (user.role === "ADMIN" || tx.createdBy === user.username);
 }
 
 const loginLimiter = rateLimit({
@@ -214,7 +222,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/transactions", async (req, res) => {
     try {
       const parsed = insertTransactionSchema
-        .omit({ transactionId: true, status: true })
+        .omit({ transactionId: true, status: true, createdBy: true })
         .safeParse(req.body);
       if (!parsed.success) {
         res.status(400).json({ error: "Datos de transacción inválidos" });
@@ -224,6 +232,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...parsed.data,
         transactionId: `TXN-${Date.now()}-${randomBytes(4).toString('hex').toUpperCase()}`,
         status: "pending",
+        // El propietario siempre se fija desde la sesión (nunca desde el body).
+        createdBy: req.currentUser!.username,
       };
       
       const transaction = await storage.createTransaction(transactionData);
@@ -242,9 +252,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/transactions", async (_req, res) => {
+  app.get("/api/transactions", async (req, res) => {
     try {
-      const transactions = await storage.getAllTransactions();
+      const user = req.currentUser!;
+      // ADMIN ve todas; cada USER solo las suyas.
+      const transactions = user.role === "ADMIN"
+        ? await storage.getAllTransactions()
+        : await storage.getTransactionsByUser(user.username);
       res.json(transactions);
     } catch (error) {
       res.status(500).json({ error: "Error al obtener transacciones" });
@@ -254,7 +268,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/transactions/:id", async (req, res) => {
     try {
       const transaction = await storage.getTransaction(req.params.id);
-      if (!transaction) {
+      // 404 (no 403) si no existe o no es del usuario: evita revelar existencia.
+      if (!canAccessTransaction(transaction, req.currentUser!)) {
         res.status(404).json({ error: "Transacción no encontrada" });
         return;
       }
@@ -299,6 +314,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(400).json({ error: "Datos de método de pago inválidos" });
         return;
       }
+      // El método de pago debe colgar de una transacción del propio usuario.
+      const parent = await storage.getTransaction(parsed.data.transactionId);
+      if (!canAccessTransaction(parent, req.currentUser!)) {
+        res.status(404).json({ error: "Transacción no encontrada" });
+        return;
+      }
       const paymentMethod = await storage.createPaymentMethod(parsed.data);
       res.json(paymentMethod);
     } catch (error) {
@@ -309,7 +330,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/payment-methods/:id", async (req, res) => {
     try {
       const paymentMethod = await storage.getPaymentMethod(req.params.id);
-      if (!paymentMethod) {
+      const parent = paymentMethod
+        ? await storage.getTransaction(paymentMethod.transactionId)
+        : undefined;
+      if (!paymentMethod || !canAccessTransaction(parent, req.currentUser!)) {
         res.status(404).json({ error: "Método de pago no encontrado" });
         return;
       }
@@ -325,6 +349,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   app.post("/api/security-tokens", async (req, res) => {
     try {
+      // El token debe colgar de una transacción del propio usuario.
+      const parent = await storage.getTransaction(req.body.transactionId);
+      if (!canAccessTransaction(parent, req.currentUser!)) {
+        res.status(404).json({ error: "Transacción no encontrada" });
+        return;
+      }
+
       const tokenId = `TOK-${Date.now()}-${randomBytes(8).toString('hex').toUpperCase()}`;
       const hash = randomBytes(32).toString('hex');
       
@@ -348,7 +379,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/security-tokens/:tokenId", async (req, res) => {
     try {
       const token = await storage.getSecurityToken(req.params.tokenId);
-      if (!token) {
+      const parent = token
+        ? await storage.getTransaction(token.transactionId)
+        : undefined;
+      if (!token || !canAccessTransaction(parent, req.currentUser!)) {
         res.status(404).json({ error: "Token no encontrado" });
         return;
       }
@@ -364,6 +398,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   app.get("/api/transaction-logs/:transactionId", async (req, res) => {
     try {
+      const parent = await storage.getTransaction(req.params.transactionId);
+      if (!canAccessTransaction(parent, req.currentUser!)) {
+        res.status(404).json({ error: "Transacción no encontrada" });
+        return;
+      }
       const logs = await storage.getTransactionLogs(req.params.transactionId);
       res.json(logs);
     } catch (error) {
@@ -397,7 +436,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         currency: "USD",
         status: "processing",
         authCode,
-        description: `Pago con ${cardType} - ${maskCardNumber(cardNumber)}`
+        description: `Pago con ${cardType} - ${maskCardNumber(cardNumber)}`,
+        createdBy: req.currentUser!.username,
       });
       
       // Crear método de pago (CVV/PIN nunca se persisten, tarjeta enmascarada)
@@ -424,7 +464,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Simular aprobación
       setTimeout(async () => {
-        await storage.updateTransactionStatus(transaction.id, "completed", authCode);
+        try {
+          await storage.updateTransactionStatus(transaction.id, "completed", authCode);
+        } catch (err) {
+          console.error("Error al completar transacción POS:", err);
+        }
       }, 2000);
       
       res.json({

@@ -19,6 +19,7 @@ export interface IStorage {
   createTransaction(transaction: InsertTransaction): Promise<Transaction>;
   getTransaction(id: string): Promise<Transaction | undefined>;
   getAllTransactions(): Promise<Transaction[]>;
+  getTransactionsByUser(username: string): Promise<Transaction[]>;
   updateTransactionStatus(id: string, status: string, authCode?: string): Promise<Transaction | undefined>;
   
   // Payment Methods
@@ -56,6 +57,7 @@ export class MemStorage implements IStorage {
     
     this.initializeProtocols();
     this.initializeAdminUser();
+    this.seedTransactions();
   }
 
   private initializeProtocols() {
@@ -111,6 +113,50 @@ export class MemStorage implements IStorage {
     console.log(`Storage initialized with ${this.users.size} users`);
   }
 
+  // Siembra transacciones demo por usuario para que el scoping sea visible.
+  private seedTransactions() {
+    const now = Date.now();
+    const seeds: Array<{
+      owner: string; type: string; protocol: string; amount: string;
+      currency: string; status: string; description: string; minsAgo: number;
+    }> = [
+      // Admin — José Luis Barrientos
+      { owner: "Admin", type: "transfer", protocol: "101.3", amount: "680000.00", currency: "USD", status: "completed", description: "Transferencia segura interbancaria", minsAgo: 4 },
+      { owner: "Admin", type: "payment", protocol: "201.2", amount: "1200000.00", currency: "USD", status: "completed", description: "Pago con AMEX - ****3007", minsAgo: 12 },
+      { owner: "Admin", type: "withdrawal", protocol: "401.1", amount: "75000.00", currency: "USD", status: "completed", description: "Retiro ATM corporativo", minsAgo: 38 },
+      // Ángel Estrada
+      { owner: "angoestradacontacto@gmail.com", type: "payment", protocol: "201.1", amount: "5420.00", currency: "USD", status: "completed", description: "Pago con VISA - ****8821", minsAgo: 7 },
+      { owner: "angoestradacontacto@gmail.com", type: "transfer", protocol: "101.2", amount: "2100.00", currency: "USD", status: "completed", description: "Transferencia con validación", minsAgo: 21 },
+      { owner: "angoestradacontacto@gmail.com", type: "payment", protocol: "201.3", amount: "890.00", currency: "MXN", status: "processing", description: "Pago con Mastercard - ****4459", minsAgo: 33 },
+      { owner: "angoestradacontacto@gmail.com", type: "deposit", protocol: "301.1", amount: "12500.00", currency: "USD", status: "pending", description: "Depósito a cuenta", minsAgo: 55 },
+      // Socemro
+      { owner: "socemro2@gmail.com", type: "deposit", protocol: "301.2", amount: "8900.00", currency: "USD", status: "completed", description: "Depósito efectivo", minsAgo: 9 },
+      { owner: "socemro2@gmail.com", type: "payment", protocol: "201.2", amount: "12500.00", currency: "USD", status: "failed", description: "Pago con Mastercard - ****9913", minsAgo: 26 },
+      { owner: "socemro2@gmail.com", type: "transfer", protocol: "101.3", amount: "45000.00", currency: "USD", status: "completed", description: "Transferencia segura", minsAgo: 48 },
+    ];
+
+    seeds.forEach((s, i) => {
+      const id = randomUUID();
+      const tx: Transaction = {
+        id,
+        transactionId: `TXN-${10000 + i}`,
+        protocol: s.protocol,
+        type: s.type,
+        amount: s.amount,
+        currency: s.currency,
+        status: s.status,
+        fromAccount: null,
+        toAccount: null,
+        description: s.description,
+        authCode: s.status === "completed" ? `AUTH-${100000 + i}` : null,
+        tokenId: null,
+        createdBy: s.owner,
+        createdAt: new Date(now - s.minsAgo * 60000),
+      };
+      this.transactions.set(id, tx);
+    });
+  }
+
   // Users
   async getUser(id: string): Promise<User | undefined> {
     return this.users.get(id);
@@ -154,6 +200,7 @@ export class MemStorage implements IStorage {
       description: insertTransaction.description || null,
       authCode: insertTransaction.authCode || null,
       tokenId: insertTransaction.tokenId || null,
+      createdBy: insertTransaction.createdBy || null,
       createdAt: new Date()
     };
     this.transactions.set(id, transaction);
@@ -168,6 +215,12 @@ export class MemStorage implements IStorage {
     return Array.from(this.transactions.values()).sort((a, b) => 
       b.createdAt.getTime() - a.createdAt.getTime()
     );
+  }
+
+  async getTransactionsByUser(username: string): Promise<Transaction[]> {
+    return Array.from(this.transactions.values())
+      .filter((t) => t.createdBy === username)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
   async updateTransactionStatus(id: string, status: string, authCode?: string): Promise<Transaction | undefined> {

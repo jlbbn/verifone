@@ -1,0 +1,4 @@
+- [Per-user data ownership scoping](ownership-scoping.md) — owner key is username (ids unstable across MemStorage restarts); 404 not 403; derived resources check parent tx ownership.
+- [Testing secure-cookie sessions on localhost](local-secure-cookie-testing.md) — curl needs `X-Forwarded-Proto: https` + a cookie jar or the Secure session cookie is dropped.
+- [Express.User type collision with passport](express-user-type-collision.md) — inside `namespace Express`, bare `User` resolves to passport's empty type; use `import("@shared/schema").User`.
+- [Version pinning constraints](version-pinning.md) — express@4, react@18, vite@5, tailwind@3 pinned; pages use recharts directly; always run `tsc --noEmit` after dep changes.
