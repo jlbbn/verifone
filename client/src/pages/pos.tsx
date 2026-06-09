@@ -8,9 +8,29 @@ import {
   TrendingUp, TrendingDown, Filter, Search
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { CalendarClock } from "lucide-react";
+
+// Calcula el estado de la suscripción (plan de 12 meses) a partir de su fecha de inicio.
+function getSubscriptionInfo(startIso: string | null | undefined) {
+  if (!startIso) return null;
+  const start = new Date(startIso);
+  if (isNaN(start.getTime())) return null;
+  const end = new Date(start);
+  end.setMonth(end.getMonth() + 12);
+  const now = new Date();
+  const msDay = 86400000;
+  const totalDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / msDay));
+  const daysRemaining = Math.max(0, Math.ceil((end.getTime() - now.getTime()) / msDay));
+  const monthsRemaining = Math.max(0, Math.min(12, Math.round(daysRemaining / (totalDays / 12))));
+  const progress = Math.min(100, Math.max(0, Math.round(((totalDays - daysRemaining) / totalDays) * 100)));
+  const fmt = (d: Date) => d.toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" });
+  return { start, end, totalDays, daysRemaining, monthsRemaining, progress, startLabel: fmt(start), endLabel: fmt(end) };
+}
 
 interface TimeZoneInfo {
   city: string;
@@ -228,15 +248,69 @@ export default function POSPage() {
     }
   }
 
+  const requestPosMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/notifications/pos-request");
+      return res.json() as Promise<{ success: boolean; duplicate: boolean }>;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      toast({
+        title: data.duplicate ? "Solicitud ya registrada" : "Solicitud enviada",
+        description: data.duplicate
+          ? "Ya tienes una solicitud de POS pendiente. El administrador la revisará pronto."
+          : "Tu solicitud fue enviada al administrador. Te notificaremos cuando sea atendida.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "No se pudo enviar la solicitud. Intenta de nuevo.",
+        variant: "destructive",
+      });
+    },
+  });
+
   function handleRequestPos() {
-    toast({
-      title: "Solicitud enviada",
-      description: "Un administrador revisará tu solicitud y configurará tu terminal POS próximamente.",
-    });
+    requestPosMutation.mutate();
   }
 
   if (!isAdmin) {
     const myTerminals = terminals.filter(t => t.owner === user?.username);
+    const sub = getSubscriptionInfo(user?.subscriptionStart);
+
+    const subscriptionBanner = sub ? (
+      <Card data-testid="card-subscription">
+        <CardContent className="pt-5 pb-5">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-md bg-[#c8322b]/10 flex items-center justify-center flex-shrink-0">
+                <CalendarClock className="w-5 h-5 text-[#c8322b]" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-sm font-semibold">Suscripción activa</p>
+                  <Badge className="bg-green-100 text-green-700 border-green-200 no-default-active-elevate">Plan 12 meses</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5" data-testid="text-subscription-legend">
+                  Te quedan <span className="font-semibold text-foreground">{sub.monthsRemaining} meses activos de servicio</span>.
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Vigencia: {sub.startLabel} — {sub.endLabel}
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-3xl font-bold text-[#c8322b] leading-none" data-testid="text-days-remaining">{sub.daysRemaining}</p>
+              <p className="text-xs text-muted-foreground mt-1">días restantes</p>
+            </div>
+          </div>
+          <div className="mt-4 h-2 w-full rounded-full bg-muted overflow-hidden">
+            <div className="h-full rounded-full bg-[#c8322b]" style={{ width: `${sub.progress}%` }} data-testid="bar-subscription-progress" />
+          </div>
+        </CardContent>
+      </Card>
+    ) : null;
 
     // Common user WITHOUT an assigned terminal → "no POS" legend
     if (myTerminals.length === 0) {
@@ -250,6 +324,8 @@ export default function POSPage() {
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">Terminal punto de venta · {user?.fullName ?? "Usuario"}</p>
           </div>
+
+          {subscriptionBanner}
 
           {/* No active terminal legend */}
           <Card className="border-2 border-dashed border-[#c8322b]/40">
@@ -303,6 +379,8 @@ export default function POSPage() {
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">Terminal punto de venta · {user?.fullName ?? "Usuario"}</p>
         </div>
+
+        {subscriptionBanner}
 
         {/* Limited access note */}
         <Card>

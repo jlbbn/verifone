@@ -59,6 +59,7 @@ function publicUser(user: User) {
     role: user.role,
     position: user.position,
     avatar: user.avatar,
+    subscriptionStart: user.subscriptionStart,
   };
 }
 
@@ -188,6 +189,127 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // A partir de aquí, todas las rutas /api requieren sesión válida (deny-by-default).
   app.use("/api", requireSession);
+
+  // ====================================================================
+  // NOTIFICACIONES Y SOLICITUDES
+  // ====================================================================
+
+  // Lista las notificaciones del usuario actual (admin recibe también las "ADMIN").
+  app.get("/api/notifications", async (req, res) => {
+    try {
+      const user = req.currentUser!;
+      const isAdmin = user.role === "ADMIN";
+      const notifications = await storage.getNotificationsForUser(user.username, isAdmin);
+      const unread = notifications.filter((n) => !n.read).length;
+      const pending = notifications.filter((n) => n.status === "pending").length;
+      res.json({ notifications, unread, pending });
+    } catch (error) {
+      res.status(500).json({ error: "Error al obtener notificaciones" });
+    }
+  });
+
+  // Crea una solicitud de configuración de POS dirigida al administrador.
+  app.post("/api/notifications/pos-request", async (req, res) => {
+    try {
+      const user = req.currentUser!;
+      const alreadyPending = await storage.hasPendingPosRequest(user.username);
+
+      if (alreadyPending) {
+        res.json({ success: true, duplicate: true });
+        return;
+      }
+
+      await storage.createNotification({
+        recipient: "ADMIN",
+        type: "pos_request",
+        title: "Solicitud de configuración de POS",
+        message: `${user.fullName} (${user.username}) no tiene una terminal activa y solicita la configuración (deploy) de un nuevo POS.`,
+        fromUser: user.username,
+        status: "pending",
+        read: false,
+      });
+
+      await storage.createNotification({
+        recipient: user.username,
+        type: "request_sent",
+        title: "Solicitud enviada",
+        message: "Tu solicitud de configuración de POS fue enviada al administrador. Recibirás una notificación cuando sea atendida.",
+        fromUser: user.username,
+        status: "info",
+        read: false,
+      });
+
+      res.json({ success: true, duplicate: false });
+    } catch (error) {
+      res.status(500).json({ error: "Error al enviar la solicitud" });
+    }
+  });
+
+  // Marca una notificación como leída (solo del propio usuario / admin).
+  app.patch("/api/notifications/:id/read", async (req, res) => {
+    try {
+      const user = req.currentUser!;
+      const isAdmin = user.role === "ADMIN";
+      const notification = await storage.getNotification(req.params.id);
+      if (!notification) {
+        res.status(404).json({ error: "Notificación no encontrada" });
+        return;
+      }
+      const owns = notification.recipient === user.username || (isAdmin && notification.recipient === "ADMIN");
+      if (!owns) {
+        res.status(403).json({ error: "Acceso denegado" });
+        return;
+      }
+      const updated = await storage.markNotificationRead(req.params.id);
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Error al actualizar la notificación" });
+    }
+  });
+
+  // Marca todas las notificaciones del usuario como leídas.
+  app.post("/api/notifications/read-all", async (req, res) => {
+    try {
+      const user = req.currentUser!;
+      const count = await storage.markAllNotificationsRead(user.username, user.role === "ADMIN");
+      res.json({ success: true, count });
+    } catch (error) {
+      res.status(500).json({ error: "Error al actualizar las notificaciones" });
+    }
+  });
+
+  // Resuelve/atiende una solicitud (solo ADMIN) y notifica al solicitante.
+  app.patch("/api/notifications/:id/resolve", requireRole("ADMIN"), async (req, res) => {
+    try {
+      const notification = await storage.getNotification(req.params.id);
+      if (!notification) {
+        res.status(404).json({ error: "Notificación no encontrada" });
+        return;
+      }
+      if (notification.type !== "pos_request") {
+        res.status(400).json({ error: "Solo las solicitudes de POS pueden marcarse como atendidas" });
+        return;
+      }
+      const updated = await storage.resolveNotification(req.params.id);
+
+      // Notifica al solicitante que su solicitud fue atendida.
+      if (notification.fromUser) {
+        await storage.createNotification({
+          recipient: notification.fromUser,
+          type: "request_resolved",
+          title: "Solicitud atendida",
+          message: "El administrador atendió tu solicitud de configuración de POS. Tu terminal será habilitada en breve.",
+          fromUser: null,
+          status: "info",
+          read: false,
+        });
+      }
+
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Error al resolver la solicitud" });
+    }
+  });
 
   // ====================================================================
   // PROTOCOLOS BANCARIOS
