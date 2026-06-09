@@ -50,12 +50,12 @@ const initialMovements: Movement[] = [
 ];
 
 const denominations = [
-  { bill: "$1,000", qty: 12 },
-  { bill: "$500",   qty: 28 },
-  { bill: "$200",   qty: 15 },
-  { bill: "$100",   qty: 43 },
-  { bill: "$50",    qty: 22 },
-  { bill: "$20",    qty: 38 },
+  { bill: "$1,000", qty: 30 },
+  { bill: "$500",   qty: 30 },
+  { bill: "$200",   qty: 20 },
+  { bill: "$100",   qty: 40 },
+  { bill: "$50",    qty: 20 },
+  { bill: "$20",    qty: 27 },
 ];
 
 export default function CajaPage() {
@@ -92,6 +92,60 @@ export default function CajaPage() {
     setMovements(prev => [newMov, ...prev]);
     setShowForm(null);
     toast({ title: data.type === "ingreso" ? "Ingreso registrado" : "Egreso registrado", description: `$${parseFloat(data.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })} — ${data.description}` });
+  }
+
+  const efectivoFisico = denominations.reduce((s, d) => s + parseInt(d.bill.replace(/\D/g, "")) * d.qty, 0);
+
+  function downloadFile(filename: string, content: string, mime = "text/plain;charset=utf-8") {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function handleReporteDiario() {
+    const fecha = new Date().toLocaleDateString("es-MX");
+    const header = "ID,Tipo,Categoría,Descripción,Referencia,Monto,Hora,Usuario";
+    const rows = movements.map(m =>
+      [m.id, m.type, m.category, `"${m.description.replace(/"/g, '""')}"`, m.reference || "", m.amount.toFixed(2), m.time, m.user].join(",")
+    );
+    downloadFile(`reporte-caja-${fecha.replace(/\//g, "-")}.csv`, [header, ...rows].join("\n"), "text/csv;charset=utf-8");
+    toast({ title: "Reporte diario generado", description: `${movements.length} movimientos exportados a CSV.` });
+  }
+
+  function handleCierreCaja() {
+    const fecha = new Date().toLocaleString("es-MX", { dateStyle: "long", timeStyle: "short" });
+    const reporte = [
+      "========================================",
+      "        BANXICO PLUS — CIERRE DE CAJA",
+      "========================================",
+      `Fecha de cierre : ${fecha}`,
+      `Cajero          : Admin`,
+      "----------------------------------------",
+      `Saldo apertura  : $45,890.00`,
+      `Total ingresos  : +$${ingresos.toLocaleString("en-US", { minimumFractionDigits: 2 })}  (${movements.filter(m => m.type === "ingreso").length} mov.)`,
+      `Total egresos   : -$${egresos.toLocaleString("en-US", { minimumFractionDigits: 2 })}  (${movements.filter(m => m.type === "egreso").length} mov.)`,
+      "----------------------------------------",
+      `SALDO FINAL     : $${saldo.toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
+      `Efectivo físico : $${efectivoFisico.toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
+      "========================================",
+      "Documento simulado — Banxico Plus",
+    ].join("\n");
+    downloadFile(`cierre-caja-${new Date().toISOString().slice(0, 10)}.txt`, reporte);
+    toast({ title: "Cierre de caja realizado", description: `Saldo final: $${saldo.toLocaleString("en-US", { minimumFractionDigits: 2 })}. Reporte descargado.` });
+  }
+
+  function handleArqueo() {
+    const diferencia = efectivoFisico - saldo;
+    const cuadra = Math.abs(diferencia) < 0.01;
+    toast({
+      title: cuadra ? "Arqueo cuadrado ✓" : "Diferencia detectada en arqueo",
+      description: `Efectivo contado: $${efectivoFisico.toLocaleString("en-US", { minimumFractionDigits: 2 })} · Saldo sistema: $${saldo.toLocaleString("en-US", { minimumFractionDigits: 2 })} · Diferencia: ${diferencia >= 0 ? "+" : "-"}$${Math.abs(diferencia).toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
+      variant: cuadra ? undefined : "destructive",
+    });
   }
 
   const filtered = movements.filter(m => filterType === "all" || m.type === filterType);
@@ -357,13 +411,13 @@ export default function CajaPage() {
                 <span className="text-sm font-semibold">Controles</span>
               </div>
               <div className="space-y-2">
-                <Button variant="outline" size="sm" className="w-full justify-start text-xs" data-testid="button-cierre-caja">
+                <Button variant="outline" size="sm" className="w-full justify-start text-xs" onClick={handleCierreCaja} data-testid="button-cierre-caja">
                   <FileText className="w-3.5 h-3.5 mr-2" /> Cierre de Caja
                 </Button>
-                <Button variant="outline" size="sm" className="w-full justify-start text-xs" data-testid="button-arqueo">
+                <Button variant="outline" size="sm" className="w-full justify-start text-xs" onClick={handleArqueo} data-testid="button-arqueo">
                   <Calculator className="w-3.5 h-3.5 mr-2" /> Arqueo de Caja
                 </Button>
-                <Button variant="outline" size="sm" className="w-full justify-start text-xs" data-testid="button-reporte">
+                <Button variant="outline" size="sm" className="w-full justify-start text-xs" onClick={handleReporteDiario} data-testid="button-reporte">
                   <BarChart2 className="w-3.5 h-3.5 mr-2" /> Reporte Diario
                 </Button>
               </div>

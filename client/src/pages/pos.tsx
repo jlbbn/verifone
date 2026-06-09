@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
 
 interface TimeZoneInfo {
   city: string;
@@ -37,7 +38,7 @@ interface POSTerminal {
   configNote?: string;
 }
 
-const terminals: POSTerminal[] = [
+const initialTerminals: POSTerminal[] = [
   {
     id: "T1001", model: "Verifone VX 690", serial: "VFN-VX690-A4821", status: "Online",
     transactions: 542, amount: 2304567.89, efficiency: 98, location: "Sucursal Centro",
@@ -106,6 +107,8 @@ function getStatusBadge(status: POSTerminal["status"]) {
 }
 
 export default function POSPage() {
+  const { toast } = useToast();
+  const [terminals, setTerminals] = useState<POSTerminal[]>(initialTerminals);
   const [timeZones, setTimeZones] = useState<TimeZoneInfo[]>([]);
   const [position, setPosition] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -186,6 +189,40 @@ export default function POSPage() {
 
   const onlineCount = terminals.filter(t => t.status === "Online" || t.status === "Reconfigured").length;
 
+  function handleRefresh() {
+    const next = terminals.map(t => t.status === "Offline" ? t : {
+      ...t,
+      signalStrength: Math.max(55, Math.min(100, t.signalStrength + Math.round((Math.random() - 0.5) * 10))),
+      lastTx: "Hace 1 seg",
+    });
+    setTerminals(next);
+    setLastUpdate(new Date());
+    if (selectedTerminal) setSelectedTerminal(next.find(t => t.id === selectedTerminal.id) ?? selectedTerminal);
+    toast({ title: "Terminales actualizadas", description: `${onlineCount} de ${terminals.length} terminales operativas.` });
+  }
+
+  function handleConfig(terminal: POSTerminal) {
+    const updated: POSTerminal = { ...terminal, status: "Reconfigured", configNote: "Re-configurada ahora — Lista para Operar" };
+    setTerminals(prev => prev.map(t => t.id === terminal.id ? updated : t));
+    setSelectedTerminal(updated);
+    toast({ title: `Terminal ${terminal.id} configurada`, description: "Parámetros aplicados y verificados correctamente." });
+  }
+
+  function handleReset(terminal: POSTerminal) {
+    const updated: POSTerminal = { ...terminal, status: "Idle", lastTx: "Reiniciada ahora", efficiency: 100, signalStrength: terminal.signalStrength || 80 };
+    setTerminals(prev => prev.map(t => t.id === terminal.id ? updated : t));
+    if (selectedTerminal?.id === terminal.id) setSelectedTerminal(updated);
+    toast({ title: `Terminal ${terminal.id} reiniciada`, description: "La terminal se reinició y quedó en modo inactivo, lista para operar." });
+  }
+
+  function handleHeaderConfig() {
+    if (selectedTerminal) {
+      handleConfig(selectedTerminal);
+    } else {
+      toast({ title: "Configuración POS", description: "Selecciona una terminal de la lista para configurarla." });
+    }
+  }
+
   return (
     <div className="space-y-0">
       {/* Time Zone Ticker */}
@@ -227,10 +264,10 @@ export default function POSPage() {
               <RefreshCw className="w-3 h-3 animate-spin" />
               Actualizado: {lastUpdate.toLocaleTimeString("es-MX")}
             </div>
-            <Button variant="outline" size="sm" data-testid="button-refresh-pos">
+            <Button variant="outline" size="sm" onClick={handleRefresh} data-testid="button-refresh-pos">
               <RefreshCw className="w-4 h-4 mr-1" /> Actualizar
             </Button>
-            <Button size="sm" className="bg-[#c8322b] hover:bg-[#a62822]" data-testid="button-add-terminal">
+            <Button size="sm" className="bg-[#c8322b] hover:bg-[#a62822]" onClick={handleHeaderConfig} data-testid="button-add-terminal">
               <Settings className="w-4 h-4 mr-1" /> Configurar
             </Button>
           </div>
@@ -485,12 +522,12 @@ export default function POSPage() {
                       <Eye className="w-3 h-3 mr-1" /> Ver
                     </Button>
                     <Button variant="outline" size="sm" className="text-xs h-7 px-2" data-testid={`button-config-${pos.id}`}
-                      onClick={e => e.stopPropagation()}>
+                      onClick={e => { e.stopPropagation(); handleConfig(pos); }}>
                       <Settings className="w-3 h-3 mr-1" /> Config
                     </Button>
                     {pos.status !== "Offline" && (
                       <Button variant="outline" size="sm" className="text-xs h-7 px-2 text-red-600 hover:text-red-700"
-                        data-testid={`button-power-${pos.id}`} onClick={e => e.stopPropagation()}>
+                        data-testid={`button-power-${pos.id}`} onClick={e => { e.stopPropagation(); handleReset(pos); }}>
                         <Power className="w-3 h-3 mr-1" /> Reset
                       </Button>
                     )}

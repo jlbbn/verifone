@@ -325,7 +325,8 @@ export default function RegistrosPage() {
                     {isAdmin && <td className="py-3 px-4 text-xs hidden md:table-cell truncate max-w-[160px]">{r.owner}</td>}
                     <td className="py-3 px-4 font-mono text-xs hidden lg:table-cell text-muted-foreground">{r.authCode}</td>
                     <td className="py-3 px-4">
-                      <Button variant="ghost" size="icon" className="w-7 h-7" data-testid={`view-${r.id}`}>
+                      <Button variant="ghost" size="icon" className="w-7 h-7" data-testid={`view-${r.id}`}
+                        onClick={(e) => { e.stopPropagation(); setSelected(selected?.id === r.id ? null : r); }}>
                         <Eye className="w-3.5 h-3.5" />
                       </Button>
                     </td>
