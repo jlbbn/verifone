@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { CreditCard } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { queryClient } from "@/lib/queryClient";
 
 const loginSchema = z.object({
   username: z.string().min(1, "Usuario requerido"),
@@ -38,6 +39,7 @@ export default function LoginPage() {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({
           username: data.username,
           password: data.password,
@@ -47,13 +49,12 @@ export default function LoginPage() {
       const result = await response.json();
 
       if (response.ok && result.success) {
+        queryClient.setQueryData(["/api/me"], result.user);
         toast({
           title: "Acceso concedido",
-          description: "Bienvenido al sistema Banxico Plus",
+          description: `Bienvenido, ${result.user?.fullName ?? "usuario"}`,
         });
-        setTimeout(() => {
-          setLocation("/dashboard");
-        }, 500);
+        setLocation("/dashboard");
       } else {
         toast({
           title: "Error de autenticación",

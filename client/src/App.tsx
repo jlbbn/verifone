@@ -6,7 +6,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { FinancialTicker } from "@/components/financial-ticker";
-import { CreditCard, Bell, User } from "lucide-react";
+import { CreditCard, Bell, User, Loader2 } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
 import LoginPage from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
 import NewTransactionPage from "@/pages/new-transaction";
@@ -18,6 +19,20 @@ import ClavesPage from "@/pages/claves";
 import NotFound from "@/pages/not-found";
 
 function AppLayout({ children }: { children: React.ReactNode }) {
+  const { user, isLoading, isAuthenticated } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <Loader2 className="w-8 h-8 animate-spin text-[#c8322b]" data-testid="loader-session" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Redirect to="/login" />;
+  }
+
   return (
     <div className="flex h-screen w-full flex-col md:flex-row">
       <AppSidebar />
@@ -32,9 +47,15 @@ function AppLayout({ children }: { children: React.ReactNode }) {
             <button className="hover:bg-white/10 p-2 rounded-md transition-colors">
               <Bell className="w-4 h-4 md:w-5 md:h-5" />
             </button>
-            <button className="hover:bg-white/10 p-2 rounded-md transition-colors">
-              <User className="w-4 h-4 md:w-5 md:h-5" />
-            </button>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+                <User className="w-4 h-4 md:w-5 md:h-5" />
+              </div>
+              <div className="hidden sm:block leading-tight">
+                <p className="text-xs font-semibold" data-testid="text-header-username">{user?.fullName}</p>
+                <p className="text-[10px] text-white/70" data-testid="text-header-email">{user?.email}</p>
+              </div>
+            </div>
           </div>
         </header>
         

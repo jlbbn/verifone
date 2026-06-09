@@ -77,6 +77,7 @@ export class MemStorage implements IStorage {
     const seedUsers: Array<Omit<User, "id" | "password"> & { password: string }> = [
       {
         username: "Admin",
+        email: "joseluis.barrientos@banxicoplus.com",
         password: "Keylog100$",
         fullName: "José Luis Barrientos",
         role: "ADMIN",
@@ -85,18 +86,20 @@ export class MemStorage implements IStorage {
       },
       {
         username: "angoestradacontacto@gmail.com",
+        email: "angoestradacontacto@gmail.com",
         password: "Keylog200$",
         fullName: "Ángel Estrada",
         role: "USER",
-        position: "User",
+        position: "Usuario",
         avatar: null,
       },
       {
         username: "socemro2@gmail.com",
+        email: "socemro2@gmail.com",
         password: "Keylog100$",
-        fullName: "socemro2",
+        fullName: "Socemro",
         role: "USER",
-        position: "User",
+        position: "Usuario",
         avatar: null,
       },
     ];
@@ -124,6 +127,7 @@ export class MemStorage implements IStorage {
     const user: User = {
       id,
       username: insertUser.username,
+      email: insertUser.email,
       password: hashPassword(insertUser.password),
       fullName: insertUser.fullName,
       role: insertUser.role || "USER",
