@@ -27,7 +27,7 @@ const transactionSchema = z.object({
   cvv: z.string().min(3, "CVV requerido").max(4),
   protocol: z.string().min(1, "Protocolo requerido"),
   transactionType: z.string().min(1, "Tipo de transacción requerido"),
-  currency: z.string().default("USD"),
+  currency: z.string(),
   fromAccount: z.string().optional(),
   toAccount: z.string().optional(),
   description: z.string().optional(),

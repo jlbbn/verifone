@@ -7,6 +7,7 @@ import {
   type BankingProtocol, type InsertBankingProtocol
 } from "@shared/schema";
 import { randomUUID } from "crypto";
+import { hashPassword, maskCardNumber } from "./auth-utils";
 
 export interface IStorage {
   // Users
@@ -72,46 +73,39 @@ export class MemStorage implements IStorage {
     protocols.forEach(p => this.protocols.set(p.code, p));
   }
 
-  private async initializeAdminUser() {
-    const id1 = randomUUID();
-    const adminUser: User = {
-      id: id1,
-      username: "Admin",
-      password: "Keylog100$",
-      fullName: "José Luis Barrientos",
-      role: "ADMIN",
-      position: "Software Engineer",
-      avatar: null
-    };
-    this.users.set(id1, adminUser);
-    console.log('Admin user initialized:', adminUser.username);
+  private initializeAdminUser() {
+    const seedUsers: Array<Omit<User, "id" | "password"> & { password: string }> = [
+      {
+        username: "Admin",
+        password: "Keylog100$",
+        fullName: "José Luis Barrientos",
+        role: "ADMIN",
+        position: "Software Engineer",
+        avatar: null,
+      },
+      {
+        username: "angoestradacontacto@gmail.com",
+        password: "Keylog200$",
+        fullName: "Ángel Estrada",
+        role: "USER",
+        position: "User",
+        avatar: null,
+      },
+      {
+        username: "socemro2@gmail.com",
+        password: "Keylog100$",
+        fullName: "socemro2",
+        role: "USER",
+        position: "User",
+        avatar: null,
+      },
+    ];
 
-    const id2 = randomUUID();
-    const newUser: User = {
-      id: id2,
-      username: "angoestradacontacto@gmail.com",
-      password: "Keylog200$",
-      fullName: "Ángel Estrada",
-      role: "USER",
-      position: "User",
-      avatar: null
-    };
-    this.users.set(id2, newUser);
-    console.log('New user initialized:', newUser.username);
-
-    const id3 = randomUUID();
-    const user3: User = {
-      id: id3,
-      username: "socemro2@gmail.com",
-      password: "Keylog100$",
-      fullName: "socemro2",
-      role: "USER",
-      position: "User",
-      avatar: null
-    };
-    this.users.set(id3, user3);
-    console.log('New user initialized:', user3.username);
-    console.log('Total users in storage:', this.users.size);
+    for (const seed of seedUsers) {
+      const id = randomUUID();
+      this.users.set(id, { ...seed, id, password: hashPassword(seed.password) });
+    }
+    console.log(`Storage initialized with ${this.users.size} users`);
   }
 
   // Users
@@ -130,7 +124,7 @@ export class MemStorage implements IStorage {
     const user: User = {
       id,
       username: insertUser.username,
-      password: insertUser.password,
+      password: hashPassword(insertUser.password),
       fullName: insertUser.fullName,
       role: insertUser.role || "USER",
       position: insertUser.position || null,
@@ -188,9 +182,10 @@ export class MemStorage implements IStorage {
       id,
       transactionId: insertPayment.transactionId,
       cardType: insertPayment.cardType,
-      cardNumber: insertPayment.cardNumber,
-      cvv: insertPayment.cvv || null,
-      pin: insertPayment.pin || null,
+      cardNumber: maskCardNumber(insertPayment.cardNumber),
+      // PCI DSS: CVV y PIN nunca se almacenan en persistencia
+      cvv: null,
+      pin: null,
       holderName: insertPayment.holderName,
       expiryDate: insertPayment.expiryDate,
       verified: insertPayment.verified || null
