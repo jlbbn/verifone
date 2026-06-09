@@ -1,11 +1,66 @@
-import type { Express } from "express";
+import type { Express, RequestHandler } from "express";
 import { createServer, type Server } from "http";
 import rateLimit from "express-rate-limit";
 import { storage } from "./storage";
 import { randomBytes } from "crypto";
 import { z } from "zod";
 import { verifyPassword, maskCardNumber, hashPassword } from "./auth-utils";
-import { insertPaymentMethodSchema, insertTransactionSchema } from "@shared/schema";
+import { insertPaymentMethodSchema, insertTransactionSchema, type User } from "@shared/schema";
+
+declare module "express-session" {
+  interface SessionData {
+    username?: string;
+  }
+}
+
+declare global {
+  namespace Express {
+    interface Request {
+      currentUser?: import("@shared/schema").User;
+    }
+  }
+}
+
+// Exige una sesión válida; deniega por defecto cualquier acceso no autenticado.
+const requireSession: RequestHandler = async (req, res, next) => {
+  const username = req.session.username;
+  if (!username) {
+    res.status(401).json({ error: "No autenticado" });
+    return;
+  }
+  const user = await storage.getUserByUsername(username);
+  if (!user) {
+    req.session.destroy(() => {});
+    res.status(401).json({ error: "No autenticado" });
+    return;
+  }
+  req.currentUser = user;
+  next();
+};
+
+// Exige que el usuario autenticado tenga un rol específico.
+function requireRole(role: string): RequestHandler {
+  return (req, res, next) => {
+    if (!req.currentUser || req.currentUser.role !== role) {
+      res.status(403).json({ error: "Acceso denegado" });
+      return;
+    }
+    next();
+  };
+}
+
+// Proyección segura del usuario (nunca expone la contraseña).
+function publicUser(user: User) {
+  return {
+    id: user.id,
+    username: user.username,
+    email: user.email,
+    fullName: user.fullName,
+    role: user.role,
+    position: user.position,
+    avatar: user.avatar,
+  };
+}
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -64,7 +119,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isValid = verifyPassword(password, user ? user.password : DUMMY_HASH);
 
       if (user && isValid) {
-        res.json({ success: true, user: { id: user.id, username: user.username, fullName: user.fullName, role: user.role } });
+        // Regenerar la sesión evita fijación de sesión tras autenticarse.
+        req.session.regenerate((err) => {
+          if (err) {
+            console.error("Session regenerate error");
+            res.status(500).json({ error: "Error en autenticación" });
+            return;
+          }
+          req.session.username = user.username;
+          req.session.save((saveErr) => {
+            if (saveErr) {
+              console.error("Session save error");
+              res.status(500).json({ error: "Error en autenticación" });
+              return;
+            }
+            res.json({ success: true, user: publicUser(user) });
+          });
+        });
       } else {
         res.status(401).json({ error: "Credenciales inválidas" });
       }
@@ -73,6 +144,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Error en autenticación" });
     }
   });
+
+  // Devuelve el usuario de la sesión actual (sin datos sensibles).
+  app.get("/api/me", async (req, res) => {
+    try {
+      const username = req.session.username;
+      if (!username) {
+        res.status(401).json({ error: "No autenticado" });
+        return;
+      }
+      const user = await storage.getUserByUsername(username);
+      if (!user) {
+        // La sesión apunta a un usuario inexistente (p. ej. tras reinicio).
+        req.session.destroy(() => {});
+        res.status(401).json({ error: "No autenticado" });
+        return;
+      }
+      res.json({ user: publicUser(user) });
+    } catch (error) {
+      res.status(500).json({ error: "Error al obtener la sesión" });
+    }
+  });
+
+  // Cierra la sesión del usuario actual.
+  app.post("/api/logout", (req, res) => {
+    req.session.destroy((err) => {
+      if (err) {
+        res.status(500).json({ error: "Error al cerrar sesión" });
+        return;
+      }
+      res.clearCookie("connect.sid");
+      res.json({ success: true });
+    });
+  });
+
+  // A partir de aquí, todas las rutas /api requieren sesión válida (deny-by-default).
+  app.use("/api", requireSession);
 
   // ====================================================================
   // PROTOCOLOS BANCARIOS
@@ -157,7 +264,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/transactions/:id/status", async (req, res) => {
+  app.patch("/api/transactions/:id/status", requireRole("ADMIN"), async (req, res) => {
     try {
       const { status, authCode } = req.body;
       const transaction = await storage.updateTransactionStatus(req.params.id, status, authCode);
