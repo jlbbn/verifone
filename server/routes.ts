@@ -1,8 +1,47 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import rateLimit from "express-rate-limit";
 import { storage } from "./storage";
 import { randomBytes } from "crypto";
 import { z } from "zod";
+import { verifyPassword, maskCardNumber, hashPassword } from "./auth-utils";
+import { insertPaymentMethodSchema, insertTransactionSchema } from "@shared/schema";
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Demasiados intentos de acceso. Intente más tarde." },
+});
+
+const paymentLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Demasiadas solicitudes de pago. Intente más tarde." },
+});
+
+// Hash señuelo para igualar el tiempo de respuesta cuando el usuario no existe
+// (mitiga enumeración de usuarios por análisis de tiempos).
+const DUMMY_HASH = hashPassword("dummy-password-for-timing-equalization");
+
+const loginSchema = z.object({
+  username: z.string().min(1).max(255),
+  password: z.string().min(1).max(255),
+});
+
+const posPaymentSchema = z.object({
+  cardType: z.string().min(1).max(50),
+  cardNumber: z.string().min(4).max(25),
+  amount: z.union([z.string(), z.number()]).transform((v) => String(v)),
+  protocol: z.string().max(20).optional(),
+  holderName: z.string().max(120).optional(),
+  expiryDate: z.string().max(10).optional(),
+  cvv: z.string().max(4).optional(),
+  pin: z.string().max(8).optional(),
+});
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
@@ -10,22 +49,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // AUTENTICACIÓN
   // ====================================================================
   
-  app.post("/api/login", async (req, res) => {
+  app.post("/api/login", loginLimiter, async (req, res) => {
     try {
-      const { username, password } = req.body;
-      
-      console.log('Login attempt:', { username, password });
-      
+      const parsed = loginSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: "Datos de acceso inválidos" });
+        return;
+      }
+      const { username, password } = parsed.data;
+
       const user = await storage.getUserByUsername(username);
-      console.log('User found:', user ? { id: user.id, username: user.username } : 'Not found');
-      
-      if (user && user.password === password) {
+
+      // Siempre se ejecuta una verificación para igualar tiempos de respuesta.
+      const isValid = verifyPassword(password, user ? user.password : DUMMY_HASH);
+
+      if (user && isValid) {
         res.json({ success: true, user: { id: user.id, username: user.username, fullName: user.fullName, role: user.role } });
       } else {
         res.status(401).json({ error: "Credenciales inválidas" });
       }
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('Login error');
       res.status(500).json({ error: "Error en autenticación" });
     }
   });
@@ -62,8 +106,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   app.post("/api/transactions", async (req, res) => {
     try {
+      const parsed = insertTransactionSchema
+        .omit({ transactionId: true, status: true })
+        .safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: "Datos de transacción inválidos" });
+        return;
+      }
       const transactionData = {
-        ...req.body,
+        ...parsed.data,
         transactionId: `TXN-${Date.now()}-${randomBytes(4).toString('hex').toUpperCase()}`,
         status: "pending",
       };
@@ -136,7 +187,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   app.post("/api/payment-methods", async (req, res) => {
     try {
-      const paymentMethod = await storage.createPaymentMethod(req.body);
+      const parsed = insertPaymentMethodSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: "Datos de método de pago inválidos" });
+        return;
+      }
+      const paymentMethod = await storage.createPaymentMethod(parsed.data);
       res.json(paymentMethod);
     } catch (error) {
       res.status(500).json({ error: "Error al crear método de pago" });
@@ -212,15 +268,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POS VIRTUAL - PROCESAMIENTO DE PAGOS
   // ====================================================================
   
-  app.post("/api/pos/process-payment", async (req, res) => {
+  app.post("/api/pos/process-payment", paymentLimiter, async (req, res) => {
     try {
-      const { cardType, cardNumber, amount, protocol } = req.body;
+      const parsed = posPaymentSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: "Datos de pago inválidos" });
+        return;
+      }
+      const { cardType, cardNumber, amount, protocol, holderName, expiryDate } = parsed.data;
       
       // Simular procesamiento de pago
       const authCode = `AUTH-${Date.now()}-${randomBytes(4).toString('hex').toUpperCase()}`;
       const transactionId = `TXN-${Date.now()}-${randomBytes(4).toString('hex').toUpperCase()}`;
       
-      // Crear transacción
+      // Crear transacción (tarjeta siempre enmascarada en la descripción)
       const transaction = await storage.createTransaction({
         transactionId,
         protocol: protocol || "201.1",
@@ -229,16 +290,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         currency: "USD",
         status: "processing",
         authCode,
-        description: `Pago con ${cardType} - ${cardNumber}`
+        description: `Pago con ${cardType} - ${maskCardNumber(cardNumber)}`
       });
       
-      // Crear método de pago
+      // Crear método de pago (CVV/PIN nunca se persisten, tarjeta enmascarada)
       await storage.createPaymentMethod({
         transactionId: transaction.id,
         cardType,
         cardNumber,
-        holderName: req.body.holderName || "Titular",
-        expiryDate: req.body.expiryDate || "12/25",
+        holderName: holderName || "Titular",
+        expiryDate: expiryDate || "12/25",
         verified: true
       });
       
