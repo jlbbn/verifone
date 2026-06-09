@@ -68,18 +68,25 @@ export default function Dashboard() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="flex items-center justify-between pb-4 border-b last:border-0">
+            {[
+              { id: 1001, amount: 680000, protocol: "101.3 - Transferencia segura", time: "Hace 2 min" },
+              { id: 1002, amount: 1200000, protocol: "201.2 - Pago internacional", time: "Hace 5 min" },
+              { id: 1003, amount: 450000, protocol: "101.2 - Transferencia con validación", time: "Hace 8 min" },
+              { id: 1004, amount: 890000, protocol: "201.3 - Pago express", time: "Hace 12 min" },
+              { id: 1005, amount: 1500000, protocol: "101.3 - Transferencia segura", time: "Hace 15 min" },
+            ].map((tx) => (
+              <div key={tx.id} className="flex items-center justify-between pb-4 border-b last:border-0">
                 <div className="flex items-center gap-4">
-                  <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
                   <div>
-                    <p className="font-medium">Transacción #{1000 + i}</p>
-                    <p className="text-sm text-muted-foreground">Protocolo 101.3 - Transferencia segura</p>
+                    <p className="font-medium">Transacción #{tx.id}</p>
+                    <p className="text-sm text-muted-foreground">Protocolo {tx.protocol}</p>
+                    <p className="text-xs text-muted-foreground/60">{tx.time}</p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-semibold">$5,{(i * 234).toLocaleString()}.00</p>
-                  <p className="text-sm text-muted-foreground">Completada</p>
+                  <p className="font-bold text-lg">${tx.amount.toLocaleString()}.00 USD</p>
+                  <p className="text-sm text-green-600 font-semibold">✓ Completada</p>
                 </div>
               </div>
             ))}

@@ -14,17 +14,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { username, password } = req.body;
       
-      if (username === "Admin" && password === "Keylog100$") {
-        const user = await storage.getUserByUsername(username);
-        if (user) {
-          res.json({ success: true, user: { id: user.id, username: user.username, fullName: user.fullName, role: user.role } });
-        } else {
-          res.status(401).json({ error: "Credenciales inválidas" });
-        }
+      console.log('Login attempt:', { username, password });
+      
+      const user = await storage.getUserByUsername(username);
+      console.log('User found:', user ? { id: user.id, username: user.username } : 'Not found');
+      
+      if (user && user.password === password) {
+        res.json({ success: true, user: { id: user.id, username: user.username, fullName: user.fullName, role: user.role } });
       } else {
         res.status(401).json({ error: "Credenciales inválidas" });
       }
     } catch (error) {
+      console.error('Login error:', error);
       res.status(500).json({ error: "Error en autenticación" });
     }
   });

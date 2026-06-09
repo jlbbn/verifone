@@ -122,53 +122,68 @@ export default function POSPage() {
 
       {/* Main Content */}
       <div className="p-4 md:p-6 space-y-4 md:space-y-6">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold">Enrutamiento POS</h1>
-          <p className="text-sm md:text-base text-muted-foreground">Sistema de puntos de venta conectados</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold">Enrutamiento POS</h1>
+            <p className="text-sm md:text-base text-muted-foreground">Sistema de puntos de venta conectados en tiempo real</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-muted-foreground">Última actualización</p>
+            <p className="text-sm font-semibold">{new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</p>
+          </div>
         </div>
 
         <div className="grid gap-4 md:grid-cols-4">
-          <Card className="hover-elevate">
+          <Card className="hover-elevate border-l-4 border-l-green-500">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Terminales Activas</CardTitle>
-              <Store className="h-4 w-4 text-green-600" />
+              <Store className="h-5 w-5 text-green-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">12</div>
-              <p className="text-xs text-muted-foreground">de 15 totales</p>
+              <div className="text-3xl font-bold text-green-600">12</div>
+              <p className="text-xs text-muted-foreground mt-1">de 15 totales disponibles</p>
+              <div className="mt-2 flex items-center gap-2">
+                <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="h-full bg-green-500" style={{ width: '80%' }}></div>
+                </div>
+                <span className="text-xs font-semibold">80%</span>
+              </div>
             </CardContent>
           </Card>
 
-          <Card className="hover-elevate">
+          <Card className="hover-elevate border-l-4 border-l-blue-500">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Transacciones</CardTitle>
-              <CheckCircle className="h-4 w-4 text-green-600" />
+              <CardTitle className="text-sm font-medium">Transacciones Hoy</CardTitle>
+              <CheckCircle className="h-5 w-5 text-blue-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">1,847</div>
-              <p className="text-xs text-muted-foreground">Hoy</p>
+              <div className="text-3xl font-bold text-blue-600">1,847</div>
+              <p className="text-xs text-green-600 mt-1">↑ +12.5% vs ayer</p>
+              <p className="text-xs text-muted-foreground">Promedio: 154 por hora</p>
             </CardContent>
           </Card>
 
-          <Card className="hover-elevate">
+          <Card className="hover-elevate border-l-4 border-l-red-500">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Rechazadas</CardTitle>
-              <XCircle className="h-4 w-4 text-red-600" />
+              <XCircle className="h-5 w-5 text-red-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">23</div>
-              <p className="text-xs text-muted-foreground">1.2% del total</p>
+              <div className="text-3xl font-bold text-red-600">23</div>
+              <p className="text-xs text-muted-foreground mt-1">1.2% del total</p>
+              <p className="text-xs text-green-600">↓ -0.3% vs ayer</p>
             </CardContent>
           </Card>
 
-          <Card className="hover-elevate">
+          <Card className="hover-elevate border-l-4 border-l-purple-500">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Tiempo Promedio</CardTitle>
-              <Clock className="h-4 w-4 text-muted-foreground" />
+              <Clock className="h-5 w-5 text-purple-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">2.3s</div>
-              <p className="text-xs text-muted-foreground">Por transacción</p>
+              <div className="text-3xl font-bold text-purple-600">2.3s</div>
+              <p className="text-xs text-muted-foreground mt-1">Por transacción</p>
+              <p className="text-xs text-green-600">↓ -0.2s vs ayer</p>
             </CardContent>
           </Card>
         </div>
@@ -216,41 +231,54 @@ export default function POSPage() {
           <CardContent>
             <div className="space-y-4">
               {[
-                { id: "T1001", model: "Verifone VX 690", status: "Online", transactions: 542, amount: 230450.78, efficiency: 98, location: "Sucursal Centro" },
-                { id: "T1002", model: "Ingenico iCT220", status: "Online", transactions: 321, amount: 101240.25, efficiency: 95, location: "Sucursal Norte" },
-                { id: "T1003", model: "PAX S920", status: "Offline", transactions: 198, amount: 67430.50, efficiency: 82, location: "Sucursal Sur" },
-                { id: "T1004", model: "Verifone VX 520", status: "Online", transactions: 456, amount: 178600.30, efficiency: 96, location: "Sucursal Oeste" },
-                { id: "T1005", model: "Ingenico iWL250", status: "Online", transactions: 330, amount: 145380.67, efficiency: 94, location: "Sucursal Este" },
+                { id: "T1001", model: "Verifone VX 690", status: "Online", transactions: 542, amount: 2304567.89, efficiency: 98, location: "Sucursal Centro", uptime: "99.8%", lastTx: "Hace 12 seg" },
+                { id: "T1002", model: "Ingenico iCT220", status: "Online", transactions: 321, amount: 1850234.50, efficiency: 95, location: "Sucursal Norte", uptime: "99.5%", lastTx: "Hace 28 seg" },
+                { id: "T1003", model: "PAX S920", status: "Offline", transactions: 198, amount: 674305.00, efficiency: 82, location: "Sucursal Sur", uptime: "87.2%", lastTx: "Hace 2 hrs" },
+                { id: "T1004", model: "Verifone VX 520", status: "Online", transactions: 456, amount: 3186003.20, efficiency: 96, location: "Sucursal Oeste", uptime: "99.6%", lastTx: "Hace 5 seg" },
+                { id: "T1005", model: "Ingenico iWL250", status: "Online", transactions: 330, amount: 1953806.75, efficiency: 94, location: "Sucursal Este", uptime: "99.3%", lastTx: "Hace 45 seg" },
               ].map((pos, i) => (
-                <div key={i} className="flex items-center justify-between pb-4 border-b last:border-0">
+                <div key={i} className="flex items-center justify-between pb-4 border-b last:border-0 hover:bg-gray-50 p-3 rounded-lg transition-colors">
                   <div className="flex items-center gap-4 flex-1">
-                    <div className={`w-3 h-3 rounded-full ${pos.status === 'Online' ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+                    <div className="relative">
+                      <div className={`w-4 h-4 rounded-full ${pos.status === 'Online' ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+                      {pos.status === 'Online' && (
+                        <div className="absolute inset-0 w-4 h-4 rounded-full bg-green-500 animate-ping opacity-75"></div>
+                      )}
+                    </div>
                     <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium">{pos.id}</p>
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${pos.status === 'Online' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <Store className="h-4 w-4 text-gray-500" />
+                        <p className="font-bold text-lg">{pos.id}</p>
+                        <span className={`text-xs px-3 py-1 rounded-full font-semibold ${pos.status === 'Online' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                           {pos.status}
                         </span>
                       </div>
-                      <p className="text-sm text-muted-foreground">{pos.model}</p>
-                      <p className="text-xs text-muted-foreground">{pos.location}</p>
+                      <p className="text-sm font-medium text-gray-700">{pos.model}</p>
+                      <div className="flex items-center gap-4 mt-1">
+                        <p className="text-xs text-muted-foreground">📍 {pos.location}</p>
+                        <p className="text-xs text-muted-foreground">⏱️ {pos.lastTx}</p>
+                        <p className="text-xs font-semibold text-blue-600">Uptime: {pos.uptime}</p>
+                      </div>
                     </div>
                   </div>
-                  <div className="text-right space-y-1">
-                    <p className="font-semibold">{pos.transactions} transacciones</p>
-                    <p className="text-sm text-muted-foreground">${pos.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  <div className="text-right space-y-1.5 min-w-[200px]">
+                    <p className="font-bold text-xl text-green-600">${pos.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</p>
+                    <p className="text-sm font-semibold text-gray-600">{pos.transactions} transacciones procesadas</p>
                     <div className="flex items-center gap-2 justify-end">
-                      <div className="w-20 h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <span className="text-xs text-muted-foreground font-semibold">Eficiencia:</span>
+                      <div className="w-24 h-2.5 bg-gray-200 rounded-full overflow-hidden">
                         <div 
-                          className={`h-full ${pos.efficiency >= 95 ? 'bg-green-500' : pos.efficiency >= 85 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                          className={`h-full transition-all ${pos.efficiency >= 95 ? 'bg-green-500' : pos.efficiency >= 85 ? 'bg-yellow-500' : 'bg-red-500'}`}
                           style={{ width: `${pos.efficiency}%` }}
                         ></div>
                       </div>
-                      <span className="text-xs text-muted-foreground">{pos.efficiency}%</span>
+                      <span className="text-sm font-bold text-gray-700">{pos.efficiency}%</span>
                     </div>
                   </div>
                   <div className="ml-4">
-                    <Button variant="outline" size="sm">Ver Detalles</Button>
+                    <Button variant="outline" size="sm" className="hover:bg-[#c8322b] hover:text-white transition-colors">
+                      Ver Detalles
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -327,6 +355,27 @@ export default function POSPage() {
               </div>
             </CardContent>
           </Card>
+        </div>
+
+        {/* System Date Footer */}
+        <div className="mt-8 pt-4 border-t border-gray-200">
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4" />
+              <span>Sistema operativo desde: 2025-01-01</span>
+            </div>
+            <div className="flex items-center gap-4">
+              <span>Fecha del sistema: {new Date().toLocaleDateString('es-MX', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+              })}</span>
+              <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">
+                Sistema Activo
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -73,9 +73,9 @@ export class MemStorage implements IStorage {
   }
 
   private async initializeAdminUser() {
-    const id = randomUUID();
+    const id1 = randomUUID();
     const adminUser: User = {
-      id,
+      id: id1,
       username: "Admin",
       password: "Keylog100$",
       fullName: "José Luis Barrientos",
@@ -83,7 +83,35 @@ export class MemStorage implements IStorage {
       position: "Software Engineer",
       avatar: null
     };
-    this.users.set(id, adminUser);
+    this.users.set(id1, adminUser);
+    console.log('Admin user initialized:', adminUser.username);
+
+    const id2 = randomUUID();
+    const newUser: User = {
+      id: id2,
+      username: "angoestradacontacto@gmail.com",
+      password: "Keylog200$",
+      fullName: "Ángel Estrada",
+      role: "USER",
+      position: "User",
+      avatar: null
+    };
+    this.users.set(id2, newUser);
+    console.log('New user initialized:', newUser.username);
+
+    const id3 = randomUUID();
+    const user3: User = {
+      id: id3,
+      username: "socemro2@gmail.com",
+      password: "Keylog100$",
+      fullName: "socemro2",
+      role: "USER",
+      position: "User",
+      avatar: null
+    };
+    this.users.set(id3, user3);
+    console.log('New user initialized:', user3.username);
+    console.log('Total users in storage:', this.users.size);
   }
 
   // Users

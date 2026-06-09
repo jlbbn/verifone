@@ -32,19 +32,39 @@ export default function LoginPage() {
   async function onSubmit(data: LoginForm) {
     setIsLoading(true);
     
-    // Validar credenciales exactas
-    if (data.username === "Admin" && data.password === "Keylog100$") {
-      toast({
-        title: "Acceso concedido",
-        description: "Bienvenido al sistema Banxico Plus",
+    try {
+      const response = await fetch('/api/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: data.username,
+          password: data.password,
+        }),
       });
-      setTimeout(() => {
-        setLocation("/dashboard");
-      }, 500);
-    } else {
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        toast({
+          title: "Acceso concedido",
+          description: "Bienvenido al sistema Banxico Plus",
+        });
+        setTimeout(() => {
+          setLocation("/dashboard");
+        }, 500);
+      } else {
+        toast({
+          title: "Error de autenticación",
+          description: result.error || "Usuario o contraseña incorrectos",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
       toast({
         title: "Error de autenticación",
-        description: "Usuario o contraseña incorrectos",
+        description: "Error al conectar con el servidor",
         variant: "destructive",
       });
     }
