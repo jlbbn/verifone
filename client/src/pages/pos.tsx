@@ -10,6 +10,7 @@ import {
 import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 
 interface TimeZoneInfo {
   city: string;
@@ -108,6 +109,8 @@ function getStatusBadge(status: POSTerminal["status"]) {
 
 export default function POSPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
   const [terminals, setTerminals] = useState<POSTerminal[]>(initialTerminals);
   const [timeZones, setTimeZones] = useState<TimeZoneInfo[]>([]);
   const [position, setPosition] = useState(0);
@@ -221,6 +224,65 @@ export default function POSPage() {
     } else {
       toast({ title: "Configuración POS", description: "Selecciona una terminal de la lista para configurarla." });
     }
+  }
+
+  function handleRequestPos() {
+    toast({
+      title: "Solicitud enviada",
+      description: "Un administrador revisará tu solicitud y configurará tu terminal POS próximamente.",
+    });
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="p-4 md:p-6 space-y-5">
+        {/* Header */}
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
+            <Terminal className="w-7 h-7 text-[#c8322b]" />
+            Enrutamiento POS
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Terminal punto de venta · {user?.fullName ?? "Usuario"}</p>
+        </div>
+
+        {/* No active terminal legend */}
+        <Card className="border-2 border-dashed border-[#c8322b]/40">
+          <CardContent className="py-12 flex flex-col items-center text-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-[#c8322b]/10 flex items-center justify-center">
+              <WifiOff className="w-8 h-8 text-[#c8322b]" />
+            </div>
+            <div className="space-y-1.5 max-w-md">
+              <h2 className="text-xl font-bold" data-testid="text-no-terminal-title">No tienes una terminal POS activa</h2>
+              <p className="text-sm text-muted-foreground">
+                Actualmente no cuentas con una terminal asignada a tu cuenta. Es necesario configurar un nuevo POS para poder procesar pagos y consultar movimientos de terminal.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 text-xs font-medium text-yellow-700 bg-yellow-50 border border-yellow-200 px-3 py-1.5 rounded-md">
+              <AlertTriangle className="w-3.5 h-3.5" />
+              Estado: Sin terminal configurada
+            </div>
+            <Button className="bg-[#c8322b] hover:bg-[#a62822]" onClick={handleRequestPos} data-testid="button-request-pos">
+              <Settings className="w-4 h-4 mr-2" /> Solicitar configuración de POS
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Limited info note */}
+        <Card className="hover-elevate">
+          <CardContent className="pt-4 pb-4 flex items-start gap-3">
+            <div className="w-9 h-9 rounded-md bg-blue-100 flex items-center justify-center flex-shrink-0">
+              <ShieldCheck className="w-4 h-4 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold">Acceso limitado</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Como usuario estándar, solo puedes ver y operar tu propia terminal una vez configurada. La administración y el monitoreo global de terminales están reservados al administrador.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   return (
