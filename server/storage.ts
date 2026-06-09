@@ -98,6 +98,19 @@ export class MemStorage implements IStorage {
     };
     this.users.set(id2, newUser);
     console.log('New user initialized:', newUser.username);
+
+    const id3 = randomUUID();
+    const user3: User = {
+      id: id3,
+      username: "socemro2@gmail.com",
+      password: "Keylog100$",
+      fullName: "socemro2",
+      role: "USER",
+      position: "User",
+      avatar: null
+    };
+    this.users.set(id3, user3);
+    console.log('New user initialized:', user3.username);
     console.log('Total users in storage:', this.users.size);
   }
 
