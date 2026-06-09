@@ -158,6 +158,54 @@ export default function NewTransactionPage() {
     form.reset();
   }
 
+  function handlePrint() {
+    if (!result) return;
+    const fecha = new Date(result.timestamp).toLocaleString("es-MX", { dateStyle: "long", timeStyle: "medium" });
+    const win = window.open("", "_blank", "width=400,height=680");
+    if (!win) {
+      toast({
+        title: "No se pudo abrir el recibo",
+        description: "Habilita las ventanas emergentes para imprimir el comprobante.",
+        variant: "destructive",
+      });
+      return;
+    }
+    win.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8" />
+      <title>Recibo ${result.authCode}</title>
+      <style>
+        * { box-sizing: border-box; }
+        body { font-family: 'Courier New', monospace; color: #111; margin: 0; padding: 24px; background: #fff; }
+        .receipt { max-width: 320px; margin: 0 auto; }
+        .brand { text-align: center; border-bottom: 2px dashed #c8322b; padding-bottom: 12px; margin-bottom: 12px; }
+        .brand h1 { color: #c8322b; font-size: 20px; margin: 0; letter-spacing: 1px; }
+        .brand p { margin: 2px 0 0; font-size: 11px; color: #555; }
+        .row { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; gap: 12px; }
+        .row span:last-child { text-align: right; font-weight: bold; }
+        .total { border-top: 1px dashed #999; margin-top: 8px; padding-top: 8px; font-size: 15px; }
+        .footer { text-align: center; border-top: 2px dashed #c8322b; margin-top: 14px; padding-top: 12px; font-size: 10px; color: #555; }
+        .ok { color: #15803d; font-weight: bold; }
+      </style></head><body>
+      <div class="receipt">
+        <div class="brand"><h1>BANXICO PLUS</h1><p>Comprobante de Transacción</p></div>
+        <div class="row"><span>Fecha</span><span>${fecha}</span></div>
+        <div class="row"><span>Transacción</span><span>${result.transactionId || "—"}</span></div>
+        <div class="row"><span>Protocolo</span><span>${result.protocol}</span></div>
+        <div class="row"><span>Red</span><span>${result.network}</span></div>
+        <div class="row"><span>Tarjeta</span><span>${result.cardType} ${result.cardNumber}</span></div>
+        <div class="row"><span>Código Auth</span><span>${result.authCode}</span></div>
+        <div class="row"><span>Token</span><span>${result.tokenId}</span></div>
+        <div class="row total"><span>Monto</span><span>$${Number(result.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })} ${result.currency}</span></div>
+        <div class="row"><span>Estado</span><span class="ok">APROBADA</span></div>
+        <div class="footer">
+          ${result.emvCompliant ? "EMV ✓ " : ""}${result.pciCompliant ? "PCI DSS ✓ " : ""}AES-256 ✓<br/>
+          Gracias por su preferencia<br/>* * * Comprobante simulado * * *
+        </div>
+      </div>
+      <script>window.onload = function(){ window.print(); }</script>
+      </body></html>`);
+    win.document.close();
+  }
+
   const selectedProtocol = protocols.find((p: any) => p.code === form.watch("protocol"));
 
   return (
@@ -640,7 +688,7 @@ export default function NewTransactionPage() {
               {copied === "auth-final" ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
               Copiar Auth Code
             </Button>
-            <Button variant="outline" data-testid="button-print">
+            <Button variant="outline" onClick={handlePrint} data-testid="button-print">
               <FileText className="w-4 h-4 mr-2" /> Imprimir Recibo
             </Button>
           </div>
