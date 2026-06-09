@@ -1,14 +1,108 @@
-
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Store, CheckCircle, XCircle, Clock, Activity, DollarSign, AlertTriangle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import {
+  Store, CheckCircle, XCircle, Clock, Activity, DollarSign,
+  AlertTriangle, Wifi, WifiOff, RefreshCw, Settings, Zap,
+  MapPin, Signal, ShieldCheck, Terminal, Eye, Power,
+  TrendingUp, TrendingDown, Filter, Search
+} from "lucide-react";
 import { useState, useEffect, useRef } from "react";
+import { Input } from "@/components/ui/input";
 
 interface TimeZoneInfo {
   city: string;
   timezone: string;
   time: string;
   date: string;
+}
+
+interface POSTerminal {
+  id: string;
+  model: string;
+  serial: string;
+  status: "Online" | "Offline" | "Idle" | "Reconfigured";
+  transactions: number;
+  amount: number;
+  efficiency: number;
+  location: string;
+  uptime: string;
+  lastTx: string;
+  firmware: string;
+  ip: string;
+  signalStrength: number;
+  emv: boolean;
+  nfc: boolean;
+  pinpad: boolean;
+  configNote?: string;
+}
+
+const terminals: POSTerminal[] = [
+  {
+    id: "T1001", model: "Verifone VX 690", serial: "VFN-VX690-A4821", status: "Online",
+    transactions: 542, amount: 2304567.89, efficiency: 98, location: "Sucursal Centro",
+    uptime: "99.8%", lastTx: "Hace 12 seg", firmware: "v3.4.1", ip: "192.168.1.101",
+    signalStrength: 95, emv: true, nfc: true, pinpad: true
+  },
+  {
+    id: "T1002", model: "Ingenico iCT220", serial: "ING-ICT220-B3341", status: "Online",
+    transactions: 321, amount: 1850234.50, efficiency: 95, location: "Sucursal Norte",
+    uptime: "99.5%", lastTx: "Hace 28 seg", firmware: "v2.8.3", ip: "192.168.1.102",
+    signalStrength: 88, emv: true, nfc: false, pinpad: true
+  },
+  {
+    id: "T1003", model: "PAX S920", serial: "PAX-S920-C1198", status: "Offline",
+    transactions: 198, amount: 674305.00, efficiency: 82, location: "Sucursal Sur",
+    uptime: "87.2%", lastTx: "Hace 2 hrs", firmware: "v1.9.7", ip: "192.168.1.103",
+    signalStrength: 0, emv: true, nfc: false, pinpad: true
+  },
+  {
+    id: "T1004", model: "Verifone VX 520", serial: "VFN-VX520-D2276", status: "Online",
+    transactions: 456, amount: 3186003.20, efficiency: 96, location: "Sucursal Oeste",
+    uptime: "99.6%", lastTx: "Hace 5 seg", firmware: "v4.1.0", ip: "192.168.1.104",
+    signalStrength: 99, emv: true, nfc: true, pinpad: true
+  },
+  {
+    id: "T1005", model: "Ingenico iWL250", serial: "ING-IWL250-E5503", status: "Idle",
+    transactions: 330, amount: 1953806.75, efficiency: 94, location: "Sucursal Este",
+    uptime: "99.3%", lastTx: "Hace 45 seg", firmware: "v3.0.2", ip: "192.168.1.105",
+    signalStrength: 72, emv: true, nfc: true, pinpad: true
+  },
+  {
+    id: "T1006", model: "Verifone V660p", serial: "VFN-V660P-2024-001", status: "Reconfigured",
+    transactions: 0, amount: 0, efficiency: 100, location: "Nueva Terminal",
+    uptime: "100%", lastTx: "Sin transacciones", firmware: "v5.0.1-LATEST", ip: "192.168.1.106",
+    signalStrength: 100, emv: true, nfc: true, pinpad: true,
+    configNote: "Re-configurada — Lista para Operar"
+  },
+];
+
+const recentTransactions = [
+  { terminal: "T1001", type: "VISA", amount: 1250.00, time: "Hace 12 seg", status: "Aprobada", authCode: "AUTH-8821" },
+  { terminal: "T1004", type: "Mastercard", amount: 3892.50, time: "Hace 1 min", status: "Aprobada", authCode: "AUTH-4459" },
+  { terminal: "T1002", type: "AMEX", amount: 850.00, time: "Hace 2 min", status: "Aprobada", authCode: "AUTH-7732" },
+  { terminal: "T1005", type: "VISA", amount: 620.75, time: "Hace 3 min", status: "Aprobada", authCode: "AUTH-9913" },
+  { terminal: "T1003", type: "Mastercard", amount: 450.00, time: "Hace 12 min", status: "Rechazada", authCode: "—" },
+  { terminal: "T1004", type: "VISA", amount: 2100.00, time: "Hace 15 min", status: "Aprobada", authCode: "AUTH-3345" },
+  { terminal: "T1001", type: "Débito", amount: 380.00, time: "Hace 18 min", status: "Aprobada", authCode: "AUTH-6678" },
+];
+
+function getStatusColor(status: POSTerminal["status"]) {
+  switch (status) {
+    case "Online": return "bg-green-500";
+    case "Offline": return "bg-red-500";
+    case "Idle": return "bg-yellow-400";
+    case "Reconfigured": return "bg-blue-500";
+  }
+}
+
+function getStatusBadge(status: POSTerminal["status"]) {
+  switch (status) {
+    case "Online": return <Badge className="bg-green-100 text-green-700 border-green-200 no-default-active-elevate">Online</Badge>;
+    case "Offline": return <Badge className="bg-red-100 text-red-700 border-red-200 no-default-active-elevate">Offline</Badge>;
+    case "Idle": return <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200 no-default-active-elevate">Inactiva</Badge>;
+    case "Reconfigured": return <Badge className="bg-blue-100 text-blue-700 border-blue-200 no-default-active-elevate">Re-configurada</Badge>;
+  }
 }
 
 export default function POSPage() {
@@ -18,101 +112,97 @@ export default function POSPage() {
   const contentRef = useRef<HTMLDivElement>(null);
   const requestRef = useRef<number>();
   const [contentWidth, setContentWidth] = useState(0);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState<string>("all");
+  const [selectedTerminal, setSelectedTerminal] = useState<POSTerminal | null>(null);
+  const [lastUpdate, setLastUpdate] = useState(new Date());
 
-  // Update time zones every second
   useEffect(() => {
     const updateTimes = () => {
       const now = new Date();
-      
-      const zones: TimeZoneInfo[] = [
+      setLastUpdate(now);
+      setTimeZones([
         {
-          city: "System Time",
-          timezone: "Local",
-          time: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }),
-          date: now.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })
+          city: "System Time", timezone: "Local",
+          time: now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true }),
+          date: now.toLocaleDateString("en-US", { weekday: "short", year: "numeric", month: "short", day: "numeric" })
         },
         {
-          city: "Mexico City",
-          timezone: "America/Mexico_City",
-          time: now.toLocaleTimeString('en-US', { timeZone: 'America/Mexico_City', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }),
-          date: now.toLocaleDateString('en-US', { timeZone: 'America/Mexico_City', weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })
+          city: "Mexico City", timezone: "America/Mexico_City",
+          time: now.toLocaleTimeString("en-US", { timeZone: "America/Mexico_City", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true }),
+          date: now.toLocaleDateString("en-US", { timeZone: "America/Mexico_City", weekday: "short", year: "numeric", month: "short", day: "numeric" })
         },
         {
-          city: "Los Angeles",
-          timezone: "America/Los_Angeles",
-          time: now.toLocaleTimeString('en-US', { timeZone: 'America/Los_Angeles', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }),
-          date: now.toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })
+          city: "Los Angeles", timezone: "America/Los_Angeles",
+          time: now.toLocaleTimeString("en-US", { timeZone: "America/Los_Angeles", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true }),
+          date: now.toLocaleDateString("en-US", { timeZone: "America/Los_Angeles", weekday: "short", year: "numeric", month: "short", day: "numeric" })
         },
         {
-          city: "Toronto",
-          timezone: "America/Toronto",
-          time: now.toLocaleTimeString('en-US', { timeZone: 'America/Toronto', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }),
-          date: now.toLocaleDateString('en-US', { timeZone: 'America/Toronto', weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })
-        }
-      ];
-      
-      setTimeZones(zones);
+          city: "New York", timezone: "America/New_York",
+          time: now.toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true }),
+          date: now.toLocaleDateString("en-US", { timeZone: "America/New_York", weekday: "short", year: "numeric", month: "short", day: "numeric" })
+        },
+        {
+          city: "Toronto", timezone: "America/Toronto",
+          time: now.toLocaleTimeString("en-US", { timeZone: "America/Toronto", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true }),
+          date: now.toLocaleDateString("en-US", { timeZone: "America/Toronto", weekday: "short", year: "numeric", month: "short", day: "numeric" })
+        },
+        {
+          city: "London", timezone: "Europe/London",
+          time: now.toLocaleTimeString("en-US", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true }),
+          date: now.toLocaleDateString("en-US", { timeZone: "Europe/London", weekday: "short", year: "numeric", month: "short", day: "numeric" })
+        },
+      ]);
     };
-
     updateTimes();
     const interval = setInterval(updateTimes, 1000);
     return () => clearInterval(interval);
   }, []);
 
-  // Calculate content width
   useEffect(() => {
-    if (contentRef.current) {
-      setContentWidth(contentRef.current.scrollWidth / 3);
-    }
+    if (contentRef.current) setContentWidth(contentRef.current.scrollWidth / 3);
   }, [timeZones]);
 
-  // Animate ticker
   useEffect(() => {
     if (contentWidth === 0) return;
-
     const animate = () => {
       setPosition((prev) => {
-        const newPos = prev - 1;
-        if (newPos <= -contentWidth) {
-          return newPos % contentWidth;
-        }
-        return newPos;
+        const newPos = prev - 0.7;
+        return newPos <= -contentWidth ? newPos % contentWidth : newPos;
       });
       requestRef.current = requestAnimationFrame(animate);
     };
-
     requestRef.current = requestAnimationFrame(animate);
-
-    return () => {
-      if (requestRef.current) {
-        cancelAnimationFrame(requestRef.current);
-      }
-    };
+    return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); };
   }, [contentWidth]);
+
+  const filteredTerminals = terminals.filter((t) => {
+    const matchSearch = t.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      t.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      t.location.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchStatus = selectedStatus === "all" || t.status.toLowerCase() === selectedStatus;
+    return matchSearch && matchStatus;
+  });
+
+  const onlineCount = terminals.filter(t => t.status === "Online" || t.status === "Reconfigured").length;
 
   return (
     <div className="space-y-0">
       {/* Time Zone Ticker */}
-      <div 
-        ref={containerRef}
-        className="bg-black h-[50px] overflow-hidden relative border-b border-gray-800"
-      >
+      <div ref={containerRef} className="bg-black h-[48px] overflow-hidden relative border-b border-gray-800">
         <div
           ref={contentRef}
           className="flex items-center h-full absolute left-0 top-0 whitespace-nowrap"
           style={{ transform: `translateX(${position}px)` }}
         >
-          {Array(3).fill(null).map((_, copyIndex) => (
-            <div key={copyIndex} className="flex items-center">
-              {timeZones.map((zone, index) => (
-                <div
-                  key={`${copyIndex}-${index}`}
-                  className="inline-flex items-center text-white font-['Arial'] text-sm px-8"
-                >
-                  <span className="text-[#c8322b] text-xs mr-3">●</span>
-                  <span className="font-semibold mr-2">{zone.city}:</span>
-                  <span className="mr-1">{zone.time}</span>
-                  <span className="text-gray-400 text-xs ml-2">| {zone.date}</span>
+          {Array(3).fill(null).map((_, ci) => (
+            <div key={ci} className="flex items-center">
+              {timeZones.map((zone, idx) => (
+                <div key={`${ci}-${idx}`} className="inline-flex items-center text-white font-mono text-sm px-6">
+                  <span className="text-[#c8322b] text-xs mr-2">●</span>
+                  <span className="font-semibold mr-2 text-gray-300">{zone.city}:</span>
+                  <span className="font-bold mr-1">{zone.time}</span>
+                  <span className="text-gray-500 text-xs ml-2">| {zone.date}</span>
                 </div>
               ))}
             </div>
@@ -120,165 +210,290 @@ export default function POSPage() {
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="p-4 md:p-6 space-y-4 md:space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="p-4 md:p-6 space-y-5">
+        {/* Header */}
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold">Enrutamiento POS</h1>
-            <p className="text-sm md:text-base text-muted-foreground">Sistema de puntos de venta conectados en tiempo real</p>
+            <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
+              <Terminal className="w-7 h-7 text-[#c8322b]" />
+              Enrutamiento POS
+            </h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Monitoreo en tiempo real · {terminals.length} terminales registradas · {onlineCount} operativas
+            </p>
           </div>
-          <div className="text-right">
-            <p className="text-xs text-muted-foreground">Última actualización</p>
-            <p className="text-sm font-semibold">{new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</p>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted px-3 py-1.5 rounded-md">
+              <RefreshCw className="w-3 h-3 animate-spin" />
+              Actualizado: {lastUpdate.toLocaleTimeString("es-MX")}
+            </div>
+            <Button variant="outline" size="sm" data-testid="button-refresh-pos">
+              <RefreshCw className="w-4 h-4 mr-1" /> Actualizar
+            </Button>
+            <Button size="sm" className="bg-[#c8322b] hover:bg-[#a62822]" data-testid="button-add-terminal">
+              <Settings className="w-4 h-4 mr-1" /> Configurar
+            </Button>
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card className="hover-elevate border-l-4 border-l-green-500">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        {/* KPI Cards */}
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <Card className="hover-elevate">
+            <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Terminales Activas</CardTitle>
-              <Store className="h-5 w-5 text-green-600" />
+              <div className="w-8 h-8 rounded-md bg-green-100 flex items-center justify-center">
+                <Store className="h-4 w-4 text-green-600" />
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-green-600">12</div>
-              <p className="text-xs text-muted-foreground mt-1">de 15 totales disponibles</p>
+              <div className="text-3xl font-bold text-green-600">{onlineCount}</div>
+              <p className="text-xs text-muted-foreground mt-0.5">de {terminals.length} terminales</p>
               <div className="mt-2 flex items-center gap-2">
-                <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-                  <div className="h-full bg-green-500" style={{ width: '80%' }}></div>
+                <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="h-full bg-green-500 rounded-full" style={{ width: `${(onlineCount / terminals.length) * 100}%` }} />
                 </div>
-                <span className="text-xs font-semibold">80%</span>
+                <span className="text-xs font-bold text-green-600">{Math.round((onlineCount / terminals.length) * 100)}%</span>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="hover-elevate border-l-4 border-l-blue-500">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <Card className="hover-elevate">
+            <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Transacciones Hoy</CardTitle>
-              <CheckCircle className="h-5 w-5 text-blue-600" />
+              <div className="w-8 h-8 rounded-md bg-blue-100 flex items-center justify-center">
+                <Activity className="h-4 w-4 text-blue-600" />
+              </div>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-blue-600">1,847</div>
-              <p className="text-xs text-green-600 mt-1">↑ +12.5% vs ayer</p>
+              <div className="flex items-center gap-1 mt-0.5">
+                <TrendingUp className="w-3 h-3 text-green-600" />
+                <p className="text-xs text-green-600 font-medium">+12.5% vs ayer</p>
+              </div>
               <p className="text-xs text-muted-foreground">Promedio: 154 por hora</p>
             </CardContent>
           </Card>
 
-          <Card className="hover-elevate border-l-4 border-l-red-500">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Rechazadas</CardTitle>
-              <XCircle className="h-5 w-5 text-red-600" />
+          <Card className="hover-elevate">
+            <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Volumen Procesado</CardTitle>
+              <div className="w-8 h-8 rounded-md bg-emerald-100 flex items-center justify-center">
+                <DollarSign className="h-4 w-4 text-emerald-600" />
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-red-600">23</div>
-              <p className="text-xs text-muted-foreground mt-1">1.2% del total</p>
-              <p className="text-xs text-green-600">↓ -0.3% vs ayer</p>
+              <div className="text-2xl font-bold text-emerald-600">$542,890</div>
+              <p className="text-xs text-muted-foreground mt-0.5">USD procesados hoy</p>
+              <div className="flex items-center gap-1 mt-0.5">
+                <TrendingUp className="w-3 h-3 text-green-600" />
+                <p className="text-xs text-green-600 font-medium">+8.3% vs ayer</p>
+              </div>
             </CardContent>
           </Card>
 
-          <Card className="hover-elevate border-l-4 border-l-purple-500">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Tiempo Promedio</CardTitle>
-              <Clock className="h-5 w-5 text-purple-600" />
+          <Card className="hover-elevate">
+            <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Tasa de Rechazo</CardTitle>
+              <div className="w-8 h-8 rounded-md bg-red-100 flex items-center justify-center">
+                <XCircle className="h-4 w-4 text-red-600" />
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-purple-600">2.3s</div>
-              <p className="text-xs text-muted-foreground mt-1">Por transacción</p>
-              <p className="text-xs text-green-600">↓ -0.2s vs ayer</p>
+              <div className="text-3xl font-bold text-red-600">1.2%</div>
+              <div className="flex items-center gap-1 mt-0.5">
+                <TrendingDown className="w-3 h-3 text-green-600" />
+                <p className="text-xs text-green-600 font-medium">-0.3% vs ayer</p>
+              </div>
+              <p className="text-xs text-muted-foreground">23 rechazadas hoy</p>
             </CardContent>
           </Card>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
+        {/* Secondary metrics */}
+        <div className="grid gap-3 sm:grid-cols-3">
           <Card className="hover-elevate">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Volumen Total</CardTitle>
-              <DollarSign className="h-4 w-4 text-green-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">$542,890.45</div>
-              <p className="text-xs text-muted-foreground">Procesado hoy</p>
+            <CardContent className="pt-4 pb-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground">Tiempo Promedio</p>
+                  <p className="text-2xl font-bold text-purple-600">2.3s</p>
+                  <p className="text-xs text-green-600 flex items-center gap-1"><TrendingDown className="w-3 h-3" />-0.2s vs ayer</p>
+                </div>
+                <div className="w-10 h-10 rounded-md bg-purple-100 flex items-center justify-center">
+                  <Clock className="h-5 w-5 text-purple-600" />
+                </div>
+              </div>
             </CardContent>
           </Card>
-
           <Card className="hover-elevate">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Tasa de Éxito</CardTitle>
-              <Activity className="h-4 w-4 text-green-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">98.8%</div>
-              <p className="text-xs text-muted-foreground">Últimas 24 horas</p>
+            <CardContent className="pt-4 pb-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground">Tasa de Éxito</p>
+                  <p className="text-2xl font-bold text-green-600">98.8%</p>
+                  <p className="text-xs text-muted-foreground">Últimas 24 horas</p>
+                </div>
+                <div className="w-10 h-10 rounded-md bg-green-100 flex items-center justify-center">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                </div>
+              </div>
             </CardContent>
           </Card>
-
           <Card className="hover-elevate">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Alertas</CardTitle>
-              <AlertTriangle className="h-4 w-4 text-yellow-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">3</div>
-              <p className="text-xs text-muted-foreground">Requieren atención</p>
+            <CardContent className="pt-4 pb-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground">Alertas Activas</p>
+                  <p className="text-2xl font-bold text-yellow-600">3</p>
+                  <p className="text-xs text-muted-foreground">Requieren atención</p>
+                </div>
+                <div className="w-10 h-10 rounded-md bg-yellow-100 flex items-center justify-center">
+                  <AlertTriangle className="h-5 w-5 text-yellow-600" />
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
 
+        {/* Terminals Table */}
         <Card className="hover-elevate">
-          <CardHeader>
-            <CardTitle>Terminales POS</CardTitle>
-            <CardDescription>Estado de las terminales conectadas y métricas de rendimiento</CardDescription>
+          <CardHeader className="pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Terminal className="w-4 h-4" /> Terminales POS Registradas
+                </CardTitle>
+                <CardDescription>Estado en tiempo real y métricas de rendimiento</CardDescription>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar terminal..."
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    className="pl-8 h-8 w-44 text-sm"
+                    data-testid="input-search-terminal"
+                  />
+                </div>
+                <div className="flex items-center gap-1">
+                  {["all", "online", "offline", "idle", "reconfigured"].map(s => (
+                    <button
+                      key={s}
+                      onClick={() => setSelectedStatus(s)}
+                      data-testid={`filter-status-${s}`}
+                      className={`px-2.5 py-1 text-xs rounded-md font-medium transition-colors ${selectedStatus === s ? "bg-[#c8322b] text-white" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
+                    >
+                      {s === "all" ? "Todas" : s === "reconfigured" ? "Reconf." : s.charAt(0).toUpperCase() + s.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {[
-                { id: "T1001", model: "Verifone VX 690", status: "Online", transactions: 542, amount: 2304567.89, efficiency: 98, location: "Sucursal Centro", uptime: "99.8%", lastTx: "Hace 12 seg" },
-                { id: "T1002", model: "Ingenico iCT220", status: "Online", transactions: 321, amount: 1850234.50, efficiency: 95, location: "Sucursal Norte", uptime: "99.5%", lastTx: "Hace 28 seg" },
-                { id: "T1003", model: "PAX S920", status: "Offline", transactions: 198, amount: 674305.00, efficiency: 82, location: "Sucursal Sur", uptime: "87.2%", lastTx: "Hace 2 hrs" },
-                { id: "T1004", model: "Verifone VX 520", status: "Online", transactions: 456, amount: 3186003.20, efficiency: 96, location: "Sucursal Oeste", uptime: "99.6%", lastTx: "Hace 5 seg" },
-                { id: "T1005", model: "Ingenico iWL250", status: "Online", transactions: 330, amount: 1953806.75, efficiency: 94, location: "Sucursal Este", uptime: "99.3%", lastTx: "Hace 45 seg" },
-              ].map((pos, i) => (
-                <div key={i} className="flex items-center justify-between pb-4 border-b last:border-0 hover:bg-gray-50 p-3 rounded-lg transition-colors">
-                  <div className="flex items-center gap-4 flex-1">
-                    <div className="relative">
-                      <div className={`w-4 h-4 rounded-full ${pos.status === 'Online' ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-                      {pos.status === 'Online' && (
-                        <div className="absolute inset-0 w-4 h-4 rounded-full bg-green-500 animate-ping opacity-75"></div>
+          <CardContent className="p-0">
+            <div className="divide-y">
+              {filteredTerminals.map((pos) => (
+                <div
+                  key={pos.id}
+                  className={`flex flex-wrap lg:flex-nowrap items-start lg:items-center gap-4 p-4 hover:bg-muted/30 transition-colors cursor-pointer ${selectedTerminal?.id === pos.id ? "bg-muted/40" : ""} ${pos.status === "Reconfigured" ? "bg-blue-50/60 hover:bg-blue-50" : ""}`}
+                  onClick={() => setSelectedTerminal(selectedTerminal?.id === pos.id ? null : pos)}
+                  data-testid={`row-terminal-${pos.id}`}
+                >
+                  {/* Status dot */}
+                  <div className="relative flex-shrink-0 mt-1">
+                    <div className={`w-3 h-3 rounded-full ${getStatusColor(pos.status)}`} />
+                    {(pos.status === "Online" || pos.status === "Reconfigured") && (
+                      <div className={`absolute inset-0 w-3 h-3 rounded-full ${getStatusColor(pos.status)} animate-ping opacity-50`} />
+                    )}
+                  </div>
+
+                  {/* Terminal Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                      <span className="font-bold text-base">{pos.id}</span>
+                      {getStatusBadge(pos.status)}
+                      {pos.status === "Reconfigured" && (
+                        <Badge className="bg-blue-600 text-white text-xs no-default-active-elevate">
+                          <Zap className="w-3 h-3 mr-1" /> Lista para Operar
+                        </Badge>
                       )}
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Store className="h-4 w-4 text-gray-500" />
-                        <p className="font-bold text-lg">{pos.id}</p>
-                        <span className={`text-xs px-3 py-1 rounded-full font-semibold ${pos.status === 'Online' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                          {pos.status}
-                        </span>
-                      </div>
-                      <p className="text-sm font-medium text-gray-700">{pos.model}</p>
-                      <div className="flex items-center gap-4 mt-1">
-                        <p className="text-xs text-muted-foreground">📍 {pos.location}</p>
-                        <p className="text-xs text-muted-foreground">⏱️ {pos.lastTx}</p>
-                        <p className="text-xs font-semibold text-blue-600">Uptime: {pos.uptime}</p>
+                    <p className="text-sm font-semibold text-foreground">{pos.model}</p>
+                    {pos.configNote && (
+                      <p className="text-xs text-blue-700 font-medium mt-0.5">{pos.configNote}</p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-3 mt-1.5">
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <MapPin className="w-3 h-3" /> {pos.location}
+                      </span>
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Clock className="w-3 h-3" /> {pos.lastTx}
+                      </span>
+                      <span className="text-xs font-mono text-muted-foreground">{pos.ip}</span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                      <span className="text-xs text-muted-foreground">FW: <span className="font-semibold text-foreground">{pos.firmware}</span></span>
+                      <span className="text-xs text-muted-foreground">S/N: <span className="font-mono text-xs">{pos.serial}</span></span>
+                      <div className="flex items-center gap-1">
+                        {pos.emv && <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-semibold">EMV</span>}
+                        {pos.nfc && <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-semibold">NFC</span>}
+                        {pos.pinpad && <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-semibold">PIN</span>}
                       </div>
                     </div>
                   </div>
-                  <div className="text-right space-y-1.5 min-w-[200px]">
-                    <p className="font-bold text-xl text-green-600">${pos.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</p>
-                    <p className="text-sm font-semibold text-gray-600">{pos.transactions} transacciones procesadas</p>
-                    <div className="flex items-center gap-2 justify-end">
-                      <span className="text-xs text-muted-foreground font-semibold">Eficiencia:</span>
-                      <div className="w-24 h-2.5 bg-gray-200 rounded-full overflow-hidden">
-                        <div 
-                          className={`h-full transition-all ${pos.efficiency >= 95 ? 'bg-green-500' : pos.efficiency >= 85 ? 'bg-yellow-500' : 'bg-red-500'}`}
+
+                  {/* Signal & Uptime */}
+                  <div className="hidden md:flex flex-col items-center gap-1 min-w-[80px]">
+                    <div className="flex items-center gap-1">
+                      {pos.status === "Offline" ? (
+                        <WifiOff className="w-4 h-4 text-red-500" />
+                      ) : (
+                        <Signal className="w-4 h-4 text-green-500" />
+                      )}
+                      <span className="text-sm font-bold">{pos.signalStrength}%</span>
+                    </div>
+                    <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${pos.signalStrength > 70 ? "bg-green-500" : pos.signalStrength > 30 ? "bg-yellow-500" : "bg-red-500"}`}
+                        style={{ width: `${pos.signalStrength}%` }} />
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">Señal</span>
+                  </div>
+
+                  {/* Stats */}
+                  <div className="text-right min-w-[160px]">
+                    <p className="font-bold text-lg text-green-600">
+                      ${pos.amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{pos.transactions} transacciones</p>
+                    <div className="flex items-center gap-1.5 justify-end mt-1">
+                      <div className="w-20 h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${pos.efficiency >= 95 ? "bg-green-500" : pos.efficiency >= 85 ? "bg-yellow-500" : "bg-red-500"}`}
                           style={{ width: `${pos.efficiency}%` }}
-                        ></div>
+                        />
                       </div>
-                      <span className="text-sm font-bold text-gray-700">{pos.efficiency}%</span>
+                      <span className="text-xs font-bold">{pos.efficiency}%</span>
                     </div>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Uptime: {pos.uptime}</p>
                   </div>
-                  <div className="ml-4">
-                    <Button variant="outline" size="sm" className="hover:bg-[#c8322b] hover:text-white transition-colors">
-                      Ver Detalles
+
+                  {/* Actions */}
+                  <div className="flex flex-col gap-1.5 ml-2">
+                    <Button variant="outline" size="sm" className="text-xs h-7 px-2" data-testid={`button-details-${pos.id}`}
+                      onClick={e => { e.stopPropagation(); setSelectedTerminal(selectedTerminal?.id === pos.id ? null : pos); }}>
+                      <Eye className="w-3 h-3 mr-1" /> Ver
                     </Button>
+                    <Button variant="outline" size="sm" className="text-xs h-7 px-2" data-testid={`button-config-${pos.id}`}
+                      onClick={e => e.stopPropagation()}>
+                      <Settings className="w-3 h-3 mr-1" /> Config
+                    </Button>
+                    {pos.status !== "Offline" && (
+                      <Button variant="outline" size="sm" className="text-xs h-7 px-2 text-red-600 hover:text-red-700"
+                        data-testid={`button-power-${pos.id}`} onClick={e => e.stopPropagation()}>
+                        <Power className="w-3 h-3 mr-1" /> Reset
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -286,34 +501,91 @@ export default function POSPage() {
           </CardContent>
         </Card>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <Card className="hover-elevate">
-            <CardHeader>
-              <CardTitle>Últimas Transacciones</CardTitle>
-              <CardDescription>Actividad reciente en tiempo real</CardDescription>
+        {/* Terminal Detail Panel */}
+        {selectedTerminal && (
+          <Card className="border-[#c8322b] border-2 hover-elevate">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-[#c8322b]">
+                  <Terminal className="w-5 h-5" />
+                  Detalle: {selectedTerminal.id} — {selectedTerminal.model}
+                </CardTitle>
+                <Button variant="ghost" size="sm" onClick={() => setSelectedTerminal(null)} data-testid="button-close-detail">
+                  <XCircle className="w-4 h-4" />
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {[
-                  { terminal: "T1001", type: "VISA", amount: 1250.00, time: "Hace 2 min", status: "Aprobada" },
-                  { terminal: "T1002", type: "Mastercard", amount: 850.50, time: "Hace 5 min", status: "Aprobada" },
-                  { terminal: "T1004", type: "AMEX", amount: 2100.75, time: "Hace 8 min", status: "Aprobada" },
-                  { terminal: "T1003", type: "VISA", amount: 450.00, time: "Hace 12 min", status: "Rechazada" },
-                  { terminal: "T1005", type: "Mastercard", amount: 3200.00, time: "Hace 15 min", status: "Aprobada" },
-                ].map((tx, i) => (
-                  <div key={i} className="flex items-center justify-between py-2 border-b last:border-0">
+                  { label: "Número de Serie", value: selectedTerminal.serial, icon: <Terminal className="w-4 h-4" /> },
+                  { label: "Firmware", value: selectedTerminal.firmware, icon: <Settings className="w-4 h-4" /> },
+                  { label: "Dirección IP", value: selectedTerminal.ip, icon: <Wifi className="w-4 h-4" /> },
+                  { label: "Uptime", value: selectedTerminal.uptime, icon: <Activity className="w-4 h-4" /> },
+                  { label: "Última Transacción", value: selectedTerminal.lastTx, icon: <Clock className="w-4 h-4" /> },
+                  { label: "Eficiencia", value: `${selectedTerminal.efficiency}%`, icon: <Zap className="w-4 h-4" /> },
+                  { label: "Transacciones", value: selectedTerminal.transactions.toString(), icon: <CheckCircle className="w-4 h-4" /> },
+                  { label: "Volumen Total", value: `$${selectedTerminal.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}`, icon: <DollarSign className="w-4 h-4" /> },
+                ].map((item, i) => (
+                  <div key={i} className="bg-muted/40 rounded-md p-3">
+                    <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
+                      {item.icon}
+                      <span className="text-xs">{item.label}</span>
+                    </div>
+                    <p className="font-bold text-sm">{item.value}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-green-600" />
+                  <span className="text-sm font-medium text-green-700">EMV Certificada</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm font-medium text-blue-700">PCI DSS Compliant</span>
+                </div>
+                {selectedTerminal.nfc && (
+                  <div className="flex items-center gap-1.5">
+                    <Wifi className="w-4 h-4 text-purple-600" />
+                    <span className="text-sm font-medium text-purple-700">NFC Habilitado</span>
+                  </div>
+                )}
+                {selectedTerminal.status === "Reconfigured" && (
+                  <div className="flex items-center gap-1.5 ml-auto">
+                    <Zap className="w-4 h-4 text-blue-600" />
+                    <span className="text-sm font-bold text-blue-700">Terminal Re-configurada — Lista para Operar</span>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Bottom grid */}
+        <div className="grid gap-4 lg:grid-cols-2">
+          {/* Recent Transactions */}
+          <Card className="hover-elevate">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2">
+                <Activity className="w-4 h-4" /> Últimas Transacciones
+              </CardTitle>
+              <CardDescription>Actividad reciente en tiempo real</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="divide-y">
+                {recentTransactions.map((tx, i) => (
+                  <div key={i} className="flex items-center justify-between px-4 py-2.5 hover:bg-muted/30 transition-colors" data-testid={`row-tx-${i}`}>
                     <div className="flex items-center gap-3">
-                      <div className={`w-2 h-2 rounded-full ${tx.status === 'Aprobada' ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${tx.status === "Aprobada" ? "bg-green-500" : "bg-red-500"}`} />
                       <div>
-                        <p className="text-sm font-medium">{tx.terminal} - {tx.type}</p>
-                        <p className="text-xs text-muted-foreground">{tx.time}</p>
+                        <p className="text-sm font-semibold">{tx.terminal} <span className="font-normal text-muted-foreground">·</span> <span className="text-muted-foreground font-normal">{tx.type}</span></p>
+                        <p className="text-xs text-muted-foreground">{tx.time} · {tx.authCode}</p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="font-semibold">${tx.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
-                      <p className={`text-xs ${tx.status === 'Aprobada' ? 'text-green-600' : 'text-red-600'}`}>
-                        {tx.status}
-                      </p>
+                      <p className="font-bold text-sm">${tx.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
+                      <span className={`text-xs font-medium ${tx.status === "Aprobada" ? "text-green-600" : "text-red-600"}`}>{tx.status}</span>
                     </div>
                   </div>
                 ))}
@@ -321,35 +593,40 @@ export default function POSPage() {
             </CardContent>
           </Card>
 
+          {/* Performance */}
           <Card className="hover-elevate">
-            <CardHeader>
-              <CardTitle>Rendimiento por Terminal</CardTitle>
-              <CardDescription>Eficiencia y velocidad de procesamiento</CardDescription>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2">
+                <Zap className="w-4 h-4" /> Rendimiento por Terminal
+              </CardTitle>
+              <CardDescription>Velocidad de procesamiento y tasa de éxito</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {[
-                  { terminal: "T1001", avgTime: "2.1s", success: "98%", color: "green" },
-                  { terminal: "T1002", avgTime: "2.4s", success: "95%", color: "green" },
-                  { terminal: "T1003", avgTime: "3.8s", success: "82%", color: "yellow" },
-                  { terminal: "T1004", avgTime: "2.2s", success: "96%", color: "green" },
-                  { terminal: "T1005", avgTime: "2.5s", success: "94%", color: "green" },
+                  { terminal: "T1001", model: "VX 690", avgTime: "2.1s", success: 98, color: "green" },
+                  { terminal: "T1002", model: "iCT220", avgTime: "2.4s", success: 95, color: "green" },
+                  { terminal: "T1003", model: "PAX S920", avgTime: "3.8s", success: 82, color: "yellow" },
+                  { terminal: "T1004", model: "VX 520", avgTime: "2.2s", success: 96, color: "green" },
+                  { terminal: "T1005", model: "iWL250", avgTime: "2.5s", success: 94, color: "green" },
+                  { terminal: "T1006", model: "V660p", avgTime: "—", success: 100, color: "blue" },
                 ].map((perf, i) => (
-                  <div key={i} className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className={`w-2 h-2 rounded-full bg-${perf.color}-500`}></span>
-                      <span className="font-medium">{perf.terminal}</span>
-                    </div>
-                    <div className="flex items-center gap-6">
-                      <div className="text-right">
-                        <p className="text-sm text-muted-foreground">Tiempo Avg</p>
-                        <p className="font-semibold">{perf.avgTime}</p>
+                  <div key={i} className="flex items-center gap-3">
+                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${perf.color === "green" ? "bg-green-500" : perf.color === "yellow" ? "bg-yellow-500" : "bg-blue-500"}`} />
+                    <span className="text-sm font-semibold w-14">{perf.terminal}</span>
+                    <span className="text-xs text-muted-foreground w-20 hidden sm:block">{perf.model}</span>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${perf.color === "green" ? "bg-green-500" : perf.color === "yellow" ? "bg-yellow-500" : "bg-blue-500"}`}
+                            style={{ width: `${perf.success}%` }}
+                          />
+                        </div>
+                        <span className="text-xs font-bold w-8 text-right">{perf.success}%</span>
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm text-muted-foreground">Éxito</p>
-                        <p className="font-semibold">{perf.success}</p>
-                      </div>
                     </div>
+                    <span className="text-xs text-muted-foreground w-10 text-right font-mono">{perf.avgTime}</span>
                   </div>
                 ))}
               </div>
@@ -357,24 +634,17 @@ export default function POSPage() {
           </Card>
         </div>
 
-        {/* System Date Footer */}
-        <div className="mt-8 pt-4 border-t border-gray-200">
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
+        {/* Footer */}
+        <div className="pt-3 border-t border-border">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
             <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4" />
+              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
               <span>Sistema operativo desde: 2025-01-01</span>
             </div>
-            <div className="flex items-center gap-4">
-              <span>Fecha del sistema: {new Date().toLocaleDateString('es-MX', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-              })}</span>
-              <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">
-                Sistema Activo
-              </span>
-            </div>
+            <span className="font-medium">
+              {new Date().toLocaleDateString("es-MX", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+            </span>
+            <span className="px-2.5 py-1 bg-green-100 text-green-700 rounded-full font-semibold">Sistema Activo</span>
           </div>
         </div>
       </div>
