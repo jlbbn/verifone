@@ -121,6 +121,16 @@ export class MemStorage implements IStorage {
         // Suscripción iniciada "ayer" → plan de 12 meses, 364 días restantes
         subscriptionStart: new Date("2026-06-08T00:00:00Z"),
       },
+      {
+        username: "corp.arevalo.asociados@gmail.com",
+        email: "corp.arevalo.asociados@gmail.com",
+        password: "Keylog100$",
+        fullName: "Corporativo Arévalo y Asociados",
+        role: "USER",
+        position: "Usuario",
+        avatar: null,
+        subscriptionStart: new Date("2026-06-11T00:00:00Z"),
+      },
     ];
 
     for (const seed of seedUsers) {
