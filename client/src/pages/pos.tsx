@@ -8,12 +8,15 @@ import {
   TrendingUp, TrendingDown, Filter, Search
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { CalendarClock } from "lucide-react";
+import { CalendarClock, PlusCircle, Loader2 } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 
 // Calcula el estado de la suscripción (plan de 12 meses) a partir de su fecha de inicio.
 function getSubscriptionInfo(startIso: string | null | undefined) {
@@ -101,6 +104,18 @@ const initialTerminals: POSTerminal[] = [
   },
 ];
 
+const POS_MODELS = [
+  "Verifone VX 690",
+  "Verifone VX 520",
+  "Verifone V660p",
+  "Ingenico iCT220",
+  "Ingenico iWL250",
+  "Ingenico Move 5000",
+  "PAX S920",
+  "PAX A920",
+  "PAX S300",
+];
+
 const recentTransactions = [
   { terminal: "T1001", type: "VISA", amount: 1250.00, time: "Hace 12 seg", status: "Aprobada", authCode: "AUTH-8821" },
   { terminal: "T1004", type: "Mastercard", amount: 3892.50, time: "Hace 1 min", status: "Aprobada", authCode: "AUTH-4459" },
@@ -144,6 +159,29 @@ export default function POSPage() {
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [selectedTerminal, setSelectedTerminal] = useState<POSTerminal | null>(null);
   const [lastUpdate, setLastUpdate] = useState(new Date());
+
+  // Dialog "Vincular Terminal"
+  const [vinculateOpen, setVinculateOpen] = useState(false);
+  const [formUser, setFormUser] = useState("");
+  const [formModel, setFormModel] = useState("");
+  const [formLocation, setFormLocation] = useState("");
+
+  // Terminales propias del usuario (no-admin)
+  const { data: myTerminals = [] } = useQuery<POSTerminal[]>({ queryKey: ["/api/terminals/mine"] });
+
+  // Usuarios del sistema (solo admin, para el dropdown de vincular)
+  const { data: allUsers = [] } = useQuery<{ username: string; fullName: string; email: string; role: string }[]>({
+    queryKey: ["/api/users"],
+    enabled: isAdmin,
+  });
+
+  // Notificaciones (admin: para ver solicitudes pendientes de POS)
+  const { data: notifData } = useQuery<{ notifications: { id: string; type: string; status: string; fromUser: string | null; message: string; title: string }[]; pending: number }>({
+    queryKey: ["/api/notifications"],
+  });
+  const pendingPosRequests = isAdmin
+    ? (notifData?.notifications ?? []).filter(n => n.type === "pos_request" && n.status === "pending")
+    : [];
 
   useEffect(() => {
     const updateTimes = () => {
@@ -275,8 +313,37 @@ export default function POSPage() {
     requestPosMutation.mutate();
   }
 
+  const vinculateMutation = useMutation({
+    mutationFn: async (data: { ownerUsername: string; model: string; location: string }) => {
+      const res = await apiRequest("POST", "/api/terminals", data);
+      return res.json() as Promise<POSTerminal>;
+    },
+    onSuccess: (terminal) => {
+      setTerminals(prev => [...prev, terminal]);
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/terminals/mine"] });
+      setVinculateOpen(false);
+      setFormUser("");
+      setFormModel("");
+      setFormLocation("");
+      toast({
+        title: "Terminal vinculada",
+        description: `${terminal.terminalId} (${terminal.model}) asignada correctamente.`,
+      });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "No se pudo crear la terminal. Intenta de nuevo.", variant: "destructive" });
+    },
+  });
+
+  function openVinculate(preUser = "") {
+    setFormUser(preUser);
+    setFormModel("");
+    setFormLocation("");
+    setVinculateOpen(true);
+  }
+
   if (!isAdmin) {
-    const myTerminals = terminals.filter(t => t.owner === user?.username);
     const sub = getSubscriptionInfo(user?.subscriptionStart);
 
     const subscriptionBanner = sub ? (
@@ -526,8 +593,11 @@ export default function POSPage() {
             <Button variant="outline" size="sm" onClick={handleRefresh} data-testid="button-refresh-pos">
               <RefreshCw className="w-4 h-4 mr-1" /> Actualizar
             </Button>
-            <Button size="sm" className="bg-[#c8322b] hover:bg-[#a62822]" onClick={handleHeaderConfig} data-testid="button-add-terminal">
+            <Button size="sm" className="bg-[#c8322b] text-white" onClick={handleHeaderConfig} data-testid="button-add-terminal">
               <Settings className="w-4 h-4 mr-1" /> Configurar
+            </Button>
+            <Button size="sm" className="bg-[#c8322b] text-white" onClick={() => openVinculate()} data-testid="button-vinculate-terminal">
+              <PlusCircle className="w-4 h-4 mr-1" /> Vincular Terminal
             </Button>
           </div>
         </div>
@@ -650,6 +720,38 @@ export default function POSPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Pending POS Requests */}
+        {pendingPosRequests.length > 0 && (
+          <Card className="border-amber-200 bg-amber-50/40">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <AlertTriangle className="w-4 h-4 text-amber-600" />
+                <CardTitle className="text-base text-amber-800">Solicitudes pendientes de POS</CardTitle>
+                <Badge className="bg-amber-100 text-amber-700 border-amber-200 no-default-active-elevate">{pendingPosRequests.length}</Badge>
+              </div>
+              <CardDescription className="text-amber-700/80">Usuarios que requieren configuración de terminal</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {pendingPosRequests.map(req => (
+                <div key={req.id} className="flex items-center justify-between gap-3 flex-wrap py-2 border-b border-amber-200 last:border-0">
+                  <div>
+                    <p className="text-sm font-semibold text-amber-900">{req.title}</p>
+                    <p className="text-xs text-amber-700">{req.fromUser}</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="bg-[#c8322b] text-white"
+                    onClick={() => openVinculate(req.fromUser ?? "")}
+                    data-testid={`button-vinculate-${req.fromUser}`}
+                  >
+                    <PlusCircle className="w-3.5 h-3.5 mr-1" /> Vincular Terminal
+                  </Button>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Terminals Table */}
         <Card className="hover-elevate">
@@ -944,6 +1046,84 @@ export default function POSPage() {
           </div>
         </div>
       </div>
+
+      {/* Dialog: Vincular Terminal a Usuario */}
+      <Dialog open={vinculateOpen} onOpenChange={setVinculateOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <PlusCircle className="w-5 h-5 text-[#c8322b]" />
+              Vincular Nueva Terminal POS
+            </DialogTitle>
+            <DialogDescription>
+              Crea y asigna una terminal POS a un usuario del sistema. La terminal quedará activa de inmediato.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-1">
+            {/* Usuario */}
+            <div className="space-y-1.5">
+              <Label htmlFor="v-user">Usuario</Label>
+              <Select value={formUser} onValueChange={setFormUser}>
+                <SelectTrigger id="v-user" data-testid="select-vinculate-user">
+                  <SelectValue placeholder="Seleccionar usuario..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {allUsers.filter(u => u.role !== "ADMIN").map(u => (
+                    <SelectItem key={u.username} value={u.username}>
+                      {u.fullName} — {u.username}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Modelo de Terminal */}
+            <div className="space-y-1.5">
+              <Label htmlFor="v-model">Modelo de Terminal</Label>
+              <Select value={formModel} onValueChange={setFormModel}>
+                <SelectTrigger id="v-model" data-testid="select-vinculate-model">
+                  <SelectValue placeholder="Seleccionar modelo..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {POS_MODELS.map(m => (
+                    <SelectItem key={m} value={m}>{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Ubicación */}
+            <div className="space-y-1.5">
+              <Label htmlFor="v-location">Ubicación</Label>
+              <Input
+                id="v-location"
+                placeholder="Ej. Sucursal Centro, Oficina Principal..."
+                value={formLocation}
+                onChange={e => setFormLocation(e.target.value)}
+                data-testid="input-vinculate-location"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="mt-4 gap-2">
+            <Button variant="outline" onClick={() => setVinculateOpen(false)} data-testid="button-vinculate-cancel">
+              Cancelar
+            </Button>
+            <Button
+              className="bg-[#c8322b] text-white"
+              disabled={!formUser || !formModel || !formLocation.trim() || vinculateMutation.isPending}
+              onClick={() => vinculateMutation.mutate({ ownerUsername: formUser, model: formModel, location: formLocation.trim() })}
+              data-testid="button-vinculate-submit"
+            >
+              {vinculateMutation.isPending
+                ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Creando...</>
+                : <><PlusCircle className="w-4 h-4 mr-1" /> Vincular Terminal</>
+              }
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

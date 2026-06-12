@@ -125,3 +125,36 @@ export type InsertTransactionLog = z.infer<typeof insertTransactionLogSchema>;
 
 export type BankingProtocol = typeof bankingProtocols.$inferSelect;
 export type InsertBankingProtocol = z.infer<typeof insertBankingProtocolSchema>;
+
+// Terminal POS (gestión en memoria — sin tabla en DB real)
+export interface PosTerminal {
+  id: string;
+  terminalId: string;
+  model: string;
+  serial: string;
+  status: "Online" | "Offline" | "Idle" | "Reconfigured";
+  transactions: number;
+  amount: number;
+  efficiency: number;
+  location: string;
+  uptime: string;
+  lastTx: string;
+  firmware: string;
+  ip: string;
+  signalStrength: number;
+  emv: boolean;
+  nfc: boolean;
+  pinpad: boolean;
+  configNote?: string;
+  owner?: string;
+  createdAt: Date;
+}
+
+export interface InsertPosTerminal {
+  model: string;
+  location: string;
+  owner?: string;
+  emv?: boolean;
+  nfc?: boolean;
+  pinpad?: boolean;
+}

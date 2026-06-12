@@ -5,7 +5,8 @@ import {
   type SecurityToken, type InsertSecurityToken,
   type TransactionLog, type InsertTransactionLog,
   type BankingProtocol, type InsertBankingProtocol,
-  type Notification, type InsertNotification
+  type Notification, type InsertNotification,
+  type PosTerminal, type InsertPosTerminal,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { hashPassword, maskCardNumber } from "./auth-utils";
@@ -47,6 +48,15 @@ export interface IStorage {
   markAllNotificationsRead(username: string, isAdmin: boolean): Promise<number>;
   resolveNotification(id: string): Promise<Notification | undefined>;
   hasPendingPosRequest(fromUser: string): Promise<boolean>;
+  resolvePendingPosRequest(fromUser: string): Promise<Notification | undefined>;
+
+  // POS Terminals
+  getAllTerminals(): Promise<PosTerminal[]>;
+  getTerminalsByOwner(username: string): Promise<PosTerminal[]>;
+  createTerminal(data: InsertPosTerminal): Promise<PosTerminal>;
+
+  // Users (admin)
+  getAllUsers(): Promise<User[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -57,6 +67,7 @@ export class MemStorage implements IStorage {
   private transactionLogs: Map<string, TransactionLog[]>;
   private protocols: Map<string, BankingProtocol>;
   private notifications: Map<string, Notification>;
+  private posTerminals: Map<string, PosTerminal>;
 
   constructor() {
     this.users = new Map();
@@ -66,11 +77,13 @@ export class MemStorage implements IStorage {
     this.transactionLogs = new Map();
     this.protocols = new Map();
     this.notifications = new Map();
+    this.posTerminals = new Map();
     
     this.initializeProtocols();
     this.initializeAdminUser();
     this.seedTransactions();
     this.seedNotifications();
+    this.seedTerminals();
   }
 
   private initializeProtocols() {
@@ -425,6 +438,81 @@ export class MemStorage implements IStorage {
     return Array.from(this.notifications.values()).some(
       (n) => n.type === "pos_request" && n.fromUser === fromUser && n.status === "pending",
     );
+  }
+
+  async resolvePendingPosRequest(fromUser: string): Promise<Notification | undefined> {
+    const pending = Array.from(this.notifications.values()).find(
+      (n) => n.type === "pos_request" && n.fromUser === fromUser && n.status === "pending",
+    );
+    if (!pending) return undefined;
+    return this.resolveNotification(pending.id);
+  }
+
+  // POS Terminals
+  private seedTerminals() {
+    const seed: PosTerminal[] = [
+      { id: randomUUID(), terminalId: "T1001", model: "Verifone VX 690", serial: "VFN-VX690-A4821", status: "Online", transactions: 542, amount: 2304567.89, efficiency: 98, location: "Sucursal Centro", uptime: "99.8%", lastTx: "Hace 12 seg", firmware: "v3.4.1", ip: "192.168.1.101", signalStrength: 95, emv: true, nfc: true, pinpad: true, createdAt: new Date() },
+      { id: randomUUID(), terminalId: "T1002", model: "Ingenico iCT220", serial: "ING-ICT220-B3341", status: "Online", transactions: 321, amount: 1850234.50, efficiency: 95, location: "Sucursal Norte", uptime: "99.5%", lastTx: "Hace 28 seg", firmware: "v2.8.3", ip: "192.168.1.102", signalStrength: 88, emv: true, nfc: false, pinpad: true, createdAt: new Date() },
+      { id: randomUUID(), terminalId: "T1003", model: "PAX S920", serial: "PAX-S920-C1198", status: "Offline", transactions: 198, amount: 674305.00, efficiency: 82, location: "Sucursal Sur", uptime: "87.2%", lastTx: "Hace 2 hrs", firmware: "v1.9.7", ip: "192.168.1.103", signalStrength: 0, emv: true, nfc: false, pinpad: true, createdAt: new Date() },
+      { id: randomUUID(), terminalId: "T1004", model: "Verifone VX 520", serial: "VFN-VX520-D2276", status: "Online", transactions: 456, amount: 3186003.20, efficiency: 96, location: "Sucursal Oeste", uptime: "99.6%", lastTx: "Hace 5 seg", firmware: "v4.1.0", ip: "192.168.1.104", signalStrength: 99, emv: true, nfc: true, pinpad: true, createdAt: new Date() },
+      { id: randomUUID(), terminalId: "T1005", model: "Ingenico iWL250", serial: "ING-IWL250-E5503", status: "Online", transactions: 330, amount: 1953806.75, efficiency: 94, location: "Sucursal Este", uptime: "99.3%", lastTx: "Hace 45 seg", firmware: "v3.0.2", ip: "192.168.1.105", signalStrength: 72, emv: true, nfc: true, pinpad: true, owner: "angoestradacontacto@gmail.com", createdAt: new Date() },
+      { id: randomUUID(), terminalId: "T1006", model: "Verifone V660p", serial: "VFN-V660P-2024-001", status: "Reconfigured", transactions: 0, amount: 0, efficiency: 100, location: "Nueva Terminal", uptime: "100%", lastTx: "Sin transacciones", firmware: "v5.0.1-LATEST", ip: "192.168.1.106", signalStrength: 100, emv: true, nfc: true, pinpad: true, configNote: "Re-configurada — Lista para Operar", createdAt: new Date() },
+    ];
+    seed.forEach(t => this.posTerminals.set(t.id, t));
+  }
+
+  private getNextTerminalId(): string {
+    let max = 1006;
+    this.posTerminals.forEach(t => {
+      const num = parseInt(t.terminalId.replace("T", ""), 10);
+      if (!isNaN(num) && num > max) max = num;
+    });
+    return `T${max + 1}`;
+  }
+
+  async getAllTerminals(): Promise<PosTerminal[]> {
+    return Array.from(this.posTerminals.values()).sort((a, b) =>
+      a.terminalId.localeCompare(b.terminalId)
+    );
+  }
+
+  async getTerminalsByOwner(username: string): Promise<PosTerminal[]> {
+    return Array.from(this.posTerminals.values()).filter(t => t.owner === username);
+  }
+
+  async createTerminal(data: InsertPosTerminal): Promise<PosTerminal> {
+    const id = randomUUID();
+    const terminalId = this.getNextTerminalId();
+    const suffix = randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase();
+    const terminal: PosTerminal = {
+      id,
+      terminalId,
+      model: data.model,
+      serial: `POS-${suffix}-${terminalId}`,
+      status: "Reconfigured",
+      transactions: 0,
+      amount: 0,
+      efficiency: 100,
+      location: data.location,
+      uptime: "100%",
+      lastTx: "Sin transacciones",
+      firmware: "v5.0.0-NEW",
+      ip: `192.168.1.${100 + this.posTerminals.size + 1}`,
+      signalStrength: 100,
+      emv: data.emv ?? true,
+      nfc: data.nfc ?? true,
+      pinpad: data.pinpad ?? true,
+      configNote: "Terminal nueva — configurada y lista para operar",
+      owner: data.owner,
+      createdAt: new Date(),
+    };
+    this.posTerminals.set(id, terminal);
+    return terminal;
+  }
+
+  // Users (admin)
+  async getAllUsers(): Promise<User[]> {
+    return Array.from(this.users.values());
   }
 }
 
