@@ -312,6 +312,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ====================================================================
+  // TERMINALES POS
+  // ====================================================================
+
+  // Lista de terminales: admin → todas; usuario → las propias
+  app.get("/api/terminals", async (req, res) => {
+    try {
+      const user = req.currentUser!;
+      const terminals = user.role === "ADMIN"
+        ? await storage.getAllTerminals()
+        : await storage.getTerminalsByOwner(user.username);
+      res.json(terminals);
+    } catch {
+      res.status(500).json({ error: "Error al obtener terminales" });
+    }
+  });
+
+  // Terminales solo del usuario autenticado
+  app.get("/api/terminals/mine", async (req, res) => {
+    try {
+      const terminals = await storage.getTerminalsByOwner(req.currentUser!.username);
+      res.json(terminals);
+    } catch {
+      res.status(500).json({ error: "Error al obtener terminales" });
+    }
+  });
+
+  // Crear + asignar terminal a un usuario (solo ADMIN)
+  app.post("/api/terminals", requireRole("ADMIN"), async (req, res) => {
+    try {
+      const bodySchema = z.object({
+        ownerUsername: z.string().min(1),
+        model: z.string().min(1),
+        location: z.string().min(1),
+        emv: z.boolean().optional().default(true),
+        nfc: z.boolean().optional().default(true),
+        pinpad: z.boolean().optional().default(true),
+      });
+      const parsed = bodySchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: "Datos inválidos", details: parsed.error.issues });
+        return;
+      }
+      const { ownerUsername, model, location, emv, nfc, pinpad } = parsed.data;
+
+      const targetUser = await storage.getUserByUsername(ownerUsername);
+      if (!targetUser) {
+        res.status(404).json({ error: "Usuario no encontrado" });
+        return;
+      }
+
+      const terminal = await storage.createTerminal({ model, location, owner: ownerUsername, emv, nfc, pinpad });
+
+      // Auto-resolver cualquier solicitud POS pendiente de ese usuario
+      await storage.resolvePendingPosRequest(ownerUsername);
+
+      // Notificar al usuario que su terminal está lista
+      await storage.createNotification({
+        recipient: ownerUsername,
+        type: "request_resolved",
+        title: "Terminal POS activada",
+        message: `Tu terminal ${terminal.terminalId} (${model}) fue configurada y está lista para operar en: ${location}.`,
+        fromUser: null,
+        status: "info",
+        read: false,
+      });
+
+      res.json(terminal);
+    } catch {
+      res.status(500).json({ error: "Error al crear la terminal" });
+    }
+  });
+
+  // Lista de usuarios para el dropdown del admin (Vincular Terminal)
+  app.get("/api/users", requireRole("ADMIN"), async (req, res) => {
+    try {
+      const users = await storage.getAllUsers();
+      res.json(users.map(publicUser));
+    } catch {
+      res.status(500).json({ error: "Error al obtener usuarios" });
+    }
+  });
+
+  // ====================================================================
   // PROTOCOLOS BANCARIOS
   // ====================================================================
   
