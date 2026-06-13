@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, decimal, integer, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, decimal, integer, boolean, doublePrecision } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -15,24 +15,24 @@ export const users = pgTable("users", {
   role: text("role").notNull().default("USER"),
   position: text("position"),
   avatar: text("avatar"),
-  subscriptionStart: timestamp("subscription_start"), // inicio de suscripción (plan 12 meses); null = sin suscripción
+  subscriptionStart: timestamp("subscription_start"),
 });
 
 // Transacciones bancarias
 export const transactions = pgTable("transactions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   transactionId: text("transaction_id").notNull().unique(),
-  protocol: text("protocol").notNull(), // 101.1, 101.2, etc.
-  type: text("type").notNull(), // transfer, payment, deposit, withdrawal
+  protocol: text("protocol").notNull(),
+  type: text("type").notNull(),
   amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
   currency: text("currency").notNull().default("USD"),
-  status: text("status").notNull().default("pending"), // pending, processing, completed, failed
+  status: text("status").notNull().default("pending"),
   fromAccount: text("from_account"),
   toAccount: text("to_account"),
   description: text("description"),
   authCode: text("auth_code"),
   tokenId: text("token_id"),
-  createdBy: text("created_by"), // username del propietario de la transacción
+  createdBy: text("created_by"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -40,8 +40,8 @@ export const transactions = pgTable("transactions", {
 export const paymentMethods = pgTable("payment_methods", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   transactionId: text("transaction_id").notNull(),
-  cardType: text("card_type").notNull(), // VISA, Mastercard, AMEX, etc.
-  cardNumber: text("card_number").notNull(), // últimos 4 dígitos
+  cardType: text("card_type").notNull(),
+  cardNumber: text("card_number").notNull(),
   cvv: text("cvv"),
   pin: text("pin"),
   holderName: text("holder_name").notNull(),
@@ -78,20 +78,44 @@ export const bankingProtocols = pgTable("banking_protocols", {
   code: text("code").notNull().unique(),
   name: text("name").notNull(),
   description: text("description").notNull(),
-  category: text("category").notNull(), // transfer, payment, deposit, withdrawal
+  category: text("category").notNull(),
   requiresSecurity: boolean("requires_security").default(true),
 });
 
-// Notificaciones y solicitudes (centro de notificaciones / panel admin)
+// Notificaciones y solicitudes
 export const notifications = pgTable("notifications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  recipient: text("recipient").notNull(), // username destinatario, o "ADMIN" para todos los administradores
-  type: text("type").notNull(), // pos_request, request_sent, request_resolved, system, info
+  recipient: text("recipient").notNull(),
+  type: text("type").notNull(),
   title: text("title").notNull(),
   message: text("message").notNull(),
-  fromUser: text("from_user"), // username que originó la notificación (solicitante)
-  status: text("status").notNull().default("info"), // info | pending | resolved
+  fromUser: text("from_user"),
+  status: text("status").notNull().default("info"),
   read: boolean("read").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Terminales POS (persistentes en DB)
+export const posTerminals = pgTable("pos_terminals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  terminalId: text("terminal_id").notNull().unique(),
+  model: text("model").notNull(),
+  serial: text("serial").notNull(),
+  status: text("status").notNull().default("Reconfigured"),
+  transactions: integer("transactions").notNull().default(0),
+  amount: doublePrecision("amount").notNull().default(0),
+  efficiency: integer("efficiency").notNull().default(100),
+  location: text("location").notNull(),
+  uptime: text("uptime").notNull().default("100%"),
+  lastTx: text("last_tx").notNull().default("Sin transacciones"),
+  firmware: text("firmware").notNull().default("v5.0.0-NEW"),
+  ip: text("ip").notNull(),
+  signalStrength: integer("signal_strength").notNull().default(100),
+  emv: boolean("emv").notNull().default(true),
+  nfc: boolean("nfc").notNull().default(true),
+  pinpad: boolean("pinpad").notNull().default(true),
+  configNote: text("config_note"),
+  owner: text("owner"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -126,34 +150,13 @@ export type InsertTransactionLog = z.infer<typeof insertTransactionLogSchema>;
 export type BankingProtocol = typeof bankingProtocols.$inferSelect;
 export type InsertBankingProtocol = z.infer<typeof insertBankingProtocolSchema>;
 
-// Terminal POS (gestión en memoria — sin tabla en DB real)
-export interface PosTerminal {
-  id: string;
-  terminalId: string;
-  model: string;
-  serial: string;
-  status: "Online" | "Offline" | "Idle" | "Reconfigured";
-  transactions: number;
-  amount: number;
-  efficiency: number;
-  location: string;
-  uptime: string;
-  lastTx: string;
-  firmware: string;
-  ip: string;
-  signalStrength: number;
-  emv: boolean;
-  nfc: boolean;
-  pinpad: boolean;
-  configNote?: string;
-  owner?: string;
-  createdAt: Date;
-}
+export type PosTerminal = typeof posTerminals.$inferSelect;
 
+// InsertPosTerminal: sólo los campos que el admin proporciona al crear una terminal
 export interface InsertPosTerminal {
   model: string;
   location: string;
-  owner?: string;
+  owner?: string | null;
   emv?: boolean;
   nfc?: boolean;
   pinpad?: boolean;

@@ -3,6 +3,7 @@ import helmet from "helmet";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
+import { storage } from "./storage";
 
 const app = express();
 
@@ -52,6 +53,7 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  await storage.initialize();
   await setupAuth(app);
   registerAuthRoutes(app);
   const server = await registerRoutes(app);
