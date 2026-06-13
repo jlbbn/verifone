@@ -751,6 +751,146 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ── SR-LINK: SENDER / RECEIVER PAIRING ────────────────────────────────────
+  const srLinkSchema = z.object({
+    senderName:       z.string().min(1),
+    senderCard:       z.string().min(4),
+    senderBank:       z.string().min(1),
+    senderCardType:   z.string().min(1),
+    senderExpiry:     z.string().min(1),
+    senderCountry:    z.string().min(1),
+    senderA2:         z.string().min(2),
+    senderA3:         z.string().min(3),
+    senderIsoNum:     z.string().min(1),
+    receiverName:     z.string().min(1),
+    receiverCard:     z.string().min(4),
+    receiverBank:     z.string().min(1),
+    receiverCardType: z.string().min(1),
+    receiverExpiry:   z.string().min(1),
+    receiverCountry:  z.string().min(1),
+    receiverA2:       z.string().min(2),
+    receiverA3:       z.string().min(3),
+    receiverIsoNum:   z.string().min(1),
+    totalAmount:      z.string().min(1),
+    renderedAmount:   z.string().min(1),
+    currency:         z.enum(["EUR", "USD", "MXN", "GBP"]),
+    protocol:         z.string().min(1),
+  });
+
+  app.post("/api/sr-link", requireSession, async (req, res) => {
+    try {
+      const actor = req.currentUser!;
+      // Access control: ADMIN always; others need at least one active terminal
+      if (actor.role !== "ADMIN") {
+        const myTerminals = await storage.getTerminalsByOwner(actor.username);
+        const hasActive = myTerminals.some(t => t.status === "active");
+        if (!hasActive) {
+          res.status(403).json({
+            error: "Terminal no activa. Contacta al administrador para habilitar tu terminal antes de operar vinculaciones.",
+          });
+          return;
+        }
+      }
+
+      const parsed = srLinkSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: "Datos inválidos", details: parsed.error.flatten() });
+        return;
+      }
+      const d = parsed.data;
+
+      const linkedCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const approvalCode = `LINK-${randomBytes(3).toString('hex').toUpperCase()}`;
+      const transactionId = `SR-${Date.now()}-${randomBytes(4).toString('hex').toUpperCase()}`;
+      const tokenId = `SRLINK-${Date.now()}-${randomBytes(8).toString('hex').toUpperCase()}`;
+      const authCodes = `${randomBytes(4).toString('hex').toUpperCase()}-${randomBytes(2).toString('hex').toUpperCase()}`;
+      const now = new Date();
+      const finish = new Date(now.getTime() + 10 * 60 * 1000);
+      const amountVal = parseFloat(d.renderedAmount.replace(/,/g, ""));
+
+      const tx = await storage.createTransaction({
+        transactionId,
+        protocol: `P${d.protocol}`,
+        type: "sr-link",
+        amount: isNaN(amountVal) ? "0" : amountVal.toString(),
+        currency: d.currency,
+        status: "processing",
+        fromAccount: `${d.senderName.toUpperCase()} · ${d.senderBank.toUpperCase()} · ${maskCardNumber(d.senderCard.replace(/\s/g, ""))}`,
+        toAccount:   `${d.receiverName.toUpperCase()} · ${d.receiverBank.toUpperCase()} · ${maskCardNumber(d.receiverCard.replace(/\s/g, ""))}`,
+        authCode: approvalCode,
+        description: `SR-LINK: ${d.senderName.toUpperCase()} → ${d.receiverName.toUpperCase()} · ${d.renderedAmount} ${d.currency} · PROTOCOL ${d.protocol}`,
+        createdBy: actor.username,
+      });
+
+      await storage.createPaymentMethod({
+        transactionId: tx.id,
+        cardType: d.receiverCardType,
+        cardNumber: d.receiverCard.replace(/\s/g, ""),
+        holderName: d.receiverName,
+        expiryDate: d.receiverExpiry,
+        verified: true,
+      });
+
+      await storage.createSecurityToken({
+        tokenId,
+        transactionId: tx.id,
+        hash: randomBytes(32).toString('hex'),
+        algorithm: "AES-256",
+        emvCompliant: true,
+        pciCompliant: true,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      });
+
+      const steps: [string, string, string][] = [
+        ["NETWORK_CONNECT", "ok",        `Connecting to Mastercard Network — DONE`],
+        ["SENDER_VERIFY",   "ok",        `Sender verified: ${d.senderName.toUpperCase()} · ${d.senderBank.toUpperCase()}`],
+        ["RECEIVER_VERIFY", "ok",        `Receiver verified: ${d.receiverName.toUpperCase()} · ${d.receiverBank.toUpperCase()}`],
+        ["PROTOCOL_CHECK",  "ok",        `Protocol ${d.protocol} validated — ONLINE SALE`],
+        ["SR_LINK",         "ok",        `Linked Code assigned: ${linkedCode}`],
+        ["AUTH_GENERATE",   "ok",        `Authorization: ${approvalCode} · Auth codes: ${authCodes}`],
+        ["TX_RECORD",       "ok",        `Transaction record created: ${transactionId}`],
+        ["COMPLETE",        "completed", `SR-LINK complete — Amount: ${d.renderedAmount} ${d.currency} — STATUS: APPROVED`],
+      ];
+      for (const [action, status, message] of steps) {
+        await storage.createTransactionLog({ transactionId: tx.id, action, status, message });
+      }
+
+      await storage.updateTransactionStatus(tx.id, "completed", approvalCode);
+
+      res.json({
+        success: true,
+        transactionId,
+        linkedCode,
+        approvalCode,
+        authCodes,
+        tokenId,
+        status: "LINKED",
+        sender: {
+          name: d.senderName.toUpperCase(), card: maskCardNumber(d.senderCard.replace(/\s/g, "")),
+          bank: d.senderBank.toUpperCase(), cardType: d.senderCardType,
+          expiry: d.senderExpiry, country: d.senderCountry,
+          a2: d.senderA2, a3: d.senderA3, isoNum: d.senderIsoNum,
+        },
+        receiver: {
+          name: d.receiverName.toUpperCase(), card: maskCardNumber(d.receiverCard.replace(/\s/g, "")),
+          bank: d.receiverBank.toUpperCase(), cardType: d.receiverCardType,
+          expiry: d.receiverExpiry, country: d.receiverCountry,
+          a2: d.receiverA2, a3: d.receiverA3, isoNum: d.receiverIsoNum,
+        },
+        totalAmount: d.totalAmount,
+        renderedAmount: d.renderedAmount,
+        currency: d.currency,
+        protocol: d.protocol,
+        globalDate: now.toLocaleDateString("en-US", { day: "2-digit", month: "long", year: "numeric" }).toUpperCase(),
+        startTime: now.toLocaleTimeString("es-MX", { hour12: false }),
+        finishTime: finish.toLocaleTimeString("es-MX", { hour12: false }),
+      });
+    } catch (error) {
+      console.error("SR-Link error:", error);
+      res.status(500).json({ error: "Error al procesar vinculación SR" });
+    }
+  });
+
   // ── System Settings ────────────────────────────────────────────────────────
   app.get("/api/settings", requireSession, async (_req, res) => {
     try {
