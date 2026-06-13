@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { Link } from "wouter";
 import { useSystemSettings } from "@/hooks/use-system-settings";
 import { DEFAULT_SYSTEM_SETTINGS } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -15,7 +16,7 @@ import {
   MonitorSmartphone, CreditCard, Wifi, ShieldCheck, CheckCircle,
   X, Delete, RefreshCw, Activity, Loader2, Receipt,
   Zap, Clock, Lock, AlertTriangle, Settings, FileBarChart,
-  Radio, Download, Info, ChevronRight, Printer, ArrowDownLeft
+  Radio, Download, Info, ChevronRight, Printer, ArrowDownLeft, Sliders
 } from "lucide-react";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -492,6 +493,14 @@ export default function POSVirtualPage() {
             }`}>
             <Zap className="w-3.5 h-3.5" /> Venta Forzada {isVF ? "ON" : "OFF"}
           </button>
+          {user?.role === "ADMIN" && (
+            <Link href="/admin/settings">
+              <button data-testid="button-admin-settings"
+                className="flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold border border-[#c8322b] text-[#c8322b] bg-red-50 transition-all">
+                <Sliders className="w-3.5 h-3.5" /> Administrar
+              </button>
+            </Link>
+          )}
         </div>
       </div>
 
