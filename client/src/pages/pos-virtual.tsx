@@ -1,4 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useSystemSettings } from "@/hooks/use-system-settings";
+import { DEFAULT_SYSTEM_SETTINGS } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,8 +19,6 @@ import {
 } from "lucide-react";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const TC_MXN = 17.50; // Tipo de cambio USD → MXN
-
 const CARD_TYPES = [
   "VISA Nacional",
   "VISA Internacional",
@@ -57,7 +57,7 @@ function formatAmountDigits(digits: string) {
   if (!digits) return "0.00";
   return fmt(parseInt(digits, 10) / 100);
 }
-function toMXN(usd: number) { return fmt(usd * TC_MXN); }
+function toMXN(usd: number, tc: number) { return fmt(usd * tc); }
 
 function randHex(n: number) {
   return Array.from({ length: n }, () => Math.floor(Math.random() * 16).toString(16).toUpperCase()).join("");
@@ -98,51 +98,10 @@ function buildVisaNetData(amountDigits: string, cardNumber: string, holderName: 
   };
 }
 
-// ─── Terminal Parameters Report (FUNCIONES > REPORTE PARAMETROS) ──────────────
-const TERMINAL_PARAMS = [
-  { label: "APLICACION",      value: "RETAIL" },
-  { label: "VERSION",         value: "PROVEEOPENAT400" },
-  { label: "AFILIACION",      value: "7705397" },
-  { label: "VERSION FECHA",   value: "JUN 13 2026" },
-  { label: "PCI REBOOT",      value: "03" },
-  { label: "ARRSVEC",         value: "1.10.213" },
-  { label: "REGISTRO VHO",    value: "V660p-A" },
-  { label: "VERSION EPROM",   value: "V660PT6 10.2" },
-  { label: "TIPO TERMINAL",   value: "V660p-A" },
-  { label: "SERIE NUMERO",    value: "T13-768-018" },
-  { label: "PTID",            value: "71376801" },
-  { label: "NII",             value: "016" },
-  { label: "NUM DE FOLIO",    value: "****8" },
-  { label: "BANCO",           value: "" },
-  { label: "TURNOS",          value: "1" },
-  { label: "VENTA FORZADA",   value: "SI", highlight: true },
-  { label: "CASH BACK",       value: "SI" },
-  { label: "TIEMPO AIRE",     value: "SI", highlight: true },
-  { label: "CRIPTOGRAFIA",    value: "SI" },
-  { label: "DCC MODE",        value: "0" },
-  { label: "BN#",             value: "0" },
-  { label: "IMP TICKET",      value: "3" },
-  { label: "DEVOLUCION",      value: "3" },
-  { label: "PAGOS DIF",       value: "06" },
-  { label: "AMEX OPTBLUE",    value: "SI" },
-  { label: "PLAN AMEX",       value: "SI" },
-  { label: "MANEJO CTLS",     value: "SI" },
-  { label: "MANEJO EMV",      value: "SI" },
-  { label: "EMV MODULE",      value: "VOS2 VERTEX" },
-  { label: "PP P400",         value: "SI", highlight: true },
-  { label: "USUARIOS",        value: "SI", highlight: true },
-  { label: "TX POR LLAVE T",  value: "VENTA" },
-  { label: "SERVICOMERCIO",   value: "SI", highlight: true },
-  { label: "MOTO CVW2",       value: "SI", highlight: true },
-  { label: "SUPER MANUAL",    value: "SI", highlight: true },
-  { label: "COMM ELECTR",     value: "SI", highlight: true },
-  { label: "OPS",             value: "SI", highlight: true },
-  { label: "LEALTAD MEDA",    value: "SI", highlight: true },
-  { label: "GIFTCARD",        value: "SI", highlight: true },
-  { label: "MODO COMUNI",     value: "SOLO ETHERNET" },
-  { label: "ACTIVADO SSL",    value: "SI", highlight: true },
-  { label: "ACTIVADO TLS",    value: "SI" },
-];
+const HIGHLIGHT_PARAM_LABELS = new Set([
+  "VENTA FORZADA","TIEMPO AIRE","PP P400","USUARIOS","SERVICOMERCIO",
+  "MOTO CVW2","SUPER MANUAL","COMM ELECTR","OPS","LEALTAD MEDA","GIFTCARD","ACTIVADO SSL",
+]);
 
 // ─── Modals ───────────────────────────────────────────────────────────────────
 
@@ -176,12 +135,18 @@ function FuncionesModal({ onClose, onSelect }: { onClose: () => void; onSelect: 
   );
 }
 
-function ReporteParametrosModal({ onClose }: { onClose: () => void }) {
+function ReporteParametrosModal({
+  params, onClose,
+}: {
+  params: { label: string; value: string; highlight?: boolean }[];
+  onClose: () => void;
+}) {
+  const afiliacion = params.find(p => p.label === "AFILIACION")?.value ?? "7705397";
+  const version = params.find(p => p.label === "VERSION")?.value ?? "PROVEEOPENAT400";
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 overflow-y-auto">
       <div className="w-full max-w-xs my-4">
         <div className="rounded-lg overflow-hidden shadow-2xl border border-gray-200">
-          {/* Receipt top */}
           <div className="bg-white px-5 py-4 text-center border-b border-dashed border-gray-300">
             <p className="font-bold text-sm tracking-wide" style={{ fontFamily: "monospace" }}>LISTA DE PARAMETROS</p>
             <div className="flex justify-between mt-2 text-xs font-mono text-gray-600">
@@ -189,14 +154,12 @@ function ReporteParametrosModal({ onClose }: { onClose: () => void }) {
               <span>HORA {new Date().toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>
             </div>
           </div>
-          {/* Terminal ID */}
           <div className="bg-white px-5 py-3 text-center border-b border-dashed border-gray-300">
-            <p className="font-bold text-2xl tracking-widest font-mono">7705397</p>
+            <p className="font-bold text-2xl tracking-widest font-mono">{afiliacion}</p>
             <p className="text-xs text-gray-500 font-mono">CAJA: 1</p>
           </div>
-          {/* Params */}
           <div className="bg-white px-4 py-3 divide-y divide-gray-100">
-            {TERMINAL_PARAMS.map((p, i) => (
+            {params.map((p, i) => (
               <div key={i} className="flex items-center justify-between py-1">
                 <span className="text-[11px] font-mono text-gray-700">{p.label}</span>
                 <span className={`text-[11px] font-mono font-bold ${
@@ -205,9 +168,8 @@ function ReporteParametrosModal({ onClose }: { onClose: () => void }) {
               </div>
             ))}
           </div>
-          {/* Footer */}
           <div className="bg-white px-5 py-4 text-center border-t border-dashed border-gray-300">
-            <p className="text-[10px] font-mono text-gray-500 tracking-widest">PROVEEOPENAT400</p>
+            <p className="text-[10px] font-mono text-gray-500 tracking-widest">{version}</p>
           </div>
         </div>
         <Button onClick={onClose} className="w-full mt-3 bg-[#1565C0] text-white text-xs">
@@ -218,75 +180,147 @@ function ReporteParametrosModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+function Barcode() {
+  const pattern = [3,1,2,1,4,1,1,2,3,1,2,1,1,3,2,1,4,1,1,2,3,1,1,2,4,1,2,1,3,1,1,2,1,3,2,1,4,1,1,2];
+  return (
+    <div className="flex items-end justify-center h-10 gap-px my-2 px-2">
+      {pattern.map((w, i) => (
+        <div key={i} className={`${i % 2 === 0 ? "bg-white" : "bg-transparent"}`}
+          style={{ width: w * 2, height: i % 5 === 0 ? "100%" : "80%" }} />
+      ))}
+    </div>
+  );
+}
+
+function SectionHeader({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-1 my-2">
+      <div className="flex-1 border-t border-dotted border-gray-600" />
+      <span className="text-[10px] font-mono text-gray-400 px-1 whitespace-nowrap">...{label}...</span>
+      <div className="flex-1 border-t border-dotted border-gray-600" />
+    </div>
+  );
+}
+
 function VisaNetworkReceiptModal({ data, onClose }: { data: VisaNetData; onClose: () => void }) {
   function row(label: string, value: string) {
-    const dots = ".".repeat(Math.max(2, 52 - label.length - value.length));
+    const maxDots = 48;
+    const used = label.length + value.length;
+    const dots = ".".repeat(Math.max(2, maxDots - used));
     return (
-      <div key={label} className="flex text-[10px] font-mono leading-5">
-        <span className="text-blue-300 whitespace-nowrap">{label}:</span>
-        <span className="text-gray-500 flex-1 overflow-hidden">{dots}</span>
-        <span className="text-green-300 text-right whitespace-nowrap ml-1">{value}</span>
+      <div className="flex text-[10px] font-mono leading-[18px]">
+        <span className="text-gray-300 whitespace-nowrap">{label}:</span>
+        <span className="text-gray-600 flex-1 overflow-hidden tracking-tighter">{dots}</span>
+        <span className="text-white text-right whitespace-nowrap ml-1 font-bold">{value}</span>
       </div>
     );
   }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 overflow-y-auto">
-      <div className="w-full max-w-lg rounded-xl overflow-hidden shadow-2xl border border-gray-700 my-4"
-        style={{ background: "#000d1a", fontFamily: "monospace" }}>
+      <div className="w-full max-w-md rounded-xl overflow-hidden shadow-2xl border border-gray-700 my-4"
+        style={{ background: "#050f1a", fontFamily: "monospace" }}>
+
+        {/* Header */}
         <div className="flex items-center justify-between px-4 py-2 border-b border-gray-700 bg-black/60">
-          <span className="text-xs text-gray-400 font-mono">VISA NET — PROTOCOLO 101.1 — RECEIVER</span>
+          <span className="text-xs text-gray-400 font-mono tracking-wide">REPORTE PARAMETROS — Visa Net 9.0 Quantum</span>
           <button onClick={onClose} className="text-gray-400 hover:text-white"><X className="w-4 h-4" /></button>
         </div>
-        <div className="p-4 space-y-2 overflow-y-auto max-h-[75vh]">
-          <div className="text-[10px] font-mono text-cyan-400 leading-5"><p>TRACK1_DATA: {data.track1}</p></div>
-          <div className="text-[10px] font-mono text-cyan-400 leading-5"><p>TRACK2_DATA: {data.track2}</p></div>
-          <div className="text-[10px] font-mono text-cyan-400"><p>TRACK3_DATA: VERIFY_EXIT</p></div>
 
-          <div className="my-3 rounded-lg border border-blue-500/40 bg-white px-4 py-3 flex items-center justify-between">
-            <span className="text-3xl font-extrabold italic text-[#1A1F71]"
-              style={{ fontFamily: "'Arial Black', Arial, sans-serif" }}>VISA</span>
-            <span className="text-gray-700 text-2xl font-bold font-mono">{data.authCode}</span>
-            <div className="w-12 h-12 border border-gray-300 flex items-center justify-center bg-gray-50 rounded">
-              <div className="grid grid-cols-5 gap-px p-1">
-                {Array.from({ length: 25 }).map((_, i) => (
-                  <div key={i} className={`w-1.5 h-1.5 ${[0,2,4,6,8,12,16,18,20,22,24].includes(i) ? "bg-gray-800" : "bg-white"}`} />
-                ))}
-              </div>
+        <div className="p-4 space-y-1 overflow-y-auto max-h-[78vh]">
+
+          {/* TRACK lines */}
+          <p className="text-[10px] font-mono text-cyan-400 leading-5 break-all">
+            TRACK1_DATA: SEARCH_FOR_CC_DATA+LO QUANTUM 8.9 [B|B][13.19]/&lt;(A_ZA_A/S)(201/101)......../EMV/D2/COMPLETE
+          </p>
+          <p className="text-[10px] font-mono text-cyan-400 leading-5 break-all">
+            TRACK2_DATA: OPEN PROCESS_ACCESS SYSTEM _AND READ _VERIFY/MEM=149-MALWARE/TRACK_DATE/DA/+0000000000000
+          </p>
+          <p className="text-[10px] font-mono text-cyan-400 leading-5">
+            TRACK3_DATA: VERIFY_EXIT
+          </p>
+
+          {/* ── CARD INFORMATION ── */}
+          <SectionHeader label="CARD INFORMATION" />
+          <p className="text-center text-[10px] font-mono text-gray-400 tracking-widest">DATA VERIFIED BY</p>
+
+          {/* White VISA card */}
+          <div className="rounded-lg bg-white px-4 py-3 my-2 space-y-1.5">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-2xl font-extrabold italic text-[#1A1F71]"
+                style={{ fontFamily: "'Arial Black', Arial, sans-serif" }}>VISA</span>
             </div>
+            {[
+              { label: "Receiver/Card Holder Name:", value: data.holderName },
+              { label: "Receiver/Issuing Bank:",     value: "PNC BANK" },
+              { label: "Receiver/Card Number:",      value: "" },
+              { label: "Receiver/Expiration Date:",  value: data.expDate },
+            ].map(({ label, value }) => (
+              <div key={label} className="text-center">
+                <p className="text-[10px] text-gray-500">{label}</p>
+                {value
+                  ? <p className="text-xs font-bold text-[#1A1F71] bg-blue-100 px-2 py-0.5 rounded inline-block">{value}</p>
+                  : <div className="h-4 border-b-2 border-dotted border-blue-300 mx-8" />
+                }
+              </div>
+            ))}
           </div>
 
-          <div className="space-y-0.5">
-            {row("RF21", `TRANSACTION CODE / ${data.txCode}`)}
-            {row("F22:*****", `DEPOSITE CODE /${data.depositeCode}`)}
-            {row("FED CODE", data.fedCode)}
-            {row("F23B", `BANK OPERATION CODE / ${data.bankOpCode}`)}
-            {row("F32A", "DIGITAL CASH/USD/HSBC/ VISAINC_ORDSHR")}
-            {row("RECEIVER/AMOUNT", `${fmt(data.amount)} USD 11#DOLLARS#`)}
-            {row("RECEIVER /CARD NUMBER", `<${data.cardNumber}`)}
-            {row("RECEIVER/EXPIRATION DATE", data.expDate)}
-            {row("RECEIVER /CARD HOLDER NAME", `<${data.holderName}`)}
-            {row("RECEIVER/STATUS TRANSACTION", "ONLINE SALE")}
-            {row("RECEIVER/REDIRECTING TO VISA NETWORK", "OK")}
-            {row("RECEIVER/CONNECTING TO DATA BASE", "CONNECTED")}
-            {row("RECEIVER/ACCOUNT VERIFICATION", "OK")}
-            {row("PROTOCOL", data.protocol)}
-            {row("GLOBAL TRANSFER TIME", `< ${data.timestamp} CST`)}
+          <Barcode />
+          <div className="flex items-center gap-1 my-1">
+            <div className="flex-1 border-t border-gray-700" />
+            <div className="flex-1 border-t border-blue-700" />
           </div>
 
-          <div className="mt-4 rounded-lg border border-green-500/40 bg-green-950/30 p-4 text-center">
-            <p className="text-green-300 text-xs font-mono tracking-widest">AUTHORIZATION STATUS:</p>
-            <p className="text-green-400 font-bold text-sm font-mono mt-1">SUCCESSFULLY REDEEMED</p>
+          {/* ── ACTIVATING TRANSACTION ── */}
+          <SectionHeader label="ACTIVATING TRANSACTION" />
+          <div className="space-y-0">
+            {row("Redirecting to Visa Network", "OK")}
+            {row("Connecting to Database", "CONNECTED")}
+            {row("Account Verification", "OK")}
+            {row("Approval Code", "LINKED CVV2")}
+            {row("Account Type", "ONLINE SALE")}
+            {row("Transaction Status", "ACTIVE")}
+            {row("Authorization Codes", data.authCode)}
+            {row("Protocol", data.protocol)}
+          </div>
+
+          <Barcode />
+          <div className="flex items-center gap-1 my-1">
+            <div className="flex-1 border-t border-gray-700" />
+            <div className="flex-1 border-t border-blue-700" />
+          </div>
+
+          {/* ── TRANSACTION INDEX ── */}
+          <SectionHeader label="TRANSACTION INDEX" />
+          <p className="text-center text-[10px] font-mono text-gray-400 tracking-widest">DATA VERIFIED BY VISA</p>
+          <div className="space-y-0 mt-1">
+            {row("Linked Code Number", "LINKED")}
+            {row("Card Number", "CONNECTED")}
+            {row("RRN", "AUTOMATIC")}
+          </div>
+
+          <Barcode />
+
+          {/* Footer */}
+          <p className="text-center text-[9px] font-mono text-gray-500 pt-1">
+            system department/access/VisBT**14122**/****5831
+          </p>
+          <p className="text-center text-[9px] font-mono text-gray-600 break-all">
+            system screen from: barrientosjo798.replit.app/pos-virtual
+          </p>
+
+          {/* Authorization status */}
+          <div className="mt-3 rounded-lg border border-green-500/40 bg-green-950/30 p-3 text-center">
+            <p className="text-green-400 text-[10px] font-mono tracking-widest">AUTHORIZATION STATUS:</p>
+            <p className="text-green-400 font-bold text-sm font-mono mt-0.5">SUCCESSFULLY REDEEMED</p>
             <p className="text-green-300 text-2xl font-bold font-mono mt-1">{data.authCode}</p>
           </div>
 
-          <div className="text-center pt-2 border-t border-gray-800 flex items-center justify-center gap-2">
-            <span className="text-[10px] font-extrabold italic text-[#1A1F71] bg-white px-2 py-0.5 rounded"
-              style={{ fontFamily: "'Arial Black', Arial, sans-serif" }}>VISA</span>
-            <span className="text-[10px] text-gray-400 font-mono">Net 9.0 Quantum</span>
-          </div>
         </div>
-        <div className="px-4 pb-4">
-          <Button onClick={onClose} className="w-full bg-[#1565C0] text-white text-xs">Cerrar</Button>
+
+        <div className="px-4 pb-4 pt-2">
+          <Button onClick={onClose} className="w-full bg-[#1565C0] text-white text-xs">Cerrar Reporte</Button>
         </div>
       </div>
     </div>
@@ -323,6 +357,12 @@ interface ProcessResult {
 export default function POSVirtualPage() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const { data: settings } = useSystemSettings();
+  const TC_MXN = settings?.tipoCambio ?? DEFAULT_SYSTEM_SETTINGS.tipoCambio;
+  const terminalParamsForReport = useMemo(() => {
+    const stored = settings?.terminalParams ?? DEFAULT_SYSTEM_SETTINGS.terminalParams;
+    return stored.map(p => ({ ...p, highlight: HIGHLIGHT_PARAM_LABELS.has(p.label) && p.value === "SI" }));
+  }, [settings?.terminalParams]);
 
   const [step, setStep] = useState<Step>("amount");
   const [amountDigits, setAmountDigits] = useState("");
@@ -418,7 +458,7 @@ export default function POSVirtualPage() {
   }
 
   const amountUSD = parseInt(amountDigits, 10) / 100;
-  const amountMXNDisplay = toMXN(amountUSD);
+  const amountMXNDisplay = toMXN(amountUSD, TC_MXN);
   const is101 = protocol === "101.1";
   const is1643 = protocol === "1643";
   const isVF = ventaForzada || is1643;
@@ -429,7 +469,7 @@ export default function POSVirtualPage() {
     <div className="p-4 md:p-6 space-y-5 pb-24">
       {/* Modals */}
       {showFunciones && <FuncionesModal onClose={() => setShowFunciones(false)} onSelect={handleFuncionSelect} />}
-      {showReporteParams && <ReporteParametrosModal onClose={() => setShowReporteParams(false)} />}
+      {showReporteParams && <ReporteParametrosModal params={terminalParamsForReport} onClose={() => setShowReporteParams(false)} />}
       {showVisaNet && visaNetData && <VisaNetworkReceiptModal data={visaNetData} onClose={() => setShowVisaNet(false)} />}
       {infoModal && <InfoModal title={infoModal.title} content={infoModal.content} onClose={() => setInfoModal(null)} />}
 

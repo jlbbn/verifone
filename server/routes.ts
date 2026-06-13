@@ -751,6 +751,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ── System Settings ────────────────────────────────────────────────────────
+  app.get("/api/settings", requireSession, async (_req, res) => {
+    try {
+      const settings = await storage.getSettings();
+      res.json(settings);
+    } catch {
+      res.status(500).json({ error: "Error al obtener configuración" });
+    }
+  });
+
+  app.patch("/api/settings", requireSession, requireRole("ADMIN"), async (req, res) => {
+    try {
+      const patch = req.body;
+      if (!patch || typeof patch !== "object") {
+        res.status(400).json({ error: "Payload inválido" });
+        return;
+      }
+      const updated = await storage.updateSettings(patch);
+      res.json(updated);
+    } catch {
+      res.status(500).json({ error: "Error al guardar configuración" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
