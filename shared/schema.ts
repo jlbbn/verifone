@@ -115,6 +115,7 @@ export const posTerminals = pgTable("pos_terminals", {
   nfc: boolean("nfc").notNull().default(true),
   pinpad: boolean("pinpad").notNull().default(true),
   configNote: text("config_note"),
+  systemMessage: text("system_message"),
   owner: text("owner"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

@@ -64,7 +64,7 @@ export interface IStorage {
   getAllTerminals(): Promise<PosTerminal[]>;
   getTerminalsByOwner(username: string): Promise<PosTerminal[]>;
   createTerminal(data: InsertPosTerminal): Promise<PosTerminal>;
-  updateTerminal(id: string, data: Partial<{ location: string; status: string; configNote: string | null; model: string; owner: string | null }>): Promise<PosTerminal | undefined>;
+  updateTerminal(id: string, data: Partial<{ location: string; status: string; configNote: string | null; systemMessage: string | null; model: string; owner: string | null; amount: number }>): Promise<PosTerminal | undefined>;
 
   // Users (admin)
   getAllUsers(): Promise<User[]>;
@@ -434,7 +434,7 @@ export class DatabaseStorage implements IStorage {
     return terminal;
   }
 
-  async updateTerminal(id: string, data: Partial<{ location: string; status: string; configNote: string | null; model: string; owner: string | null }>): Promise<PosTerminal | undefined> {
+  async updateTerminal(id: string, data: Partial<{ location: string; status: string; configNote: string | null; systemMessage: string | null; model: string; owner: string | null; amount: number }>): Promise<PosTerminal | undefined> {
     const [updated] = await db.update(posTerminals)
       .set(data)
       .where(eq(posTerminals.id, id))
