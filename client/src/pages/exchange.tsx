@@ -24,6 +24,7 @@ interface Crypto {
 }
 
 const BASE_PRICES: Crypto[] = [
+  { id: "usdt", name: "Tether",     symbol: "USDT",price:     1.00, change24h:  0.01, volume24h: 84000000000, marketCap: "$112B",  color: "text-green-600"  },
   { id: "btc",  name: "Bitcoin",    symbol: "BTC", price: 67240.50, change24h:  2.4,  volume24h: 32100000000, marketCap: "$1.32T", color: "text-orange-500" },
   { id: "eth",  name: "Ethereum",   symbol: "ETH", price:  3456.20, change24h:  1.8,  volume24h: 18400000000, marketCap: "$415B",  color: "text-purple-500" },
   { id: "xrp",  name: "XRP",        symbol: "XRP", price:     0.52, change24h: -1.2,  volume24h:  2100000000, marketCap: "$28B",   color: "text-blue-500"   },

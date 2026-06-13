@@ -394,6 +394,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Crear usuario nuevo (solo ADMIN)
+  app.post("/api/users", requireRole("ADMIN"), async (req, res) => {
+    try {
+      const bodySchema = z.object({
+        username: z.string().min(3, "Mínimo 3 caracteres"),
+        password: z.string().min(6, "Mínimo 6 caracteres"),
+        fullName: z.string().min(1, "Nombre requerido"),
+        role: z.enum(["ADMIN", "USER"]).default("USER"),
+        subscriptionStart: z.string().nullable().optional(),
+      });
+      const parsed = bodySchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: "Datos inválidos", details: parsed.error.issues });
+        return;
+      }
+      const existing = await storage.getUserByUsername(parsed.data.username);
+      if (existing) {
+        res.status(409).json({ error: "El usuario ya existe" });
+        return;
+      }
+      const newUser = await storage.createUser({
+        username: parsed.data.username,
+        password: parsed.data.password,
+        fullName: parsed.data.fullName,
+        role: parsed.data.role,
+        subscriptionStart: parsed.data.subscriptionStart ?? null,
+      });
+      res.json(publicUser(newUser));
+    } catch {
+      res.status(500).json({ error: "Error al crear usuario" });
+    }
+  });
+
+  // Editar terminal (solo ADMIN)
+  app.patch("/api/terminals/:id", requireRole("ADMIN"), async (req, res) => {
+    try {
+      const bodySchema = z.object({
+        location: z.string().min(1).optional(),
+        status: z.enum(["online", "offline", "idle", "reconfigured"]).optional(),
+        configNote: z.string().nullable().optional(),
+        model: z.string().min(1).optional(),
+        owner: z.string().nullable().optional(),
+      });
+      const parsed = bodySchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: "Datos inválidos", details: parsed.error.issues });
+        return;
+      }
+      const updated = await storage.updateTerminal(req.params.id, parsed.data);
+      if (!updated) {
+        res.status(404).json({ error: "Terminal no encontrada" });
+        return;
+      }
+      res.json(updated);
+    } catch {
+      res.status(500).json({ error: "Error al actualizar terminal" });
+    }
+  });
+
   // ====================================================================
   // PROTOCOLOS BANCARIOS
   // ====================================================================
