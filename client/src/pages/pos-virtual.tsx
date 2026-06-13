@@ -10,13 +10,13 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   MonitorSmartphone, CreditCard, Wifi, ShieldCheck, CheckCircle,
   X, Delete, RefreshCw, Activity, Loader2, Receipt,
   Zap, Clock, Lock, AlertTriangle, Settings, FileBarChart,
-  Radio, Download, Info, ChevronRight, Printer, ArrowDownLeft, Sliders
+  Radio, Download, Info, ChevronRight, Printer, ArrowDownLeft, Sliders, Link2
 } from "lucide-react";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -346,6 +346,437 @@ function InfoModal({ title, content, onClose }: { title: string; content: string
   );
 }
 
+// ─── SR-Link: Sender / Receiver Pairing ───────────────────────────────────────
+
+const SR_CARD_TYPES = [
+  "MASTERCARD DEBIT","MASTERCARD CREDIT","MASTERCARD WORLD",
+  "VISA DEBIT","VISA CREDIT","VISA CLASSIC","AMEX","MAESTRO","REVOLUT",
+];
+const SR_CURRENCIES = ["EUR","USD","MXN","GBP"];
+const ISO_COUNTRIES = [
+  { a1:"MEXICO",         a2:"MX", a3:"MEX", num:"484" },
+  { a1:"UNITED STATES",  a2:"US", a3:"USA", num:"840" },
+  { a1:"UNITED KINGDOM", a2:"GB", a3:"GBR", num:"826" },
+  { a1:"CANADA",         a2:"CA", a3:"CAN", num:"124" },
+  { a1:"SPAIN",          a2:"ES", a3:"ESP", num:"724" },
+  { a1:"FRANCE",         a2:"FR", a3:"FRA", num:"250" },
+  { a1:"GERMANY",        a2:"DE", a3:"DEU", num:"276" },
+  { a1:"ITALY",          a2:"IT", a3:"ITA", num:"380" },
+  { a1:"CHINA",          a2:"CN", a3:"CHN", num:"156" },
+  { a1:"JAPAN",          a2:"JP", a3:"JPN", num:"392" },
+];
+const SR_STEPS = [
+  { label: "Connecting to Mastercard Network",  result: "OK",       col: "text-green-400" },
+  { label: "Verifying Sender Card",             result: "VERIFIED", col: "text-green-400" },
+  { label: "Verifying Receiver Card",           result: "VERIFIED", col: "text-green-400" },
+  { label: "Checking Protocol",                 result: "OK",       col: "text-green-400" },
+  { label: "Linking Sender → Receiver",         result: "LINKED",   col: "text-amber-300" },
+  { label: "Generating Authorization Code",     result: "",         col: "text-amber-300" },
+  { label: "Creating Transaction Record",       result: "DONE",     col: "text-green-400" },
+  { label: "SR-LINK Complete",                  result: "APPROVED", col: "text-green-400" },
+];
+
+interface SRForm {
+  senderName: string; senderCard: string; senderBank: string;
+  senderCardType: string; senderExpiry: string; senderCountryIdx: number;
+  receiverName: string; receiverCard: string; receiverBank: string;
+  receiverCardType: string; receiverExpiry: string; receiverCountryIdx: number;
+  totalAmount: string; renderedAmount: string; currency: string; protocol: string;
+}
+type SRStep = "form" | "processing" | "linked";
+
+function MCLogo() {
+  return (
+    <div className="flex flex-col items-center gap-1 my-2">
+      <div className="relative w-14 h-9">
+        <div className="absolute left-0 top-0 w-9 h-9 rounded-full bg-[#EB001B] opacity-90" />
+        <div className="absolute right-0 top-0 w-9 h-9 rounded-full bg-[#F79E1B] opacity-80" />
+      </div>
+      <span className="text-white text-[10px] tracking-widest font-semibold" style={{ fontFamily: "'Arial Black',Arial,sans-serif" }}>mastercard</span>
+    </div>
+  );
+}
+
+function SRBarcode() {
+  const p = [2,1,3,1,2,1,4,1,1,2,3,1,2,1,1,3,2,1,4,1,1,2,3,1,1,2,4,1,2,1,3,1];
+  return (
+    <div className="flex items-end h-6 gap-px my-2 justify-center">
+      {p.map((w, i) => (
+        <div key={i} className={i % 2 === 0 ? "bg-white" : "bg-transparent"}
+          style={{ width: w * 2, height: i % 4 === 0 ? "100%" : "75%" }} />
+      ))}
+    </div>
+  );
+}
+
+function fmtAmt(v: string) {
+  const n = parseFloat(v.replace(/,/g, ""));
+  if (isNaN(n)) return "0.00";
+  return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function DotRow({ label, value, col }: { label: string; value: string; col: string }) {
+  const dots = ".".repeat(Math.max(2, 44 - label.length - value.length));
+  return (
+    <div className="flex text-[9px] leading-[17px]">
+      <span className="text-gray-400 whitespace-nowrap">{label}:</span>
+      <span className="text-gray-700 flex-1 overflow-hidden tracking-tighter">{dots}</span>
+      <span className={`${col} font-bold whitespace-nowrap ml-1`}>{value}</span>
+    </div>
+  );
+}
+
+function SRLinkModal({ onClose }: { onClose: () => void }) {
+  const { toast } = useToast();
+  const [srStep, setSrStep] = useState<SRStep>("form");
+  const [visibleStep, setVisibleStep] = useState(0);
+  const [apiResult, setApiResult] = useState<any>(null);
+
+  const [form, setForm] = useState<SRForm>({
+    senderName: "PATRICIO", senderCard: "", senderBank: "", senderCardType: "MASTERCARD DEBIT",
+    senderExpiry: "", senderCountryIdx: 0,
+    receiverName: "", receiverCard: "", receiverBank: "", receiverCardType: "MASTERCARD DEBIT",
+    receiverExpiry: "", receiverCountryIdx: 0,
+    totalAmount: "", renderedAmount: "", currency: "EUR", protocol: "101",
+  });
+
+  function upd<K extends keyof SRForm>(k: K, v: SRForm[K]) {
+    setForm(f => ({ ...f, [k]: v }));
+  }
+
+  const linkMutation = useMutation({
+    mutationFn: async () => {
+      const recv = ISO_COUNTRIES[form.receiverCountryIdx];
+      const send = ISO_COUNTRIES[form.senderCountryIdx];
+      const res = await apiRequest("POST", "/api/sr-link", {
+        senderName: form.senderName, senderCard: form.senderCard, senderBank: form.senderBank,
+        senderCardType: form.senderCardType, senderExpiry: form.senderExpiry,
+        senderCountry: send.a1, senderA2: send.a2, senderA3: send.a3, senderIsoNum: send.num,
+        receiverName: form.receiverName, receiverCard: form.receiverCard, receiverBank: form.receiverBank,
+        receiverCardType: form.receiverCardType, receiverExpiry: form.receiverExpiry,
+        receiverCountry: recv.a1, receiverA2: recv.a2, receiverA3: recv.a3, receiverIsoNum: recv.num,
+        totalAmount: form.totalAmount, renderedAmount: form.renderedAmount,
+        currency: form.currency, protocol: form.protocol,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Error al vincular");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setApiResult(data);
+      queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Error de vinculación", description: e.message, variant: "destructive" });
+      setSrStep("form");
+    },
+  });
+
+  function handleVincular() {
+    if (!form.receiverName.trim() || !form.receiverCard.trim() || !form.senderCard.trim()) return;
+    setSrStep("processing");
+    setVisibleStep(0);
+    linkMutation.mutate();
+  }
+
+  useEffect(() => {
+    if (srStep !== "processing") return;
+    if (visibleStep >= SR_STEPS.length) return;
+    const t = setTimeout(() => setVisibleStep(v => v + 1), 720);
+    return () => clearTimeout(t);
+  }, [srStep, visibleStep]);
+
+  useEffect(() => {
+    if (srStep === "processing" && visibleStep >= SR_STEPS.length && apiResult) {
+      const t = setTimeout(() => setSrStep("linked"), 900);
+      return () => clearTimeout(t);
+    }
+  }, [srStep, visibleStep, apiResult]);
+
+  const rLast4 = form.receiverCard.replace(/\s/g, "").slice(-4) || "????";
+
+  if (srStep === "form") {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 overflow-y-auto">
+        <div className="w-full max-w-3xl rounded-xl overflow-hidden shadow-2xl border border-blue-900/50 my-4"
+          style={{ background: "#050f1a", fontFamily: "monospace" }}>
+          <div className="flex items-center justify-between px-5 py-3 border-b border-blue-900/50 bg-black/60">
+            <div className="flex items-center gap-2.5">
+              <div className="flex">
+                <div className="w-5 h-5 rounded-full bg-[#EB001B] opacity-90" />
+                <div className="w-5 h-5 rounded-full bg-[#F79E1B] opacity-80 -ml-2" />
+              </div>
+              <span className="text-blue-300 text-xs font-bold tracking-widest">MASTERCARD NETWORK — SENDER / RECEIVER LINK</span>
+            </div>
+            <button onClick={onClose} className="text-gray-500 hover:text-white"><X className="w-4 h-4" /></button>
+          </div>
+
+          <div className="p-4 grid md:grid-cols-2 gap-4">
+            {/* SENDER */}
+            <div className="rounded-lg border border-amber-700/50 bg-amber-950/10 p-4 space-y-3">
+              <p className="text-amber-400 text-[11px] font-bold tracking-widest flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse inline-block" /> SENDER — PATRICIO
+              </p>
+              {([
+                { label: "Card Holder Name", k: "senderName" as const, ph: "PATRICIO" },
+                { label: "Card Number",      k: "senderCard" as const, ph: "•••• •••• •••• ••••" },
+                { label: "Issuing Bank",     k: "senderBank" as const, ph: "BANAMEX / HSBC" },
+                { label: "Expiration Date",  k: "senderExpiry" as const, ph: "MM/YY" },
+              ] as const).map(({ label, k, ph }) => (
+                <div key={k}>
+                  <p className="text-[9px] text-gray-500 uppercase tracking-wide mb-1">{label}</p>
+                  <input value={form[k] as string} onChange={e => upd(k, e.target.value)} placeholder={ph}
+                    className="w-full bg-amber-950/30 border border-amber-800/50 rounded px-2 py-1.5 text-xs text-amber-200 font-mono placeholder-amber-900/50 outline-none focus:border-amber-400" />
+                </div>
+              ))}
+              <div>
+                <p className="text-[9px] text-gray-500 uppercase tracking-wide mb-1">Card Type</p>
+                <select value={form.senderCardType} onChange={e => upd("senderCardType", e.target.value)}
+                  className="w-full bg-amber-950/30 border border-amber-800/50 rounded px-2 py-1.5 text-xs text-amber-200 font-mono outline-none focus:border-amber-400">
+                  {SR_CARD_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <p className="text-[9px] text-gray-500 uppercase tracking-wide mb-1">Country (ISO)</p>
+                <select value={form.senderCountryIdx} onChange={e => upd("senderCountryIdx", +e.target.value)}
+                  className="w-full bg-amber-950/30 border border-amber-800/50 rounded px-2 py-1.5 text-xs text-amber-200 font-mono outline-none focus:border-amber-400">
+                  {ISO_COUNTRIES.map((c, i) => <option key={i} value={i}>{c.a1} · {c.a2} / {c.num}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {/* RECEIVER */}
+            <div className="rounded-lg border border-blue-700/50 bg-blue-950/10 p-4 space-y-3">
+              <p className="text-blue-300 text-[11px] font-bold tracking-widest flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse inline-block" /> RECEIVER — USTED
+              </p>
+              {([
+                { label: "Card Holder Name", k: "receiverName" as const, ph: "NOMBRE COMPLETO" },
+                { label: "Card Number",      k: "receiverCard" as const, ph: "•••• •••• •••• ••••" },
+                { label: "Issuing Bank",     k: "receiverBank" as const, ph: "REVOLUT / HSBC" },
+                { label: "Expiration Date",  k: "receiverExpiry" as const, ph: "MM/YY" },
+              ] as const).map(({ label, k, ph }) => (
+                <div key={k}>
+                  <p className="text-[9px] text-gray-500 uppercase tracking-wide mb-1">{label}</p>
+                  <input value={form[k] as string} onChange={e => upd(k, e.target.value)} placeholder={ph}
+                    className="w-full bg-blue-950/30 border border-blue-800/50 rounded px-2 py-1.5 text-xs text-blue-200 font-mono placeholder-blue-900/50 outline-none focus:border-blue-400" />
+                </div>
+              ))}
+              <div>
+                <p className="text-[9px] text-gray-500 uppercase tracking-wide mb-1">Card Type</p>
+                <select value={form.receiverCardType} onChange={e => upd("receiverCardType", e.target.value)}
+                  className="w-full bg-blue-950/30 border border-blue-800/50 rounded px-2 py-1.5 text-xs text-blue-200 font-mono outline-none focus:border-blue-400">
+                  {SR_CARD_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <p className="text-[9px] text-gray-500 uppercase tracking-wide mb-1">Country (ISO)</p>
+                <select value={form.receiverCountryIdx} onChange={e => upd("receiverCountryIdx", +e.target.value)}
+                  className="w-full bg-blue-950/30 border border-blue-800/50 rounded px-2 py-1.5 text-xs text-blue-200 font-mono outline-none focus:border-blue-400">
+                  {ISO_COUNTRIES.map((c, i) => <option key={i} value={i}>{c.a1} · {c.a2} / {c.num}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="px-4 pb-3 grid grid-cols-2 md:grid-cols-4 gap-3">
+            {([
+              { label: "Total Amount",     k: "totalAmount" as const,    ph: "100,000,000.00" },
+              { label: "Amount Rendered",  k: "renderedAmount" as const, ph: "10,000.00" },
+            ] as const).map(({ label, k, ph }) => (
+              <div key={k}>
+                <p className="text-[9px] text-gray-500 uppercase tracking-wide mb-1">{label}</p>
+                <input value={form[k] as string} onChange={e => upd(k, e.target.value)} placeholder={ph}
+                  className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-xs text-gray-200 font-mono outline-none focus:border-blue-500" />
+              </div>
+            ))}
+            <div>
+              <p className="text-[9px] text-gray-500 uppercase tracking-wide mb-1">Currency</p>
+              <select value={form.currency} onChange={e => upd("currency", e.target.value)}
+                className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-xs text-gray-200 font-mono outline-none focus:border-blue-500">
+                {SR_CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <p className="text-[9px] text-gray-500 uppercase tracking-wide mb-1">Protocol</p>
+              <select value={form.protocol} onChange={e => upd("protocol", e.target.value)}
+                className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-xs text-gray-200 font-mono outline-none focus:border-blue-500">
+                {["101","201","301","401"].map(p => <option key={p} value={p}>PROTOCOL {p}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="px-4 pb-5 space-y-2">
+            <button onClick={handleVincular}
+              disabled={!form.receiverName.trim() || !form.receiverCard.trim() || !form.senderCard.trim()}
+              className="w-full py-3 rounded-lg font-mono font-bold text-sm tracking-widest bg-[#0038A8] hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-all">
+              INICIAR VINCULACION — MASTERCARD NETWORK
+            </button>
+            <p className="text-center text-[9px] text-gray-700 font-mono tracking-widest">
+              CONNECTING TO SYSTEM · VERIFICATION ACCESS INFO · CONFIRMATION IDENTITY
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (srStep === "processing") {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black p-6 overflow-y-auto">
+        <div className="w-full max-w-xl" style={{ fontFamily: "monospace" }}>
+          <p className="text-green-400 text-[10px] mb-5 leading-relaxed">
+            GENERATED BY BANXICO PLUS SERVER ACCOUNT-GIT MASTERCARD @ {new Date().toISOString().replace("T", " ").slice(0, 19)} UTC
+          </p>
+          <div className="flex justify-center mb-3">
+            <div className="relative w-12 h-8">
+              <div className="absolute left-0 top-0 w-8 h-8 rounded-full bg-[#EB001B] opacity-90" />
+              <div className="absolute right-0 top-0 w-8 h-8 rounded-full bg-[#F79E1B] opacity-80" />
+            </div>
+          </div>
+          <p className="text-blue-400 text-[10px] text-center tracking-widest mb-4">
+            ........CARD INFORMATION VERIFIED BY MASTERCARD........
+          </p>
+          <div className="space-y-0.5 text-[10px] mb-4">
+            <div className="flex gap-2">
+              <span className="text-gray-500">SENDER/CARD HOLDER NAME:</span>
+              <span className="text-amber-300 font-bold">{form.senderName.toUpperCase()}</span>
+            </div>
+            <div className="flex gap-2">
+              <span className="text-gray-500">RECEIVER/CARD HOLDER NAME:</span>
+              <span className="text-blue-300 font-bold">{form.receiverName.toUpperCase()}</span>
+            </div>
+            <div className="flex gap-2">
+              <span className="text-gray-500">RECEIVER/CARD NUMBER:</span>
+              <span className="text-blue-300 font-bold">{form.receiverCard}</span>
+            </div>
+            <div className="flex gap-2">
+              <span className="text-gray-500">RECEIVER/TOTAL AMOUNT:</span>
+              <span className="text-blue-300 font-bold">{fmtAmt(form.totalAmount)} #{form.currency}#</span>
+            </div>
+          </div>
+          <div className="border-t border-gray-800 my-3" />
+          <p className="text-gray-500 text-[10px] text-center tracking-widest mb-3">
+            ----------ACTIVATING TRANSACTION----------
+          </p>
+          <div className="space-y-1">
+            {SR_STEPS.slice(0, visibleStep).map((s, i) => {
+              const val = s.result === "" ? (apiResult?.approvalCode ?? "...") : s.result;
+              const dots = ".".repeat(Math.max(2, 52 - s.label.length - val.length));
+              return (
+                <div key={i} className="flex text-[10px]">
+                  <span className="text-gray-400 whitespace-nowrap">{s.label}</span>
+                  <span className="text-gray-700 flex-1 overflow-hidden tracking-tighter">{dots}</span>
+                  <span className={`${s.col} font-bold ml-1 whitespace-nowrap`}>{val}</span>
+                </div>
+              );
+            })}
+            {visibleStep < SR_STEPS.length && (
+              <span className="text-green-400 animate-pulse text-xs">_</span>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const r = apiResult;
+  if (!r) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-3 overflow-y-auto">
+      <div className="w-full max-w-sm my-4 rounded-xl overflow-hidden shadow-2xl border border-gray-700" style={{ background: "#000" }}>
+        <div className="text-center pt-5 pb-1">
+          <p className="text-blue-400 text-[11px] font-bold tracking-[0.3em] font-mono">DATA VERIFIED</p>
+          <MCLogo />
+        </div>
+
+        <div className="px-4 pb-4 space-y-2.5" style={{ fontFamily: "monospace" }}>
+          {/* Sender + Receiver summary */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <p className="text-gray-600 text-[9px] uppercase tracking-wide text-center mb-1">Sender</p>
+              <div className="bg-amber-950/50 border border-amber-800/40 rounded px-2 py-1.5 text-center">
+                <p className="text-amber-300 text-[10px] font-bold truncate">{r.sender.name}</p>
+                <p className="text-amber-500 text-[9px]">{r.sender.card}</p>
+                <p className="text-amber-600 text-[9px]">{r.sender.bank}</p>
+              </div>
+            </div>
+            <div>
+              <p className="text-gray-600 text-[9px] uppercase tracking-wide text-center mb-1">Receiver</p>
+              <div className="bg-[#0038A8] rounded px-2 py-1.5 text-center">
+                <p className="text-white text-[10px] font-bold truncate">{r.receiver.name}</p>
+                <p className="text-blue-200 text-[9px]">{r.receiver.card}</p>
+                <p className="text-blue-300 text-[9px]">{r.receiver.bank}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Receiver fields in blue boxes */}
+          {[
+            { label: "Receiver/Card Number:",     value: r.receiver.card },
+            { label: "Receiver/Expiration Date:", value: form.receiverExpiry || "—" },
+            { label: "Receiver/Amount:",          value: `${fmtAmt(r.totalAmount)}.00 ${r.currency}` },
+          ].map(({ label, value }) => (
+            <div key={label} className="text-center">
+              <p className="text-white text-[10px] mb-1">{label}</p>
+              <div className="bg-[#0038A8] rounded px-3 py-1.5">
+                <p className="text-white text-[10px] font-bold tracking-wider">{value}</p>
+              </div>
+            </div>
+          ))}
+
+          <SRBarcode />
+          <div className="border-t border-dashed border-gray-800" />
+
+          <p className="text-center text-[9px] text-gray-600 tracking-widest">----------ACTIVATING TRANSACTION----------</p>
+          <div className="space-y-0.5">
+            {[
+              { label: "Redirecting  to  Network",  value: "OK",                             col: "text-green-400" },
+              { label: "Connecting to Database",     value: "CONNECTED",                      col: "text-green-400" },
+              { label: "Account Verification",       value: "OK",                             col: "text-green-400" },
+              { label: "Approval Code",              value: "LINKED",                         col: "text-green-400" },
+              { label: "Account Type",               value: "ONLINE SALE",                    col: "text-white" },
+              { label: "Transaction Status",         value: "ACTIVE",                         col: "text-green-400" },
+              { label: "Authorization Codes",        value: r.authCodes,                      col: "text-amber-300" },
+              { label: "Amount Rendered",            value: `${r.currency} ${fmtAmt(r.renderedAmount)}`, col: "text-white" },
+              { label: "Source Code",                value: `PROTOCOL ${r.protocol}`,         col: "text-white" },
+            ].map(({ label, value, col }, i) => (
+              <DotRow key={i} label={label} value={value} col={col} />
+            ))}
+          </div>
+
+          <div className="border-t border-dashed border-gray-800" />
+          <p className="text-center text-[9px] text-gray-600 tracking-widest">----------TRANSACTION INDEX----------</p>
+          <p className="text-center text-[9px] text-blue-400 tracking-widest">DATA VERIFIED  BY  MASTERCARD</p>
+          <div className="space-y-0.5">
+            <DotRow label="Linked Code Number"               value={r.linkedCode}      col="text-amber-300" />
+            <DotRow label={`Card Number Xxxxxxxxxxxx${rLast4}`} value="LINKED"          col="text-green-400" />
+            <DotRow label="Approved Amount"                  value="CONNECTED"          col="text-green-400" />
+          </div>
+          <SRBarcode />
+
+          <div className="rounded-lg border border-green-500/40 bg-green-950/30 py-3 text-center">
+            <p className="text-green-400 text-[9px] tracking-widest font-mono">AUTHORIZATION STATUS:</p>
+            <p className="text-green-300 font-bold text-xs font-mono mt-0.5">SUCCESSFULLY REDEEMED</p>
+            <p className="text-amber-300 text-3xl font-bold font-mono mt-1 tracking-widest">{r.linkedCode}</p>
+            <p className="text-gray-600 text-[9px] mt-1 font-mono">{r.transactionId}</p>
+          </div>
+        </div>
+
+        <div className="px-4 pb-5">
+          <button onClick={onClose}
+            className="w-full py-2.5 rounded-lg bg-[#0038A8] text-white font-mono font-bold text-xs tracking-widest">
+            Cerrar Reporte
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 type Step = "amount" | "card" | "processing" | "approved";
 
@@ -386,6 +817,13 @@ export default function POSVirtualPage() {
   const [showVisaNet, setShowVisaNet] = useState(false);
   const [visaNetData, setVisaNetData] = useState<VisaNetData | null>(null);
   const [infoModal, setInfoModal] = useState<{ title: string; content: string } | null>(null);
+  const [showSRLink, setShowSRLink] = useState(false);
+
+  const { data: myTerminals } = useQuery<{ status: string }[]>({
+    queryKey: ["/api/terminals/mine"],
+    enabled: !!user && user.role !== "ADMIN",
+  });
+  const canSRLink = user?.role === "ADMIN" || (myTerminals ?? []).some(t => t.status === "active");
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
@@ -473,6 +911,7 @@ export default function POSVirtualPage() {
       {showReporteParams && <ReporteParametrosModal params={terminalParamsForReport} onClose={() => setShowReporteParams(false)} />}
       {showVisaNet && visaNetData && <VisaNetworkReceiptModal data={visaNetData} onClose={() => setShowVisaNet(false)} />}
       {infoModal && <InfoModal title={infoModal.title} content={infoModal.content} onClose={() => setInfoModal(null)} />}
+      {showSRLink && <SRLinkModal onClose={() => setShowSRLink(false)} />}
 
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -493,6 +932,12 @@ export default function POSVirtualPage() {
             }`}>
             <Zap className="w-3.5 h-3.5" /> Venta Forzada {isVF ? "ON" : "OFF"}
           </button>
+          {canSRLink && (
+            <button onClick={() => setShowSRLink(true)} data-testid="button-sr-link"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold border border-blue-700 text-blue-700 bg-blue-50 transition-all">
+              <Link2 className="w-3.5 h-3.5" /> VINCULAR S/R
+            </button>
+          )}
           {user?.role === "ADMIN" && (
             <Link href="/admin/settings">
               <button data-testid="button-admin-settings"
