@@ -14,8 +14,14 @@ import {
   Wallet, TrendingUp, TrendingDown, DollarSign, Plus, Minus,
   ArrowUpRight, ArrowDownRight, BarChart2, Calculator,
   FileText, ShieldCheck, X, Check, Lock, AlertTriangle, CreditCard,
-  MonitorSmartphone, Radio, Activity, Zap
+  MonitorSmartphone, Radio, Activity, Zap, RefreshCw
 } from "lucide-react";
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+const TC = 17.50;
+
+function fmtUSD(n: number) { return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function fmtMXN(usd: number) { return (usd * TC).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 const movSchema = z.object({
@@ -28,141 +34,146 @@ const movSchema = z.object({
 type MovForm = z.infer<typeof movSchema>;
 
 interface Movement {
-  id: string;
-  type: "ingreso" | "egreso";
-  amount: number;
-  category: string;
-  description: string;
-  reference?: string;
-  time: string;
-  user: string;
-  protocol?: string;
-  cardType?: string;
-  authCode?: string;
+  id: string; type: "ingreso" | "egreso";
+  amountUSD: number; category: string; description: string;
+  reference?: string; time: string; user: string;
+  protocol?: string; cardType?: string; authCode?: string;
 }
 
+type TxProtocol = "pos" | "1643" | "101.1";
+
 interface LiveTx {
-  id: string;
-  terminal: string;
-  merchant: string;
-  amount: number;
-  cardType: string;
-  protocol: string;
-  authCode: string;
-  oper: number;
-  lote: number;
-  status: "aprobado" | "procesando";
-  time: string;
+  id: string; terminal: string; merchant: string;
+  amountUSD: number; cardType: string;
+  protocol: string; protocolType: TxProtocol;
+  authCode: string; oper: number; lote: number;
+  status: "aprobado" | "procesando"; date: string; time: string;
   isNew?: boolean;
 }
 
 // ─── Categories ───────────────────────────────────────────────────────────────
 const INGRESO_CATS = [
-  "Liquidación POS",
-  "Transferencia SPEI",
-  "Cobro comisiones",
-  "Venta tarjeta internacional",
-  "Venta tarjeta nacional",
-  "Reintegro operación",
-  "Otro ingreso electrónico",
+  "Liquidación POS", "Transferencia SPEI", "Cobro comisiones",
+  "Venta tarjeta internacional", "Venta tarjeta nacional",
+  "Reintegro operación", "Otro ingreso electrónico",
 ];
 const EGRESO_CATS = [
-  "Retiro via protocolo 1643",
-  "Pago a proveedor",
-  "Comisión procesadora",
-  "Devolución cliente",
-  "Gastos operativos",
-  "Otro egreso",
+  "Retiro via protocolo 1643", "Pago a proveedor",
+  "Comisión procesadora", "Devolución cliente",
+  "Gastos operativos", "Otro egreso",
 ];
 
-// ─── Static seed data ─────────────────────────────────────────────────────────
-const initialMovements: Movement[] = [
-  { id: "MOV-001", type: "ingreso", amount: 20160.00, category: "Venta tarjeta internacional",
-    description: "Venta Mastercard Internacional — GRUPO ASGE", reference: "AUTH-596122",
-    time: "06:55 PM", user: "Admin", protocol: "101.2 M2", cardType: "Mastercard", authCode: "596122" },
-  { id: "MOV-002", type: "ingreso", amount: 18500.00, category: "Liquidación POS",
-    description: "Liquidación terminal T1004 — VISA General", reference: "AUTH-441829",
-    time: "05:40 PM", user: "Admin", protocol: "101.1 M1", cardType: "VISA", authCode: "441829" },
-  { id: "MOV-003", type: "ingreso", amount: 15800.00, category: "Venta tarjeta internacional",
-    description: "Venta Mastercard — INTERNACIONAL GENERAL OPER 15", reference: "AUTH-334211",
-    time: "04:22 PM", user: "Admin", protocol: "201.2", cardType: "Mastercard", authCode: "334211" },
-  { id: "MOV-004", type: "egreso",  amount: 3200.00, category: "Retiro via protocolo 1643",
-    description: "Retiro operación — Protocolo 1643 POS T1005", reference: "PRT-1643-007",
-    time: "03:15 PM", user: "Admin", protocol: "1643" },
-  { id: "MOV-005", type: "ingreso", amount: 12750.00, category: "Venta tarjeta nacional",
-    description: "Venta VISA Nacional — Terminal T1001", reference: "AUTH-881203",
-    time: "02:30 PM", user: "Admin", protocol: "101.1 M1", cardType: "VISA", authCode: "881203" },
-  { id: "MOV-006", type: "egreso",  amount: 1200.00, category: "Comisión procesadora",
-    description: "Comisión red EMV — Procesadora internacional", reference: "COM-EMV-042",
-    time: "01:45 PM", user: "Admin", protocol: "201.1" },
-  { id: "MOV-007", type: "ingreso", amount: 9480.00, category: "Cobro comisiones",
-    description: "Comisiones acumuladas red T1002/T1004", reference: "COM-NET-018",
-    time: "12:00 PM", user: "Admin", protocol: "101.3 M3" },
-  { id: "MOV-008", type: "ingreso", amount: 22400.00, category: "Venta tarjeta internacional",
-    description: "Venta Mastercard Internacional — OPER 31 LOTE 4", reference: "AUTH-774019",
-    time: "10:15 AM", user: "Admin", protocol: "101.2 M2", cardType: "Mastercard", authCode: "774019" },
-  { id: "MOV-009", type: "egreso",  amount: 850.00, category: "Gastos operativos",
-    description: "Mantenimiento sistema POS — Proveedor técnico", reference: "SVC-2026-11",
-    time: "09:00 AM", user: "Admin" },
-];
+// ─── Seed data ────────────────────────────────────────────────────────────────
+const today = "13 JUN";
+const lastWeek = "06 JUN";
 
-// Base live transactions (seen by non-admin users)
 const LIVE_SEED: LiveTx[] = [
-  { id: "LX-001", terminal: "T1001", merchant: "GRUPO ASGE VENADO 69", amount: 20160.00,
-    cardType: "Mastercard Internacional", protocol: "101.2 M2", authCode: "596122",
-    oper: 28, lote: 2, status: "aprobado", time: "18:55" },
-  { id: "LX-002", terminal: "T1004", merchant: "BANXICO PLUS CANCUN", amount: 18500.00,
-    cardType: "VISA Internacional", protocol: "101.2 M2", authCode: "441829",
-    oper: 15, lote: 3, status: "aprobado", time: "17:40" },
-  { id: "LX-003", terminal: "T1002", merchant: "GRUPO ASGE VENADO 69", amount: 15800.00,
-    cardType: "Mastercard Internacional", protocol: "201.2", authCode: "334211",
-    oper: 12, lote: 1, status: "aprobado", time: "16:22" },
-  { id: "LX-004", terminal: "T1001", merchant: "BANXICO PLUS CANCUN", amount: 12750.00,
-    cardType: "VISA Nacional", protocol: "101.1 M1", authCode: "881203",
-    oper: 9, lote: 2, status: "aprobado", time: "14:30" },
-  { id: "LX-005", terminal: "T1005", merchant: "GRUPO ASGE VENADO 69", amount: 22400.00,
-    cardType: "Mastercard Internacional", protocol: "101.2 M2", authCode: "774019",
-    oper: 31, lote: 4, status: "aprobado", time: "10:15" },
+  // Regular POS — $2M USD (~$35M MXN)
+  {
+    id: "LX-001", terminal: "T1001", merchant: "GRUPO ASGE VENADO 69",
+    amountUSD: 2000000, cardType: "Mastercard Internacional",
+    protocol: "201.2", protocolType: "pos",
+    authCode: "596122", oper: 28, lote: 2, status: "aprobado",
+    date: today, time: "18:55",
+  },
+  {
+    id: "LX-002", terminal: "T1004", merchant: "BANXICO PLUS CANCUN",
+    amountUSD: 1850000, cardType: "VISA Internacional",
+    protocol: "101.2 M2", protocolType: "pos",
+    authCode: "441829", oper: 15, lote: 3, status: "aprobado",
+    date: today, time: "17:40",
+  },
+  {
+    id: "LX-003", terminal: "T1002", merchant: "GRUPO ASGE VENADO 69",
+    amountUSD: 2150000, cardType: "Mastercard Internacional",
+    protocol: "201.2", protocolType: "pos",
+    authCode: "334211", oper: 12, lote: 1, status: "aprobado",
+    date: today, time: "16:22",
+  },
+  // 1643 — Venta forzada terminal manual, ~$30K USD
+  {
+    id: "LX-004", terminal: "T1005", merchant: "GRUPO ASGE VENADO 69",
+    amountUSD: 31500, cardType: "VISA Internacional",
+    protocol: "1643", protocolType: "1643",
+    authCode: "881203", oper: 9, lote: 2, status: "aprobado",
+    date: today, time: "14:30",
+  },
+  {
+    id: "LX-005", terminal: "T1001", merchant: "BANXICO PLUS CANCUN",
+    amountUSD: 2350000, cardType: "Mastercard Internacional",
+    protocol: "101.2 M2", protocolType: "pos",
+    authCode: "774019", oper: 31, lote: 4, status: "aprobado",
+    date: today, time: "10:15",
+  },
+  // 1643 — second entry
+  {
+    id: "LX-006", terminal: "T1002", merchant: "GRUPO ASGE VENADO 69",
+    amountUSD: 28700, cardType: "Mastercard Internacional",
+    protocol: "1643", protocolType: "1643",
+    authCode: "221087", oper: 6, lote: 1, status: "aprobado",
+    date: today, time: "09:05",
+  },
+  // 101.1 — Visa Network, $5M USD, last week
+  {
+    id: "LX-007", terminal: "T1004", merchant: "VISAINC ORDSHR / BANXICO LLC",
+    amountUSD: 5000000, cardType: "VISA Internacional",
+    protocol: "101.1", protocolType: "101.1",
+    authCode: "978877", oper: 1, lote: 1, status: "aprobado",
+    date: lastWeek, time: "10:47",
+  },
 ];
 
-// Pool of realistic transactions to add as "live" updates
-const LIVE_POOL: Omit<LiveTx, "id" | "time" | "isNew">[] = [
-  { terminal: "T1004", merchant: "GRUPO ASGE VENADO 69", amount: 17600.00, cardType: "Mastercard Internacional", protocol: "101.2 M2", authCode: "612843", oper: 33, lote: 5, status: "aprobado" },
-  { terminal: "T1001", merchant: "BANXICO PLUS CANCUN", amount: 8900.00,  cardType: "VISA Nacional", protocol: "101.1 M1", authCode: "554301", oper: 10, lote: 3, status: "aprobado" },
-  { terminal: "T1002", merchant: "GRUPO ASGE VENADO 69", amount: 24500.00, cardType: "Mastercard Internacional", protocol: "201.2",  authCode: "987432", oper: 14, lote: 2, status: "aprobado" },
-  { terminal: "T1005", merchant: "BANXICO PLUS CANCUN", amount: 11200.00, cardType: "VISA Internacional", protocol: "201.2",  authCode: "331092", oper: 7,  lote: 1, status: "aprobado" },
-  { terminal: "T1004", merchant: "GRUPO ASGE VENADO 69", amount: 19800.00, cardType: "Mastercard Internacional", protocol: "101.3 M3", authCode: "762118", oper: 22, lote: 3, status: "aprobado" },
-  { terminal: "T1001", merchant: "BANXICO PLUS CANCUN", amount: 6500.00,  cardType: "VISA Nacional", protocol: "101.1 M1", authCode: "210934", oper: 5,  lote: 1, status: "aprobado" },
+const LIVE_POOL: Omit<LiveTx, "id" | "date" | "time" | "isNew">[] = [
+  { terminal: "T1004", merchant: "GRUPO ASGE VENADO 69", amountUSD: 1960000, cardType: "Mastercard Internacional", protocol: "201.2", protocolType: "pos", authCode: "612843", oper: 33, lote: 5, status: "aprobado" },
+  { terminal: "T1001", merchant: "BANXICO PLUS CANCUN",  amountUSD: 2100000, cardType: "VISA Internacional",       protocol: "101.2 M2", protocolType: "pos", authCode: "554301", oper: 10, lote: 3, status: "aprobado" },
+  { terminal: "T1002", merchant: "GRUPO ASGE VENADO 69", amountUSD: 2400000, cardType: "Mastercard Internacional", protocol: "201.2", protocolType: "pos", authCode: "987432", oper: 14, lote: 2, status: "aprobado" },
+  { terminal: "T1005", merchant: "BANXICO PLUS CANCUN",  amountUSD: 29800,   cardType: "VISA Internacional",       protocol: "1643", protocolType: "1643", authCode: "331092", oper: 7,  lote: 1, status: "aprobado" },
+  { terminal: "T1004", merchant: "GRUPO ASGE VENADO 69", amountUSD: 2200000, cardType: "Mastercard Internacional", protocol: "101.2 M2", protocolType: "pos", authCode: "762118", oper: 22, lote: 3, status: "aprobado" },
+  { terminal: "T1001", merchant: "BANXICO PLUS CANCUN",  amountUSD: 32100,   cardType: "VISA Internacional",       protocol: "1643", protocolType: "1643", authCode: "210934", oper: 5,  lote: 1, status: "aprobado" },
 ];
 
-function randFrom<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
+function randFrom<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
 
-function getSubscriptionStatus(startIso: string | null | undefined) {
-  if (!startIso) return { active: false };
-  const start = new Date(startIso);
-  if (isNaN(start.getTime())) return { active: false };
-  const end = new Date(start);
-  end.setMonth(end.getMonth() + 12);
-  return { active: Date.now() < end.getTime() };
-}
+// ─── Admin initial movements ──────────────────────────────────────────────────
+const INIT_MOVEMENTS: Movement[] = [
+  { id: "MOV-001", type: "ingreso", amountUSD: 2000000, category: "Venta tarjeta internacional",
+    description: "Venta Mastercard Internacional — GRUPO ASGE", reference: "AUTH-596122",
+    time: "18:55", user: "Admin", protocol: "201.2", cardType: "Mastercard", authCode: "596122" },
+  { id: "MOV-002", type: "ingreso", amountUSD: 1850000, category: "Liquidación POS",
+    description: "Liquidación terminal T1004 — VISA Internacional", reference: "AUTH-441829",
+    time: "17:40", user: "Admin", protocol: "101.2 M2", cardType: "VISA", authCode: "441829" },
+  { id: "MOV-003", type: "ingreso", amountUSD: 2150000, category: "Venta tarjeta internacional",
+    description: "Venta Mastercard Internacional — OPER 12 LOTE 1", reference: "AUTH-334211",
+    time: "16:22", user: "Admin", protocol: "201.2", cardType: "Mastercard", authCode: "334211" },
+  { id: "MOV-004", type: "ingreso", amountUSD: 31500, category: "Venta tarjeta internacional",
+    description: "Venta forzada terminal manual 1643 — T1005", reference: "AUTH-881203",
+    time: "14:30", user: "Admin", protocol: "1643", cardType: "VISA" },
+  { id: "MOV-005", type: "ingreso", amountUSD: 2350000, category: "Venta tarjeta nacional",
+    description: "Venta Mastercard Internacional — Terminal T1001", reference: "AUTH-774019",
+    time: "10:15", user: "Admin", protocol: "101.2 M2", cardType: "Mastercard", authCode: "774019" },
+  { id: "MOV-006", type: "egreso",  amountUSD: 1200, category: "Comisión procesadora",
+    description: "Comisión red EMV — Procesadora internacional", reference: "COM-EMV-042",
+    time: "09:50", user: "Admin", protocol: "201.1" },
+  { id: "MOV-007", type: "ingreso", amountUSD: 28700, category: "Venta tarjeta internacional",
+    description: "Venta forzada manual 1643 — T1002 OPER 6", reference: "AUTH-221087",
+    time: "09:05", user: "Admin", protocol: "1643", cardType: "Mastercard" },
+  // 101.1 from last week
+  { id: "MOV-008", type: "ingreso", amountUSD: 5000000, category: "Liquidación POS",
+    description: "Visa Network Transfer 101.1 — VISAINC/BANXICO LLC — LOTE 1", reference: "AUTH-978877",
+    time: "06/06 10:47", user: "Admin", protocol: "101.1", cardType: "VISA", authCode: "978877" },
+];
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function CajaPage() {
   const { toast } = useToast();
   const { user } = useAuth();
   const isAdmin = user?.role === "ADMIN";
-
-  // Non-admin users always see live terminal view (regardless of subscription)
-  // regardless of whether they have active subscription
   const showLiveView = !isAdmin;
 
-  const [movements, setMovements] = useState<Movement[]>(initialMovements);
+  const [movements, setMovements] = useState<Movement[]>(INIT_MOVEMENTS);
   const [showForm, setShowForm] = useState<"ingreso" | "egreso" | null>(null);
   const [filterType, setFilterType] = useState<"all" | "ingreso" | "egreso">("all");
 
-  // Live feed state for non-admin users
   const [liveTxs, setLiveTxs] = useState<LiveTx[]>(LIVE_SEED);
   const [liveCounter, setLiveCounter] = useState(0);
 
@@ -171,30 +182,30 @@ export default function CajaPage() {
     defaultValues: { type: "ingreso", amount: "", category: "", description: "", reference: "" },
   });
 
-  // Simulate incoming live transactions every ~40s
   useEffect(() => {
     if (!showLiveView) return;
     const interval = setInterval(() => {
       const base = randFrom(LIVE_POOL);
+      const now = new Date();
       const newTx: LiveTx = {
         ...base,
         id: `LX-${Date.now()}`,
-        time: new Date().toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" }),
+        date: today,
+        time: now.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" }),
         isNew: true,
       };
-      setLiveTxs(prev => [newTx, ...prev].slice(0, 20));
+      setLiveTxs(prev => [newTx, ...prev].slice(0, 25));
       setLiveCounter(c => c + 1);
-      // Clear "isNew" flag after animation
       setTimeout(() => {
         setLiveTxs(prev => prev.map(t => t.id === newTx.id ? { ...t, isNew: false } : t));
-      }, 3000);
+      }, 4000);
     }, 40000);
     return () => clearInterval(interval);
   }, [showLiveView]);
 
-  const ingresos = movements.filter(m => m.type === "ingreso").reduce((s, m) => s + m.amount, 0);
-  const egresos  = movements.filter(m => m.type === "egreso").reduce((s, m) => s + m.amount, 0);
-  const saldo    = 45890 + ingresos - egresos;
+  const ingresosUSD = movements.filter(m => m.type === "ingreso").reduce((s, m) => s + m.amountUSD, 0);
+  const egresosUSD  = movements.filter(m => m.type === "egreso").reduce((s, m) => s + m.amountUSD, 0);
+  const saldoUSD    = 45890 + ingresosUSD - egresosUSD;
 
   function openForm(type: "ingreso" | "egreso") {
     form.reset({ type, amount: "", category: "", description: "", reference: "" });
@@ -204,10 +215,8 @@ export default function CajaPage() {
   function onSubmit(data: MovForm) {
     const newMov: Movement = {
       id: `MOV-${String(movements.length + 1).padStart(3, "0")}`,
-      type: data.type,
-      amount: parseFloat(data.amount),
-      category: data.category,
-      description: data.description,
+      type: data.type, amountUSD: parseFloat(data.amount),
+      category: data.category, description: data.description,
       reference: data.reference || undefined,
       time: new Date().toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" }),
       user: user?.fullName ?? "Sistema",
@@ -215,10 +224,10 @@ export default function CajaPage() {
     setMovements(prev => [newMov, ...prev]);
     setShowForm(null);
     toast({ title: data.type === "ingreso" ? "Ingreso registrado" : "Egreso registrado",
-      description: `$${parseFloat(data.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })} — ${data.description}` });
+      description: `$${fmtUSD(parseFloat(data.amount))} USD — ${data.description}` });
   }
 
-  function downloadFile(filename: string, content: string, mime = "text/plain;charset=utf-8") {
+  function download(filename: string, content: string, mime = "text/plain;charset=utf-8") {
     const blob = new Blob([content], { type: mime });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
@@ -227,41 +236,53 @@ export default function CajaPage() {
 
   function handleReporteDiario() {
     const fecha = new Date().toLocaleDateString("es-MX");
-    const header = "ID,Tipo,Categoría,Descripción,Referencia,Monto,Hora,Protocolo,Tarjeta,Auth";
+    const header = "ID,Tipo,Categoría,Descripción,Referencia,USD,MXN,Hora,Protocolo,Tarjeta,Auth";
     const rows = movements.map(m =>
       [m.id, m.type, m.category, `"${m.description.replace(/"/g,'""')}"`,
-       m.reference||"", m.amount.toFixed(2), m.time, m.protocol||"", m.cardType||"", m.authCode||""].join(",")
+       m.reference||"", fmtUSD(m.amountUSD), fmtUSD(m.amountUSD * TC),
+       m.time, m.protocol||"", m.cardType||"", m.authCode||""].join(",")
     );
-    downloadFile(`reporte-caja-${fecha.replace(/\//g,"-")}.csv`, [header, ...rows].join("\n"), "text/csv;charset=utf-8");
+    download(`reporte-caja-${fecha.replace(/\//g,"-")}.csv`, [header, ...rows].join("\n"), "text/csv;charset=utf-8");
     toast({ title: "Reporte generado", description: `${movements.length} movimientos exportados.` });
   }
 
   function handleCierreCaja() {
     const fecha = new Date().toLocaleString("es-MX", { dateStyle: "long", timeStyle: "short" });
-    const reporte = [
+    const content = [
       "========================================",
       "     BANXICO PLUS — CIERRE DE CAJA",
       "========================================",
       `Fecha : ${fecha}`,
       `Operador: ${user?.fullName ?? "Admin"}`,
+      `T/C : ${TC} MXN/USD`,
       "----------------------------------------",
-      `Saldo apertura : $45,890.00`,
-      `Total ingresos : +$${ingresos.toLocaleString("en-US",{minimumFractionDigits:2})}`,
-      `Total egresos  : -$${egresos.toLocaleString("en-US",{minimumFractionDigits:2})}`,
+      `Saldo apertura  : $45,890.00 USD`,
+      `Total ingresos  : +$${fmtUSD(ingresosUSD)} USD  (+$${fmtUSD(ingresosUSD * TC)} MXN)`,
+      `Total egresos   : -$${fmtUSD(egresosUSD)} USD  (-$${fmtUSD(egresosUSD * TC)} MXN)`,
       "----------------------------------------",
-      `SALDO FINAL    : $${saldo.toLocaleString("en-US",{minimumFractionDigits:2})}`,
+      `SALDO FINAL USD : $${fmtUSD(saldoUSD)}`,
+      `SALDO FINAL MXN : $${fmtUSD(saldoUSD * TC)}`,
       "========================================",
-      "Documento simulado — Banxico Plus",
     ].join("\n");
-    downloadFile(`cierre-caja-${new Date().toISOString().slice(0,10)}.txt`, reporte);
-    toast({ title: "Cierre de caja realizado", description: `Saldo final: $${saldo.toLocaleString("en-US",{minimumFractionDigits:2})}` });
+    download(`cierre-caja-${new Date().toISOString().slice(0,10)}.txt`, content);
+    toast({ title: "Cierre realizado", description: `Saldo: $${fmtUSD(saldoUSD)} USD` });
   }
 
   function handleArqueo() {
-    toast({ title: "Arqueo de caja", description: `Ingresos: $${ingresos.toLocaleString("en-US",{minimumFractionDigits:2})} · Egresos: $${egresos.toLocaleString("en-US",{minimumFractionDigits:2})} · Saldo: $${saldo.toLocaleString("en-US",{minimumFractionDigits:2})}` });
+    toast({ title: "Arqueo de caja",
+      description: `Ingresos: $${fmtUSD(ingresosUSD)} USD · Egresos: $${fmtUSD(egresosUSD)} USD · Saldo: $${fmtUSD(saldoUSD)} USD` });
   }
 
   const allFiltered = movements.filter(m => filterType === "all" || m.type === filterType);
+
+  function protocolBadge(p?: string) {
+    if (!p) return null;
+    if (p === "101.1")
+      return <Badge className="bg-[#1A1F71]/10 text-[#1A1F71] border-[#1A1F71]/20 no-default-active-elevate text-[10px] font-mono">Visa Net 101.1</Badge>;
+    if (p === "1643")
+      return <Badge className="bg-amber-100 text-amber-700 border-amber-200 no-default-active-elevate text-[10px] font-mono">1643 Manual</Badge>;
+    return <Badge className="bg-blue-100 text-blue-700 border-blue-200 no-default-active-elevate text-[10px] font-mono">{p}</Badge>;
+  }
 
   // ─── LIVE VIEW (non-admin) ─────────────────────────────────────────────────
   if (showLiveView) {
@@ -274,7 +295,7 @@ export default function CajaPage() {
               <Radio className="w-7 h-7 text-[#c8322b]" /> Operaciones en Tiempo Real
             </h1>
             <p className="text-sm text-muted-foreground">
-              Transacciones activas de terminales · {new Date().toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" })}
+              Terminales activas · {new Date().toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" })}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -284,8 +305,7 @@ export default function CajaPage() {
               </Badge>
             )}
             <div className="flex items-center gap-1.5 text-xs text-green-700 bg-green-100 px-2.5 py-1.5 rounded-md font-medium">
-              <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-              En vivo
+              <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> En vivo
             </div>
           </div>
         </div>
@@ -300,14 +320,14 @@ export default function CajaPage() {
               <div>
                 <p className="font-semibold text-amber-900 text-sm">Suscripción pago pendiente</p>
                 <p className="text-xs text-amber-700 mt-0.5">
-                  Para acceder al desglose completo de caja, saldos y reportes, realiza el pago de tu suscripción o contacta al administrador.
+                  Para acceder al desglose completo de caja, saldos y reportes, contacta al administrador.
                 </p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Stats bar */}
+        {/* Stats */}
         <div className="grid gap-3 sm:grid-cols-3">
           <Card className="hover-elevate">
             <CardContent className="pt-4 pb-3">
@@ -322,26 +342,26 @@ export default function CajaPage() {
           <Card className="hover-elevate">
             <CardContent className="pt-4 pb-3">
               <div className="flex items-center gap-2 mb-1">
-                <Zap className="w-4 h-4 text-green-600" />
+                <Activity className="w-4 h-4 text-green-600" />
                 <span className="text-xs text-muted-foreground">Transacciones hoy</span>
               </div>
-              <p className="text-2xl font-bold text-green-600">{liveTxs.length}</p>
+              <p className="text-2xl font-bold text-green-600">{liveTxs.filter(t => t.date === today).length}</p>
               <p className="text-xs text-muted-foreground">Operaciones procesadas</p>
             </CardContent>
           </Card>
           <Card className="hover-elevate">
             <CardContent className="pt-4 pb-3">
               <div className="flex items-center gap-2 mb-1">
-                <ShieldCheck className="w-4 h-4 text-purple-600" />
-                <span className="text-xs text-muted-foreground">Protocolo principal</span>
+                <DollarSign className="w-4 h-4 text-purple-600" />
+                <span className="text-xs text-muted-foreground">T/C vigente</span>
               </div>
-              <p className="text-lg font-bold text-purple-600 font-mono">101.2 M2</p>
-              <p className="text-xs text-muted-foreground">Internacional</p>
+              <p className="text-lg font-bold text-purple-600 font-mono">{TC}</p>
+              <p className="text-xs text-muted-foreground">MXN por USD</p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Live transactions list */}
+        {/* Live transactions */}
         <Card className="hover-elevate">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
@@ -349,7 +369,7 @@ export default function CajaPage() {
                 <CardTitle className="flex items-center gap-2">
                   <Activity className="w-4 h-4 text-[#c8322b]" /> Transacciones de Terminales
                 </CardTitle>
-                <CardDescription>Operaciones en tiempo real — solo lectura</CardDescription>
+                <CardDescription>En tiempo real — solo lectura · TC: {TC} MXN/USD</CardDescription>
               </div>
               <Badge className="bg-[#c8322b]/10 text-[#c8322b] border-[#c8322b]/20 no-default-active-elevate text-xs font-mono">
                 Visa Net 9.0
@@ -358,72 +378,104 @@ export default function CajaPage() {
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y">
-              {liveTxs.map(tx => (
-                <div
-                  key={tx.id}
-                  data-testid={`row-live-${tx.id}`}
-                  className={`flex items-start gap-3 px-4 py-3 transition-all ${tx.isNew ? "bg-green-50 border-l-2 border-l-green-500" : "hover:bg-muted/20"}`}
-                >
-                  <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <MonitorSmartphone className="w-4 h-4 text-blue-600" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-semibold">{tx.merchant}</span>
-                      {tx.isNew && (
-                        <Badge className="bg-green-100 text-green-700 border-green-200 no-default-active-elevate text-[10px]">
-                          Nueva
-                        </Badge>
-                      )}
+              {liveTxs.map(tx => {
+                const is101 = tx.protocolType === "101.1";
+                const is1643 = tx.protocolType === "1643";
+                const isOldWeek = tx.date === lastWeek;
+                return (
+                  <div
+                    key={tx.id}
+                    data-testid={`row-live-${tx.id}`}
+                    className={`flex items-start gap-3 px-4 py-3 transition-all ${
+                      tx.isNew ? "bg-green-50 border-l-2 border-l-green-500"
+                      : is101 ? "bg-blue-50/50"
+                      : is1643 ? "bg-amber-50/40"
+                      : "hover:bg-muted/20"
+                    }`}
+                  >
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                      is101 ? "bg-[#1A1F71]/10"
+                      : is1643 ? "bg-amber-100"
+                      : "bg-blue-100"
+                    }`}>
+                      {is101
+                        ? <span className="text-sm font-extrabold italic text-[#1A1F71]" style={{ fontFamily: "'Arial Black', Arial, sans-serif" }}>V</span>
+                        : is1643
+                          ? <Zap className="w-4 h-4 text-amber-600" />
+                          : <MonitorSmartphone className="w-4 h-4 text-blue-600" />
+                      }
                     </div>
-                    <div className="flex items-center gap-2 flex-wrap mt-0.5">
-                      <span className="text-xs font-mono text-muted-foreground">{tx.terminal}</span>
-                      <Badge className="bg-blue-100 text-blue-700 border-blue-200 no-default-active-elevate text-[10px] font-mono">
-                        {tx.protocol}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold">{tx.merchant}</span>
+                        {tx.isNew && (
+                          <Badge className="bg-green-100 text-green-700 border-green-200 no-default-active-elevate text-[10px]">Nueva</Badge>
+                        )}
+                        {isOldWeek && (
+                          <Badge className="bg-gray-100 text-gray-500 border-gray-200 no-default-active-elevate text-[10px]">Hace 1 semana</Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                        <span className="text-xs font-mono text-muted-foreground">{tx.terminal}</span>
+                        {is101 && (
+                          <Badge className="bg-[#1A1F71]/10 text-[#1A1F71] border-[#1A1F71]/20 no-default-active-elevate text-[10px] font-mono">
+                            Visa Net 101.1
+                          </Badge>
+                        )}
+                        {is1643 && (
+                          <Badge className="bg-amber-100 text-amber-700 border-amber-200 no-default-active-elevate text-[10px] font-mono">
+                            <Zap className="w-2.5 h-2.5 mr-0.5" /> 1643 Manual
+                          </Badge>
+                        )}
+                        {!is101 && !is1643 && (
+                          <Badge className="bg-blue-100 text-blue-700 border-blue-200 no-default-active-elevate text-[10px] font-mono">
+                            {tx.protocol}
+                          </Badge>
+                        )}
+                        <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                          <CreditCard className="w-3 h-3" /> {tx.cardType}
+                        </span>
+                        <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded">
+                          OPER {tx.oper} / LOTE {tx.lote}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[10px] text-muted-foreground font-mono">AUTH: {tx.authCode}</span>
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className={`font-bold ${is1643 ? "text-amber-600" : is101 ? "text-[#1A1F71]" : "text-green-600"}`}>
+                        +${fmtUSD(tx.amountUSD)} USD
+                      </p>
+                      <p className="text-[10px] text-muted-foreground font-mono">
+                        ≈ ${fmtMXN(tx.amountUSD)} MXN
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">{tx.date} {tx.time}</p>
+                      <Badge className="bg-green-100 text-green-700 border-green-200 no-default-active-elevate text-[10px] mt-0.5">
+                        {tx.status}
                       </Badge>
-                      <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                        <CreditCard className="w-3 h-3" /> {tx.cardType}
-                      </span>
-                      <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded">
-                        OPER {tx.oper} / LOTE {tx.lote}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[10px] text-muted-foreground font-mono">AUTH: {tx.authCode}</span>
                     </div>
                   </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="font-bold text-green-600">
-                      +${tx.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">{tx.time}</p>
-                    <Badge className="bg-green-100 text-green-700 border-green-200 no-default-active-elevate text-[10px] mt-0.5">
-                      {tx.status}
-                    </Badge>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </CardContent>
         </Card>
 
-        {/* Protocol reference */}
+        {/* Legend */}
         <Card className="hover-elevate">
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Protocolos en uso</CardTitle>
+            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Tipos de operación</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-1.5 pb-4">
+          <CardContent className="space-y-2 pb-4">
             {[
-              { code: "101.1 M1", label: "Transferencia nacional" },
-              { code: "101.2 M2", label: "Transferencia internacional" },
-              { code: "101.3 M3", label: "Transferencia segura" },
-              { code: "201.1",    label: "Pago nacional" },
-              { code: "201.2",    label: "Pago internacional" },
-              { code: "1643",     label: "Retiro POS" },
-            ].map(p => (
-              <div key={p.code} className="flex items-center justify-between text-xs">
-                <Badge className="bg-[#c8322b]/10 text-[#c8322b] border-[#c8322b]/20 no-default-active-elevate font-mono">{p.code}</Badge>
-                <span className="text-muted-foreground">{p.label}</span>
+              { badge: "Visa Net 101.1", color: "bg-[#1A1F71]/10 text-[#1A1F71] border-[#1A1F71]/20", desc: "Transferencia Visa Network · bloques $5M USD · poco frecuente" },
+              { badge: "POS 201.x/101.2", color: "bg-blue-100 text-blue-700 border-blue-200", desc: "Venta regular internacional · ~$2M USD c/u" },
+              { badge: "1643 Manual", color: "bg-amber-100 text-amber-700 border-amber-200", desc: "Venta forzada terminal manual · operativos ~$30K USD" },
+            ].map((item, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <Badge className={`no-default-active-elevate text-[10px] font-mono flex-shrink-0 ${item.color}`}>{item.badge}</Badge>
+                <span className="text-xs text-muted-foreground">{item.desc}</span>
               </div>
             ))}
           </CardContent>
@@ -435,27 +487,26 @@ export default function CajaPage() {
   // ─── ADMIN FULL VIEW ───────────────────────────────────────────────────────
   return (
     <div className="p-4 md:p-6 space-y-5">
-      {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
             <Wallet className="w-7 h-7 text-[#c8322b]" /> Caja
           </h1>
           <p className="text-sm text-muted-foreground">
-            Gestión de operaciones · {new Date().toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" })}
+            TC: {TC} MXN/USD · {new Date().toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" })}
           </p>
         </div>
         <div className="flex gap-2">
           <Button size="sm" className="bg-green-600 text-white" onClick={() => openForm("ingreso")} data-testid="button-ingreso">
-            <Plus className="w-4 h-4 mr-1" /> Registrar Ingreso
+            <Plus className="w-4 h-4 mr-1" /> Ingreso
           </Button>
           <Button size="sm" variant="outline" className="border-red-400 text-red-600" onClick={() => openForm("egreso")} data-testid="button-egreso">
-            <Minus className="w-4 h-4 mr-1" /> Registrar Egreso
+            <Minus className="w-4 h-4 mr-1" /> Egreso
           </Button>
         </div>
       </div>
 
-      {/* KPIs */}
+      {/* KPIs — USD + MXN */}
       <div className="grid gap-3 sm:grid-cols-3">
         <Card className="hover-elevate">
           <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
@@ -465,10 +516,8 @@ export default function CajaPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-green-600" data-testid="saldo-caja">
-              ${saldo.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-            </div>
-            <p className="text-xs text-muted-foreground mt-0.5">USD — Actualizado ahora</p>
+            <div className="text-2xl font-bold text-green-600" data-testid="saldo-caja">${fmtUSD(saldoUSD)} USD</div>
+            <p className="text-xs text-muted-foreground mt-0.5">≈ ${fmtMXN(saldoUSD)} MXN</p>
           </CardContent>
         </Card>
         <Card className="hover-elevate">
@@ -479,10 +528,8 @@ export default function CajaPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-blue-600">
-              ${ingresos.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-            </div>
-            <p className="text-xs text-muted-foreground mt-0.5">{movements.filter(m => m.type==="ingreso").length} operaciones</p>
+            <div className="text-2xl font-bold text-blue-600">${fmtUSD(ingresosUSD)} USD</div>
+            <p className="text-xs text-muted-foreground mt-0.5">≈ ${fmtMXN(ingresosUSD)} MXN · {movements.filter(m=>m.type==="ingreso").length} ops</p>
           </CardContent>
         </Card>
         <Card className="hover-elevate">
@@ -493,10 +540,8 @@ export default function CajaPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-red-600">
-              ${egresos.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-            </div>
-            <p className="text-xs text-muted-foreground mt-0.5">{movements.filter(m => m.type==="egreso").length} operaciones</p>
+            <div className="text-2xl font-bold text-red-600">${fmtUSD(egresosUSD)} USD</div>
+            <p className="text-xs text-muted-foreground mt-0.5">≈ ${fmtMXN(egresosUSD)} MXN</p>
           </CardContent>
         </Card>
       </div>
@@ -528,6 +573,9 @@ export default function CajaPage() {
                           <Input {...field} placeholder="0.00" type="number" step="0.01" min="0.01" className="pl-9 font-mono text-lg" data-testid="input-monto" />
                         </div>
                       </FormControl>
+                      {field.value && !isNaN(parseFloat(field.value)) && (
+                        <p className="text-xs text-muted-foreground">≈ ${fmtMXN(parseFloat(field.value))} MXN</p>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )} />
@@ -552,18 +600,14 @@ export default function CajaPage() {
                   <FormField control={form.control} name="description" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Descripción</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="Descripción de la operación" data-testid="input-descripcion" />
-                      </FormControl>
+                      <FormControl><Input {...field} placeholder="Descripción de la operación" data-testid="input-descripcion" /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
                   <FormField control={form.control} name="reference" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Referencia / Auth (Opcional)</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="AUTH-000000" className="font-mono" data-testid="input-referencia" />
-                      </FormControl>
+                      <FormControl><Input {...field} placeholder="AUTH-000000" className="font-mono" data-testid="input-referencia" /></FormControl>
                     </FormItem>
                   )} />
                 </div>
@@ -580,21 +624,19 @@ export default function CajaPage() {
       )}
 
       <div className="grid gap-4 lg:grid-cols-3">
-        {/* Movements */}
+        {/* Movements list */}
         <Card className="hover-elevate lg:col-span-2">
           <CardHeader className="pb-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="w-4 h-4" /> Movimientos
-                </CardTitle>
-                <CardDescription>Registro del día</CardDescription>
+                <CardTitle className="flex items-center gap-2"><FileText className="w-4 h-4" /> Movimientos</CardTitle>
+                <CardDescription>Registro del día · en USD</CardDescription>
               </div>
               <div className="flex gap-1">
-                {(["all", "ingreso", "egreso"] as const).map(f => (
+                {(["all","ingreso","egreso"] as const).map(f => (
                   <button key={f} onClick={() => setFilterType(f)} data-testid={`filter-${f}`}
-                    className={`px-2.5 py-1 text-xs rounded-md font-medium transition-colors ${filterType === f ? "bg-[#c8322b] text-white" : "bg-muted text-muted-foreground"}`}>
-                    {f === "all" ? "Todos" : f === "ingreso" ? "Ingresos" : "Egresos"}
+                    className={`px-2.5 py-1 text-xs rounded-md font-medium transition-colors ${filterType===f ? "bg-[#c8322b] text-white" : "bg-muted text-muted-foreground"}`}>
+                    {f==="all" ? "Todos" : f==="ingreso" ? "Ingresos" : "Egresos"}
                   </button>
                 ))}
               </div>
@@ -602,36 +644,41 @@ export default function CajaPage() {
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y">
-              {allFiltered.map(mov => (
-                <div key={mov.id} className="flex items-start gap-3 px-4 py-3 hover:bg-muted/30 transition-colors" data-testid={`row-mov-${mov.id}`}>
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${mov.type === "ingreso" ? "bg-green-100" : "bg-red-100"}`}>
-                    {mov.type === "ingreso" ? <ArrowUpRight className="w-4 h-4 text-green-600" /> : <ArrowDownRight className="w-4 h-4 text-red-600" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold truncate">{mov.description}</p>
-                    <div className="flex items-center gap-2 flex-wrap mt-0.5">
-                      <span className="text-xs text-muted-foreground">{mov.category}</span>
-                      {mov.protocol && (
-                        <Badge className="bg-blue-100 text-blue-700 border-blue-200 no-default-active-elevate text-[10px] px-1.5">
-                          {mov.protocol}
-                        </Badge>
-                      )}
-                      {mov.cardType && (
-                        <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                          <CreditCard className="w-3 h-3" /> {mov.cardType}
-                        </span>
-                      )}
-                      {mov.reference && <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded">{mov.reference}</span>}
+              {allFiltered.map(mov => {
+                const is101 = mov.protocol === "101.1";
+                const is1643 = mov.protocol === "1643";
+                return (
+                  <div key={mov.id}
+                    className={`flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/30 ${is101 ? "bg-blue-50/30" : is1643 ? "bg-amber-50/30" : ""}`}
+                    data-testid={`row-mov-${mov.id}`}>
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${mov.type==="ingreso" ? "bg-green-100" : "bg-red-100"}`}>
+                      {mov.type==="ingreso" ? <ArrowUpRight className="w-4 h-4 text-green-600" /> : <ArrowDownRight className="w-4 h-4 text-red-600" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold truncate">{mov.description}</p>
+                      <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                        <span className="text-xs text-muted-foreground">{mov.category}</span>
+                        {protocolBadge(mov.protocol)}
+                        {mov.cardType && (
+                          <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                            <CreditCard className="w-3 h-3" /> {mov.cardType}
+                          </span>
+                        )}
+                        {mov.reference && <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded">{mov.reference}</span>}
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className={`font-bold ${mov.type==="ingreso" ? "text-green-600" : "text-red-600"}`}>
+                        {mov.type==="ingreso" ? "+" : "–"}${fmtUSD(mov.amountUSD)} USD
+                      </p>
+                      <p className="text-[10px] text-muted-foreground font-mono">
+                        ≈ ${fmtMXN(mov.amountUSD)} MXN
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">{mov.time} · {mov.id}</p>
                     </div>
                   </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className={`font-bold ${mov.type === "ingreso" ? "text-green-600" : "text-red-600"}`}>
-                      {mov.type === "ingreso" ? "+" : "–"}${mov.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">{mov.time} · {mov.id}</p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </CardContent>
         </Card>
@@ -646,16 +693,24 @@ export default function CajaPage() {
             </CardHeader>
             <CardContent className="space-y-2">
               {[
-                { label: "Saldo apertura", value: "$45,890.00", color: "text-slate-300" },
-                { label: "Total ingresos", value: `+$${ingresos.toLocaleString("en-US",{minimumFractionDigits:2})}`, color: "text-green-400" },
-                { label: "Total egresos",  value: `-$${egresos.toLocaleString("en-US",{minimumFractionDigits:2})}`, color: "text-red-400" },
-                { label: "Saldo actual",   value: `$${saldo.toLocaleString("en-US",{minimumFractionDigits:2})}`, color: "text-white font-bold" },
+                { label: "Saldo apertura", usd: 45890, color: "text-slate-300" },
+                { label: "Total ingresos", usd: ingresosUSD, color: "text-green-400", prefix: "+" },
+                { label: "Total egresos",  usd: egresosUSD, color: "text-red-400", prefix: "–" },
+                { label: "Saldo actual",   usd: saldoUSD, color: "text-white font-bold", isFinal: true },
               ].map((item, i) => (
-                <div key={i} className={`flex items-center justify-between py-1.5 ${i === 3 ? "border-t border-slate-600 mt-1 pt-2" : "border-b border-slate-700"}`}>
-                  <span className="text-xs text-slate-400">{item.label}</span>
-                  <span className={`text-sm font-mono ${item.color}`}>{item.value}</span>
+                <div key={i} className={`py-1.5 ${i===3 ? "border-t border-slate-600 mt-1 pt-2" : "border-b border-slate-700"}`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-400">{item.label}</span>
+                    <span className={`text-sm font-mono ${item.color}`}>
+                      {item.prefix || ""} ${fmtUSD(item.usd)} USD
+                    </span>
+                  </div>
+                  <div className="flex justify-end">
+                    <span className="text-[10px] text-slate-500 font-mono">≈ ${fmtMXN(item.usd)} MXN</span>
+                  </div>
                 </div>
               ))}
+              <p className="text-[10px] text-slate-500 pt-1 text-right">TC: {TC} MXN/USD</p>
             </CardContent>
           </Card>
 
@@ -665,7 +720,7 @@ export default function CajaPage() {
                 <AlertTriangle className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-xs font-semibold text-blue-800">Solo operaciones electrónicas</p>
-                  <p className="text-xs text-blue-700 mt-0.5">Retiros únicamente via protocolo 1643 POS.</p>
+                  <p className="text-xs text-blue-700 mt-0.5">Sin depósito en efectivo. Venta forzada vía protocolo 1643.</p>
                 </div>
               </div>
             </CardContent>
@@ -685,30 +740,9 @@ export default function CajaPage() {
                   <Calculator className="w-3.5 h-3.5 mr-2" /> Arqueo de Caja
                 </Button>
                 <Button variant="outline" size="sm" className="w-full justify-start text-xs" onClick={handleReporteDiario} data-testid="button-reporte">
-                  <BarChart2 className="w-3.5 h-3.5 mr-2" /> Reporte Diario
+                  <BarChart2 className="w-3.5 h-3.5 mr-2" /> Reporte Diario CSV
                 </Button>
               </div>
-            </CardContent>
-          </Card>
-
-          <Card className="hover-elevate">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Protocolos Activos</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-1.5 pb-4">
-              {[
-                { code: "101.1 M1", label: "Transferencia nacional" },
-                { code: "101.2 M2", label: "Transferencia internacional" },
-                { code: "101.3 M3", label: "Transferencia segura" },
-                { code: "201.1",    label: "Pago nacional" },
-                { code: "201.2",    label: "Pago internacional" },
-                { code: "1643",     label: "Retiro POS" },
-              ].map(p => (
-                <div key={p.code} className="flex items-center justify-between text-xs">
-                  <Badge className="bg-[#c8322b]/10 text-[#c8322b] border-[#c8322b]/20 no-default-active-elevate font-mono">{p.code}</Badge>
-                  <span className="text-muted-foreground">{p.label}</span>
-                </div>
-              ))}
             </CardContent>
           </Card>
         </div>
