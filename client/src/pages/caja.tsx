@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -10,6 +10,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { useSystemSettings } from "@/hooks/use-system-settings";
+import { DEFAULT_SYSTEM_SETTINGS } from "@shared/schema";
 import {
   Wallet, TrendingUp, TrendingDown, DollarSign, Plus, Minus,
   ArrowUpRight, ArrowDownRight, BarChart2, Calculator,
@@ -18,10 +20,7 @@ import {
 } from "lucide-react";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const TC = 17.50;
-
 function fmtUSD(n: number) { return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-function fmtMXN(usd: number) { return (usd * TC).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 const movSchema = z.object({
@@ -64,64 +63,25 @@ const EGRESO_CATS = [
 ];
 
 // ─── Seed data ────────────────────────────────────────────────────────────────
-const today = "13 JUN";
-const lastWeek = "06 JUN";
+const today = new Date().toLocaleDateString("es-MX", { day: "2-digit", month: "short" }).toUpperCase();
+const lastWeek = (() => { const d = new Date(); d.setDate(d.getDate() - 7); return d.toLocaleDateString("es-MX", { day: "2-digit", month: "short" }).toUpperCase(); })();
 
-const LIVE_SEED: LiveTx[] = [
-  // Regular POS — $2M USD (~$35M MXN)
-  {
-    id: "LX-001", terminal: "T1001", merchant: "GRUPO ASGE VENADO 69",
-    amountUSD: 2000000, cardType: "Mastercard Internacional",
-    protocol: "201.2", protocolType: "pos",
-    authCode: "596122", oper: 28, lote: 2, status: "aprobado",
-    date: today, time: "18:55",
-  },
-  {
-    id: "LX-002", terminal: "T1004", merchant: "BANXICO PLUS CANCUN",
-    amountUSD: 1850000, cardType: "VISA Internacional",
-    protocol: "101.2 M2", protocolType: "pos",
-    authCode: "441829", oper: 15, lote: 3, status: "aprobado",
-    date: today, time: "17:40",
-  },
-  {
-    id: "LX-003", terminal: "T1002", merchant: "GRUPO ASGE VENADO 69",
-    amountUSD: 2150000, cardType: "Mastercard Internacional",
-    protocol: "201.2", protocolType: "pos",
-    authCode: "334211", oper: 12, lote: 1, status: "aprobado",
-    date: today, time: "16:22",
-  },
-  // 1643 — Venta forzada terminal manual, ~$30K USD
-  {
-    id: "LX-004", terminal: "T1005", merchant: "GRUPO ASGE VENADO 69",
-    amountUSD: 31500, cardType: "VISA Internacional",
-    protocol: "1643", protocolType: "1643",
-    authCode: "881203", oper: 9, lote: 2, status: "aprobado",
-    date: today, time: "14:30",
-  },
-  {
-    id: "LX-005", terminal: "T1001", merchant: "BANXICO PLUS CANCUN",
-    amountUSD: 2350000, cardType: "Mastercard Internacional",
-    protocol: "101.2 M2", protocolType: "pos",
-    authCode: "774019", oper: 31, lote: 4, status: "aprobado",
-    date: today, time: "10:15",
-  },
-  // 1643 — second entry
-  {
-    id: "LX-006", terminal: "T1002", merchant: "GRUPO ASGE VENADO 69",
-    amountUSD: 28700, cardType: "Mastercard Internacional",
-    protocol: "1643", protocolType: "1643",
-    authCode: "221087", oper: 6, lote: 1, status: "aprobado",
-    date: today, time: "09:05",
-  },
-  // 101.1 — Visa Network, $5M USD, last week
-  {
-    id: "LX-007", terminal: "T1004", merchant: "VISAINC ORDSHR / BANXICO LLC",
-    amountUSD: 5000000, cardType: "VISA Internacional",
-    protocol: "101.1", protocolType: "101.1",
-    authCode: "978877", oper: 1, lote: 1, status: "aprobado",
-    date: lastWeek, time: "10:47",
-  },
-];
+function buildLiveSeed(s: typeof DEFAULT_SYSTEM_SETTINGS): LiveTx[] {
+  const m1 = s.feedMerchant1;
+  const m2 = s.feedMerchant2;
+  const pos = s.feedPosRegularUSD;
+  const f1643 = s.feed1643USD;
+  const visa = s.feedVisaNet101USD;
+  return [
+    { id: "LX-001", terminal: "T1001", merchant: m1, amountUSD: pos,                         cardType: "Mastercard Internacional", protocol: "201.2",    protocolType: "pos",   authCode: "596122", oper: 28, lote: 2, status: "aprobado", date: today,    time: "18:55" },
+    { id: "LX-002", terminal: "T1004", merchant: m2, amountUSD: Math.round(pos * 0.925),      cardType: "VISA Internacional",       protocol: "101.2 M2", protocolType: "pos",   authCode: "441829", oper: 15, lote: 3, status: "aprobado", date: today,    time: "17:40" },
+    { id: "LX-003", terminal: "T1002", merchant: m1, amountUSD: Math.round(pos * 1.075),      cardType: "Mastercard Internacional", protocol: "201.2",    protocolType: "pos",   authCode: "334211", oper: 12, lote: 1, status: "aprobado", date: today,    time: "16:22" },
+    { id: "LX-004", terminal: "T1005", merchant: m1, amountUSD: Math.round(f1643 * 1.05),     cardType: "VISA Internacional",       protocol: "1643",     protocolType: "1643",  authCode: "881203", oper: 9,  lote: 2, status: "aprobado", date: today,    time: "14:30" },
+    { id: "LX-005", terminal: "T1001", merchant: m2, amountUSD: Math.round(pos * 1.175),      cardType: "Mastercard Internacional", protocol: "101.2 M2", protocolType: "pos",   authCode: "774019", oper: 31, lote: 4, status: "aprobado", date: today,    time: "10:15" },
+    { id: "LX-006", terminal: "T1002", merchant: m1, amountUSD: Math.round(f1643 * 0.957),    cardType: "Mastercard Internacional", protocol: "1643",     protocolType: "1643",  authCode: "221087", oper: 6,  lote: 1, status: "aprobado", date: today,    time: "09:05" },
+    { id: "LX-007", terminal: "T1004", merchant: "VISAINC ORDSHR / BANXICO LLC", amountUSD: visa, cardType: "VISA Internacional",  protocol: "101.1",    protocolType: "101.1", authCode: "978877", oper: 1,  lote: 1, status: "aprobado", date: lastWeek, time: "10:47" },
+  ];
+}
 
 const LIVE_POOL: Omit<LiveTx, "id" | "date" | "time" | "isNew">[] = [
   { terminal: "T1004", merchant: "GRUPO ASGE VENADO 69", amountUSD: 1960000, cardType: "Mastercard Internacional", protocol: "201.2", protocolType: "pos", authCode: "612843", oper: 33, lote: 5, status: "aprobado" },
@@ -169,12 +129,16 @@ export default function CajaPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === "ADMIN";
   const showLiveView = !isAdmin;
+  const { data: settings } = useSystemSettings();
+  const TC = settings?.tipoCambio ?? DEFAULT_SYSTEM_SETTINGS.tipoCambio;
+  const fmtMXN = (usd: number) => (usd * TC).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const settingsRef = useRef(settings);
 
   const [movements, setMovements] = useState<Movement[]>(INIT_MOVEMENTS);
   const [showForm, setShowForm] = useState<"ingreso" | "egreso" | null>(null);
   const [filterType, setFilterType] = useState<"all" | "ingreso" | "egreso">("all");
 
-  const [liveTxs, setLiveTxs] = useState<LiveTx[]>(LIVE_SEED);
+  const [liveTxs, setLiveTxs] = useState<LiveTx[]>(() => buildLiveSeed(DEFAULT_SYSTEM_SETTINGS));
   const [liveCounter, setLiveCounter] = useState(0);
 
   const form = useForm<MovForm>({
@@ -182,13 +146,27 @@ export default function CajaPage() {
     defaultValues: { type: "ingreso", amount: "", category: "", description: "", reference: "" },
   });
 
+  useEffect(() => { settingsRef.current = settings; }, [settings]);
+  useEffect(() => {
+    if (settings && showLiveView) setLiveTxs(buildLiveSeed(settings));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings?.feedPosRegularUSD, settings?.feed1643USD, settings?.feedVisaNet101USD, settings?.feedMerchant1, settings?.feedMerchant2, showLiveView]);
+
   useEffect(() => {
     if (!showLiveView) return;
     const interval = setInterval(() => {
+      const s = settingsRef.current ?? DEFAULT_SYSTEM_SETTINGS;
       const base = randFrom(LIVE_POOL);
+      const isType1643 = base.protocolType === "1643";
+      const adjustedAmt = Math.round(
+        (isType1643 ? s.feed1643USD : s.feedPosRegularUSD) * (0.9 + Math.random() * 0.2)
+      );
+      const merchant = Math.random() > 0.5 ? s.feedMerchant1 : s.feedMerchant2;
       const now = new Date();
       const newTx: LiveTx = {
         ...base,
+        amountUSD: adjustedAmt,
+        merchant,
         id: `LX-${Date.now()}`,
         date: today,
         time: now.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" }),
@@ -205,7 +183,7 @@ export default function CajaPage() {
 
   const ingresosUSD = movements.filter(m => m.type === "ingreso").reduce((s, m) => s + m.amountUSD, 0);
   const egresosUSD  = movements.filter(m => m.type === "egreso").reduce((s, m) => s + m.amountUSD, 0);
-  const saldoUSD    = 45890 + ingresosUSD - egresosUSD;
+  const saldoUSD    = (settings?.saldoAperturaUSD ?? DEFAULT_SYSTEM_SETTINGS.saldoAperturaUSD) + ingresosUSD - egresosUSD;
 
   function openForm(type: "ingreso" | "egreso") {
     form.reset({ type, amount: "", category: "", description: "", reference: "" });

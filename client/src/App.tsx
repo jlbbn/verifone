@@ -19,6 +19,7 @@ import RegistrosPage from "@/pages/registros";
 import ExchangePage from "@/pages/exchange";
 import ClavesPage from "@/pages/claves";
 import AdminUsuariosPage from "@/pages/admin-users";
+import AdminSettingsPage from "@/pages/admin-settings";
 import NotFound from "@/pages/not-found";
 
 function AppLayout({ children }: { children: React.ReactNode }) {
@@ -117,6 +118,12 @@ function Router() {
       <Route path="/admin/usuarios">
         <AppLayout>
           <AdminGuard><AdminUsuariosPage /></AdminGuard>
+        </AppLayout>
+      </Route>
+
+      <Route path="/admin/settings">
+        <AppLayout>
+          <AdminGuard><AdminSettingsPage /></AdminGuard>
         </AppLayout>
       </Route>
       

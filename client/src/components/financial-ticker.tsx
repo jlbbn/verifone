@@ -1,24 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-
-interface TickerMessage {
-  symbol: string;
-  value: string;
-}
-
-const TICKER_MESSAGES: TickerMessage[] = [
-  { symbol: 'ON', value: '$22.53' },
-  { symbol: 'CAD/MXN', value: '$13.20' },
-  { symbol: 'BTC/USD', value: '$54,325.75' },
-  { symbol: 'ETH/USD', value: '$2,670.30' },
-  { symbol: 'XRP/USD', value: '$0.52' },
-  { symbol: 'LTC/USD', value: '$142.87' },
-  { symbol: 'DOT/USD', value: '$15.32' },
-  { symbol: 'ADA/USD', value: '$0.82' },
-];
+import { useSystemSettings } from '@/hooks/use-system-settings';
+import { DEFAULT_SYSTEM_SETTINGS } from '@shared/schema';
 
 export function FinancialTicker() {
+  const { data: settings } = useSystemSettings();
+  const items = settings?.tickerItems ?? DEFAULT_SYSTEM_SETTINGS.tickerItems;
+
   const [position, setPosition] = useState(0);
-  const [isPaused, setIsPaused] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const requestRef = useRef<number>();
@@ -28,33 +16,23 @@ export function FinancialTicker() {
     if (contentRef.current) {
       setContentWidth(contentRef.current.scrollWidth / 4);
     }
-  }, []);
+  }, [items]);
 
   useEffect(() => {
-    if (isPaused || contentWidth === 0) return;
-
+    if (contentWidth === 0) return;
     const animate = () => {
       setPosition((prev) => {
-        const newPos = prev - 1;
-        if (newPos <= -contentWidth) {
-          return newPos % contentWidth;
-        }
-        return newPos;
+        const next = prev - 1;
+        return next <= -contentWidth ? next % contentWidth : next;
       });
       requestRef.current = requestAnimationFrame(animate);
     };
-
     requestRef.current = requestAnimationFrame(animate);
-
-    return () => {
-      if (requestRef.current) {
-        cancelAnimationFrame(requestRef.current);
-      }
-    };
-  }, [isPaused, contentWidth]);
+    return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); };
+  }, [contentWidth]);
 
   return (
-    <div 
+    <div
       ref={containerRef}
       className="bg-black h-[50px] overflow-hidden relative border-t border-b border-gray-800"
       data-testid="financial-ticker"
@@ -64,13 +42,13 @@ export function FinancialTicker() {
         className="flex items-center h-full absolute left-0 top-0 whitespace-nowrap"
         style={{ transform: `translateX(${position}px)` }}
       >
-        {Array(4).fill(null).map((_, copyIndex) => (
-          <div key={copyIndex} className="flex items-center">
-            {TICKER_MESSAGES.map((msg, index) => (
+        {Array(4).fill(null).map((_, ci) => (
+          <div key={ci} className="flex items-center">
+            {items.map((msg, idx) => (
               <div
-                key={`${copyIndex}-${index}`}
+                key={`${ci}-${idx}`}
                 className="inline-flex items-center text-white font-['Arial'] text-sm px-5"
-                data-testid={`ticker-item-${index}-${copyIndex}`}
+                data-testid={`ticker-item-${idx}-${ci}`}
               >
                 <span className="text-[#c8322b] text-xs mr-3">●</span>
                 <span className="font-semibold">{msg.symbol}:</span>

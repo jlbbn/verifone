@@ -10,6 +10,7 @@ import {
   MonitorSmartphone,
   Users,
   ChevronRight,
+  Sliders,
 } from "lucide-react";
 import {
   Sidebar,
@@ -51,6 +52,7 @@ const menuItems = [
 
 const adminItems = [
   { title: "Gestión de Usuarios", url: "/admin/usuarios", icon: Users },
+  { title: "Configuración",       url: "/admin/settings", icon: Sliders },
 ];
 
 export function AppSidebar() {

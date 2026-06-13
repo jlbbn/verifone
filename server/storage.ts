@@ -19,7 +19,11 @@ import {
   type BankingProtocol, type InsertBankingProtocol,
   type Notification, type InsertNotification,
   type PosTerminal, type InsertPosTerminal,
+  type SystemSettings, DEFAULT_SYSTEM_SETTINGS,
 } from "@shared/schema";
+
+// In-memory system settings (shared across all sessions, resets on restart)
+let _systemSettings: SystemSettings = JSON.parse(JSON.stringify(DEFAULT_SYSTEM_SETTINGS));
 
 export interface IStorage {
   // Users
@@ -68,6 +72,10 @@ export interface IStorage {
 
   // Users (admin)
   getAllUsers(): Promise<User[]>;
+
+  // System Settings
+  getSettings(): Promise<SystemSettings>;
+  updateSettings(patch: Partial<SystemSettings>): Promise<SystemSettings>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -455,6 +463,16 @@ export class DatabaseStorage implements IStorage {
   // --- Users (admin) ---
   async getAllUsers(): Promise<User[]> {
     return db.select().from(users);
+  }
+
+  // --- System Settings ---
+  async getSettings(): Promise<SystemSettings> {
+    return JSON.parse(JSON.stringify(_systemSettings));
+  }
+
+  async updateSettings(patch: Partial<SystemSettings>): Promise<SystemSettings> {
+    _systemSettings = { ..._systemSettings, ...patch };
+    return JSON.parse(JSON.stringify(_systemSettings));
   }
 }
 

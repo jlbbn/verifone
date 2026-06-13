@@ -162,3 +162,100 @@ export interface InsertPosTerminal {
   nfc?: boolean;
   pinpad?: boolean;
 }
+
+// ─── System Settings ─────────────────────────────────────────────────────────
+export interface TickerItem {
+  symbol: string;
+  value: string;
+}
+
+export interface SystemSettings {
+  // General
+  merchantName: string;
+  merchantCity: string;
+  afiliacion: string;
+  tipoCambio: number;
+  // Caja / Balances
+  saldoAperturaUSD: number;
+  saldoSistemaUSD: number;
+  // Feed en Vivo (usuarios)
+  feedMerchant1: string;
+  feedMerchant2: string;
+  feedPosRegularUSD: number;
+  feed1643USD: number;
+  feedVisaNet101USD: number;
+  feedTerminales: string[];
+  // Ticker financiero
+  tickerItems: TickerItem[];
+  // Parámetros terminal (label + value only; UI metadata stays in frontend)
+  terminalParams: { label: string; value: string }[];
+}
+
+export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
+  merchantName: "GRUPO ASGE VENADO 69",
+  merchantCity: "CANCUN Q.ROO",
+  afiliacion: "7705397",
+  tipoCambio: 17.50,
+  saldoAperturaUSD: 45890,
+  saldoSistemaUSD: 1250000,
+  feedMerchant1: "GRUPO ASGE VENADO 69",
+  feedMerchant2: "BANXICO PLUS CANCUN",
+  feedPosRegularUSD: 2000000,
+  feed1643USD: 30000,
+  feedVisaNet101USD: 5000000,
+  feedTerminales: ["T1001", "T1002", "T1004", "T1005"],
+  tickerItems: [
+    { symbol: "ON",      value: "$22.53" },
+    { symbol: "CAD/MXN", value: "$13.20" },
+    { symbol: "BTC/USD", value: "$54,325.75" },
+    { symbol: "ETH/USD", value: "$2,670.30" },
+    { symbol: "XRP/USD", value: "$0.52" },
+    { symbol: "LTC/USD", value: "$142.87" },
+    { symbol: "DOT/USD", value: "$15.32" },
+    { symbol: "ADA/USD", value: "$0.82" },
+  ],
+  terminalParams: [
+    { label: "APLICACION",    value: "RETAIL" },
+    { label: "VERSION",       value: "PROVEEOPENAT400" },
+    { label: "AFILIACION",    value: "7705397" },
+    { label: "VERSION FECHA", value: "JUN 13 2026" },
+    { label: "PCI REBOOT",    value: "03" },
+    { label: "ARRSVEC",       value: "1.10.213" },
+    { label: "REGISTRO VHO",  value: "V660p-A" },
+    { label: "VERSION EPROM", value: "V660PT6 10.2" },
+    { label: "TIPO TERMINAL", value: "V660p-A" },
+    { label: "SERIE NUMERO",  value: "T13-768-018" },
+    { label: "PTID",          value: "71376801" },
+    { label: "NII",           value: "016" },
+    { label: "NUM DE FOLIO",  value: "****8" },
+    { label: "BANCO",         value: "" },
+    { label: "TURNOS",        value: "1" },
+    { label: "VENTA FORZADA", value: "SI" },
+    { label: "CASH BACK",     value: "SI" },
+    { label: "TIEMPO AIRE",   value: "SI" },
+    { label: "CRIPTOGRAFIA",  value: "SI" },
+    { label: "DCC MODE",      value: "0" },
+    { label: "BN#",           value: "0" },
+    { label: "IMP TICKET",    value: "3" },
+    { label: "DEVOLUCION",    value: "3" },
+    { label: "PAGOS DIF",     value: "06" },
+    { label: "AMEX OPTBLUE",  value: "SI" },
+    { label: "PLAN AMEX",     value: "SI" },
+    { label: "MANEJO CTLS",   value: "SI" },
+    { label: "MANEJO EMV",    value: "SI" },
+    { label: "EMV MODULE",    value: "VOS2 VERTEX" },
+    { label: "PP P400",       value: "SI" },
+    { label: "USUARIOS",      value: "SI" },
+    { label: "TX POR LLAVE T",value: "VENTA" },
+    { label: "SERVICOMERCIO", value: "SI" },
+    { label: "MOTO CVW2",     value: "SI" },
+    { label: "SUPER MANUAL",  value: "SI" },
+    { label: "COMM ELECTR",   value: "SI" },
+    { label: "OPS",           value: "SI" },
+    { label: "LEALTAD MEDA",  value: "SI" },
+    { label: "GIFTCARD",      value: "SI" },
+    { label: "MODO COMUNI",   value: "SOLO ETHERNET" },
+    { label: "ACTIVADO SSL",  value: "SI" },
+    { label: "ACTIVADO TLS",  value: "SI" },
+  ],
+};
