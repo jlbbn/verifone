@@ -61,6 +61,7 @@ interface POSTerminal {
   nfc: boolean;
   pinpad: boolean;
   configNote?: string;
+  systemMessage?: string;
   owner?: string;
 }
 
@@ -74,7 +75,10 @@ type ApiTerminal = {
   nfc: boolean;
   pinpad: boolean;
   configNote: string | null;
+  systemMessage: string | null;
   owner: string | null;
+  amount: number;
+  transactions: number;
 };
 
 function augmentTerminal(t: ApiTerminal, overrides?: Partial<POSTerminal>): POSTerminal {
@@ -91,6 +95,7 @@ function augmentTerminal(t: ApiTerminal, overrides?: Partial<POSTerminal>): POST
     location: t.location,
     status: statusMap[t.status] ?? "Online",
     configNote: t.configNote ?? undefined,
+    systemMessage: t.systemMessage ?? undefined,
     owner: t.owner ?? undefined,
     emv: t.emv ?? true,
     nfc: t.nfc ?? true,
@@ -101,8 +106,8 @@ function augmentTerminal(t: ApiTerminal, overrides?: Partial<POSTerminal>): POST
     signalStrength: t.status === "offline" ? 0 : Math.min(100, 60 + (num * 13) % 40),
     uptime: t.status === "offline" ? "0%" : `${(90 + ((num * 13) % 99) / 10).toFixed(1)}%`,
     lastTx: t.status === "offline" ? "Sin conexión" : `Hace ${((num % 5) + 1) * 10} seg`,
-    transactions: (num % 4) * 100 + (num * 37) % 300,
-    amount: num * 350000 + (num * 37000) % 500000,
+    transactions: t.transactions ?? 0,
+    amount: t.amount ?? 0,
     efficiency: t.status === "offline" ? 70 + (num * 5) % 15 : Math.min(99, 90 + (num * 3) % 9),
   };
   return overrides ? { ...base, ...overrides } : base;
@@ -178,6 +183,8 @@ export default function POSPage() {
   const [editLocation, setEditLocation] = useState("");
   const [editStatus, setEditStatus] = useState("");
   const [editNote, setEditNote] = useState("");
+  const [editSystemMessage, setEditSystemMessage] = useState("");
+  const [editAmount, setEditAmount] = useState("");
 
   // Terminales propias del usuario (no-admin)
   const { data: myApiTerminals = [] } = useQuery<ApiTerminal[]>({ queryKey: ["/api/terminals/mine"] });
@@ -281,6 +288,8 @@ export default function POSPage() {
     setEditLocation(terminal.location);
     setEditStatus(terminal.status.toLowerCase());
     setEditNote(terminal.configNote ?? "");
+    setEditSystemMessage(terminal.systemMessage ?? "");
+    setEditAmount(String(terminal.amount ?? 0));
     setEditOpen(true);
   }
 
@@ -302,7 +311,7 @@ export default function POSPage() {
 
   // Mutation: editar terminal (PATCH)
   const editMutation = useMutation({
-    mutationFn: async (data: { id: string; model: string; location: string; status: string; configNote: string | null }) => {
+    mutationFn: async (data: { id: string; model: string; location: string; status: string; configNote: string | null; systemMessage: string | null; amount: number }) => {
       const { id, ...body } = data;
       const res = await apiRequest("PATCH", `/api/terminals/${id}`, body);
       return res.json();
@@ -486,6 +495,15 @@ export default function POSPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              {t.systemMessage && (
+                <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-200 rounded-md px-3 py-2.5" data-testid={`banner-system-message-${t.terminalId}`}>
+                  <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-semibold text-amber-800">Mensaje del sistema</p>
+                    <p className="text-sm text-amber-700 mt-0.5">{t.systemMessage}</p>
+                  </div>
+                </div>
+              )}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
                   <p className="text-xs text-muted-foreground">Transacciones</p>
@@ -493,7 +511,7 @@ export default function POSPage() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Monto procesado</p>
-                  <p className="text-lg font-bold">${t.amount.toLocaleString("es-MX", { minimumFractionDigits: 2 })}</p>
+                  <p className="text-lg font-bold" data-testid={`text-amount-${t.terminalId}`}>${t.amount.toLocaleString("es-MX", { minimumFractionDigits: 2 })}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Eficiencia</p>
@@ -1059,7 +1077,37 @@ export default function POSPage() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="e-note">Nota de configuración (opcional)</Label>
+              <Label htmlFor="e-amount">Monto procesado (USD)</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                <Input
+                  id="e-amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={editAmount}
+                  onChange={e => setEditAmount(e.target.value)}
+                  placeholder="0.00"
+                  className="pl-6"
+                  data-testid="input-edit-amount"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">Monto total procesado que ve el usuario en su terminal.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="e-sysmsg">Mensaje del sistema para el usuario (opcional)</Label>
+              <Textarea
+                id="e-sysmsg"
+                value={editSystemMessage}
+                onChange={e => setEditSystemMessage(e.target.value)}
+                placeholder="Ej. En proceso de configuración..."
+                className="resize-none text-sm"
+                data-testid="input-edit-system-message"
+              />
+              <p className="text-xs text-muted-foreground">Este mensaje aparece como aviso destacado en la vista del usuario. Déjalo vacío para no mostrar ninguno.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="e-note">Nota de configuración interna (opcional)</Label>
               <Textarea id="e-note" value={editNote} onChange={e => setEditNote(e.target.value)} placeholder="Ej. Actualización de firmware programada..." className="resize-none text-sm" data-testid="input-edit-note" />
             </div>
           </div>
@@ -1068,7 +1116,15 @@ export default function POSPage() {
             <Button
               className="bg-[#c8322b] text-white"
               disabled={!editModel || !editLocation.trim() || !editStatus || editMutation.isPending}
-              onClick={() => editTarget && editMutation.mutate({ id: editTarget.id, model: editModel, location: editLocation.trim(), status: editStatus, configNote: editNote.trim() || null })}
+              onClick={() => editTarget && editMutation.mutate({
+                id: editTarget.id,
+                model: editModel,
+                location: editLocation.trim(),
+                status: editStatus,
+                configNote: editNote.trim() || null,
+                systemMessage: editSystemMessage.trim() || null,
+                amount: parseFloat(editAmount) || 0,
+              })}
               data-testid="button-edit-submit"
             >
               {editMutation.isPending ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Guardando...</> : <><CheckCircle className="w-4 h-4 mr-1" /> Guardar Cambios</>}

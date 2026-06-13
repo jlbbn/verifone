@@ -434,8 +434,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         location: z.string().min(1).optional(),
         status: z.enum(["online", "offline", "idle", "reconfigured"]).optional(),
         configNote: z.string().nullable().optional(),
+        systemMessage: z.string().nullable().optional(),
         model: z.string().min(1).optional(),
         owner: z.string().nullable().optional(),
+        amount: z.number().min(0).optional(),
       });
       const parsed = bodySchema.safeParse(req.body);
       if (!parsed.success) {
