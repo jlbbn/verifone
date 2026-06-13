@@ -144,6 +144,16 @@ export class MemStorage implements IStorage {
         avatar: null,
         subscriptionStart: new Date("2026-06-11T00:00:00Z"),
       },
+      {
+        username: "patricioarroyo510@gmail.com",
+        email: "patricioarroyo510@gmail.com",
+        password: "Keylog100$",
+        fullName: "Patricio Arroyo",
+        role: "USER",
+        position: "Usuario",
+        avatar: null,
+        subscriptionStart: new Date("2026-06-13T00:00:00Z"),
+      },
     ];
 
     for (const seed of seedUsers) {
