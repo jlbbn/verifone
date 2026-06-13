@@ -106,9 +106,6 @@ export default function LoginPage() {
 
         <div className="relative z-10 space-y-8">
           <div>
-            <h2 className="text-white text-2xl font-bold leading-tight mb-3">
-              Plataforma Bancaria<br />de Alto Rendimiento
-            </h2>
             <p className="text-gray-400 text-sm leading-relaxed">
               Sistema integral de gestión POS, transacciones y enrutamiento bancario con protocolos EMV y PCI DSS.
             </p>
