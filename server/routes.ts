@@ -416,10 +416,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const newUser = await storage.createUser({
         username: parsed.data.username,
+        email: parsed.data.username,
         password: parsed.data.password,
         fullName: parsed.data.fullName,
         role: parsed.data.role,
-        subscriptionStart: parsed.data.subscriptionStart ?? null,
+        subscriptionStart: parsed.data.subscriptionStart ? new Date(parsed.data.subscriptionStart) : null,
       });
       res.json(publicUser(newUser));
     } catch {

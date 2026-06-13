@@ -8,12 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import {
   Wallet, TrendingUp, TrendingDown, DollarSign, Plus, Minus,
   Clock, ArrowUpRight, ArrowDownRight, BarChart2, Calculator,
-  FileText, ShieldCheck, RefreshCw, X, Check, Banknote
+  FileText, ShieldCheck, X, Check, Lock, AlertTriangle, CreditCard
 } from "lucide-react";
 
 const movSchema = z.object({
@@ -34,32 +34,116 @@ interface Movement {
   reference?: string;
   time: string;
   user: string;
+  protocol?: string;
+  cardType?: string;
+  authCode?: string;
 }
 
-const INGRESO_CATS = ["Depósito en efectivo", "Transferencia bancaria", "Venta POS", "Cobranza", "Otro ingreso"];
-const EGRESO_CATS  = ["Retiro cliente", "Pago a proveedor", "Gastos operativos", "Devolución", "Otro egreso"];
+// Sin "Depósito en efectivo" — solo operaciones electrónicas permitidas por la plataforma
+const INGRESO_CATS = [
+  "Liquidación POS",
+  "Transferencia SPEI",
+  "Cobro comisiones",
+  "Venta tarjeta internacional",
+  "Venta tarjeta nacional",
+  "Reintegro operación",
+  "Otro ingreso electrónico",
+];
+const EGRESO_CATS = [
+  "Retiro via protocolo 1643",
+  "Pago a proveedor",
+  "Comisión procesadora",
+  "Devolución cliente",
+  "Gastos operativos",
+  "Otro egreso",
+];
 
+// Transacciones realistas basadas en operaciones POS internacionales (BZPAY style)
 const initialMovements: Movement[] = [
-  { id: "MOV-001", type: "ingreso", amount: 2500, category: "Depósito en efectivo", description: "Depósito ventanilla 01", time: "10:30 AM", user: "Admin" },
-  { id: "MOV-002", type: "egreso",  amount: 1800, category: "Retiro cliente", description: "Retiro cliente #1234", reference: "CLT-1234", time: "11:15 AM", user: "Admin" },
-  { id: "MOV-003", type: "ingreso", amount: 3200, category: "Transferencia bancaria", description: "Transferencia SPEI entrante", reference: "SPEI-88210", time: "12:00 PM", user: "Admin" },
-  { id: "MOV-004", type: "egreso",  amount: 950,  category: "Pago a proveedor", description: "Pago mantenimiento POS", time: "2:30 PM", user: "Admin" },
-  { id: "MOV-005", type: "ingreso", amount: 1500, category: "Venta POS", description: "Liquidación terminal T1004", time: "3:15 PM", user: "Admin" },
-  { id: "MOV-006", type: "egreso",  amount: 600,  category: "Gastos operativos", description: "Papelería y suministros", time: "4:00 PM", user: "Admin" },
-  { id: "MOV-007", type: "ingreso", amount: 4800, category: "Cobranza", description: "Cobro comisiones acumuladas", reference: "COM-042", time: "5:30 PM", user: "Admin" },
+  {
+    id: "MOV-001", type: "ingreso", amount: 20160.00,
+    category: "Venta tarjeta internacional",
+    description: "Venta Mastercard Internacional — GRUPO ASGE",
+    reference: "AUTH-596122", time: "06:55 PM", user: "Admin",
+    protocol: "101.2 M2", cardType: "Mastercard", authCode: "596122",
+  },
+  {
+    id: "MOV-002", type: "ingreso", amount: 18500.00,
+    category: "Liquidación POS",
+    description: "Liquidación terminal T1004 — VISA General",
+    reference: "AUTH-441829", time: "05:40 PM", user: "Admin",
+    protocol: "101.1 M1", cardType: "VISA", authCode: "441829",
+  },
+  {
+    id: "MOV-003", type: "ingreso", amount: 15800.00,
+    category: "Venta tarjeta internacional",
+    description: "Venta Mastercard — INTERNACIONAL GENERAL OPER 15",
+    reference: "AUTH-334211", time: "04:22 PM", user: "Admin",
+    protocol: "201.2", cardType: "Mastercard", authCode: "334211",
+  },
+  {
+    id: "MOV-004", type: "egreso", amount: 3200.00,
+    category: "Retiro via protocolo 1643",
+    description: "Retiro operación — Protocolo 1643 POS T1005",
+    reference: "PRT-1643-007", time: "03:15 PM", user: "Admin",
+    protocol: "1643",
+  },
+  {
+    id: "MOV-005", type: "ingreso", amount: 12750.00,
+    category: "Venta tarjeta nacional",
+    description: "Venta VISA Nacional — Terminal T1001",
+    reference: "AUTH-881203", time: "02:30 PM", user: "Admin",
+    protocol: "101.1 M1", cardType: "VISA", authCode: "881203",
+  },
+  {
+    id: "MOV-006", type: "egreso", amount: 1200.00,
+    category: "Comisión procesadora",
+    description: "Comisión red EMV — Procesadora internacional",
+    reference: "COM-EMV-042", time: "01:45 PM", user: "Admin",
+    protocol: "201.1",
+  },
+  {
+    id: "MOV-007", type: "ingreso", amount: 9480.00,
+    category: "Cobro comisiones",
+    description: "Comisiones acumuladas red T1002/T1004",
+    reference: "COM-NET-018", time: "12:00 PM", user: "Admin",
+    protocol: "101.3 M3",
+  },
+  {
+    id: "MOV-008", type: "ingreso", amount: 22400.00,
+    category: "Venta tarjeta internacional",
+    description: "Venta Mastercard Internacional — OPER 31 LOTE 4",
+    reference: "AUTH-774019", time: "10:15 AM", user: "Admin",
+    protocol: "101.2 M2", cardType: "Mastercard", authCode: "774019",
+  },
+  {
+    id: "MOV-009", type: "egreso", amount: 850.00,
+    category: "Gastos operativos",
+    description: "Mantenimiento sistema POS — Proveedor técnico",
+    reference: "SVC-2026-11", time: "09:00 AM", user: "Admin",
+  },
 ];
 
-const denominations = [
-  { bill: "$1,000", qty: 30 },
-  { bill: "$500",   qty: 30 },
-  { bill: "$200",   qty: 20 },
-  { bill: "$100",   qty: 40 },
-  { bill: "$50",    qty: 20 },
-  { bill: "$20",    qty: 27 },
-];
+function getSubscriptionStatus(startIso: string | null | undefined) {
+  if (!startIso) return { active: false, daysLeft: 0 };
+  const start = new Date(startIso);
+  if (isNaN(start.getTime())) return { active: false, daysLeft: 0 };
+  const end = new Date(start);
+  end.setMonth(end.getMonth() + 12);
+  const daysLeft = Math.ceil((end.getTime() - Date.now()) / 86400000);
+  return { active: daysLeft > 0, daysLeft: Math.max(0, daysLeft) };
+}
+
+// Cuántos movimientos puede ver un usuario sin suscripción activa
+const USER_PREVIEW_LIMIT = 3;
 
 export default function CajaPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
+  const sub = getSubscriptionStatus(user?.subscriptionStart);
+  const hasFullAccess = isAdmin || sub.active;
+
   const [movements, setMovements] = useState<Movement[]>(initialMovements);
   const [showForm, setShowForm] = useState<"ingreso" | "egreso" | null>(null);
   const [filterType, setFilterType] = useState<"all" | "ingreso" | "egreso">("all");
@@ -68,6 +152,10 @@ export default function CajaPage() {
     resolver: zodResolver(movSchema),
     defaultValues: { type: "ingreso", amount: "", category: "", description: "", reference: "" },
   });
+
+  const allFiltered = movements.filter(m => filterType === "all" || m.type === filterType);
+  const visibleMovements = hasFullAccess ? allFiltered : allFiltered.slice(0, USER_PREVIEW_LIMIT);
+  const hiddenCount = hasFullAccess ? 0 : Math.max(0, allFiltered.length - USER_PREVIEW_LIMIT);
 
   const ingresos = movements.filter(m => m.type === "ingreso").reduce((s, m) => s + m.amount, 0);
   const egresos  = movements.filter(m => m.type === "egreso").reduce((s, m) => s + m.amount, 0);
@@ -87,68 +175,60 @@ export default function CajaPage() {
       description: data.description,
       reference: data.reference || undefined,
       time: new Date().toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" }),
-      user: "Admin",
+      user: user?.fullName ?? "Sistema",
     };
     setMovements(prev => [newMov, ...prev]);
     setShowForm(null);
     toast({ title: data.type === "ingreso" ? "Ingreso registrado" : "Egreso registrado", description: `$${parseFloat(data.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })} — ${data.description}` });
   }
 
-  const efectivoFisico = denominations.reduce((s, d) => s + parseInt(d.bill.replace(/\D/g, "")) * d.qty, 0);
-
   function downloadFile(filename: string, content: string, mime = "text/plain;charset=utf-8") {
     const blob = new Blob([content], { type: mime });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
+    a.href = url; a.download = filename; a.click();
     URL.revokeObjectURL(url);
   }
 
   function handleReporteDiario() {
     const fecha = new Date().toLocaleDateString("es-MX");
-    const header = "ID,Tipo,Categoría,Descripción,Referencia,Monto,Hora,Usuario";
+    const header = "ID,Tipo,Categoría,Descripción,Referencia,Monto,Hora,Protocolo,Tarjeta,Auth";
     const rows = movements.map(m =>
-      [m.id, m.type, m.category, `"${m.description.replace(/"/g, '""')}"`, m.reference || "", m.amount.toFixed(2), m.time, m.user].join(",")
+      [m.id, m.type, m.category, `"${m.description.replace(/"/g, '""')}"`,
+       m.reference || "", m.amount.toFixed(2), m.time,
+       m.protocol || "", m.cardType || "", m.authCode || ""].join(",")
     );
     downloadFile(`reporte-caja-${fecha.replace(/\//g, "-")}.csv`, [header, ...rows].join("\n"), "text/csv;charset=utf-8");
-    toast({ title: "Reporte diario generado", description: `${movements.length} movimientos exportados a CSV.` });
+    toast({ title: "Reporte generado", description: `${movements.length} movimientos exportados a CSV.` });
   }
 
   function handleCierreCaja() {
     const fecha = new Date().toLocaleString("es-MX", { dateStyle: "long", timeStyle: "short" });
     const reporte = [
       "========================================",
-      "        BANXICO PLUS — CIERRE DE CAJA",
+      "     BANXICO PLUS — CIERRE DE CAJA",
       "========================================",
       `Fecha de cierre : ${fecha}`,
-      `Cajero          : Admin`,
+      `Operador        : ${user?.fullName ?? "Admin"}`,
       "----------------------------------------",
       `Saldo apertura  : $45,890.00`,
-      `Total ingresos  : +$${ingresos.toLocaleString("en-US", { minimumFractionDigits: 2 })}  (${movements.filter(m => m.type === "ingreso").length} mov.)`,
-      `Total egresos   : -$${egresos.toLocaleString("en-US", { minimumFractionDigits: 2 })}  (${movements.filter(m => m.type === "egreso").length} mov.)`,
+      `Total ingresos  : +$${ingresos.toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
+      `Total egresos   : -$${egresos.toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
       "----------------------------------------",
       `SALDO FINAL     : $${saldo.toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
-      `Efectivo físico : $${efectivoFisico.toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
       "========================================",
       "Documento simulado — Banxico Plus",
     ].join("\n");
     downloadFile(`cierre-caja-${new Date().toISOString().slice(0, 10)}.txt`, reporte);
-    toast({ title: "Cierre de caja realizado", description: `Saldo final: $${saldo.toLocaleString("en-US", { minimumFractionDigits: 2 })}. Reporte descargado.` });
+    toast({ title: "Cierre de caja realizado", description: `Saldo final: $${saldo.toLocaleString("en-US", { minimumFractionDigits: 2 })}` });
   }
 
   function handleArqueo() {
-    const diferencia = efectivoFisico - saldo;
-    const cuadra = Math.abs(diferencia) < 0.01;
     toast({
-      title: cuadra ? "Arqueo cuadrado ✓" : "Diferencia detectada en arqueo",
-      description: `Efectivo contado: $${efectivoFisico.toLocaleString("en-US", { minimumFractionDigits: 2 })} · Saldo sistema: $${saldo.toLocaleString("en-US", { minimumFractionDigits: 2 })} · Diferencia: ${diferencia >= 0 ? "+" : "-"}$${Math.abs(diferencia).toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
-      variant: cuadra ? undefined : "destructive",
+      title: "Arqueo de caja",
+      description: `Ingresos: $${ingresos.toLocaleString("en-US", { minimumFractionDigits: 2 })} · Egresos: $${egresos.toLocaleString("en-US", { minimumFractionDigits: 2 })} · Saldo: $${saldo.toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
     });
   }
-
-  const filtered = movements.filter(m => filterType === "all" || m.type === filterType);
 
   return (
     <div className="p-4 md:p-6 space-y-5">
@@ -158,21 +238,45 @@ export default function CajaPage() {
           <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
             <Wallet className="w-7 h-7 text-[#c8322b]" /> Caja
           </h1>
-          <p className="text-sm text-muted-foreground">Gestión de efectivo · {new Date().toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" })}</p>
+          <p className="text-sm text-muted-foreground">
+            Gestión de operaciones · {new Date().toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" })}
+          </p>
         </div>
-        <div className="flex gap-2">
-          <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => openForm("ingreso")} data-testid="button-ingreso">
-            <Plus className="w-4 h-4 mr-1" /> Registrar Ingreso
-          </Button>
-          <Button size="sm" variant="outline" className="border-red-400 text-red-600" onClick={() => openForm("egreso")} data-testid="button-egreso">
-            <Minus className="w-4 h-4 mr-1" /> Registrar Egreso
-          </Button>
-        </div>
+        {isAdmin && (
+          <div className="flex gap-2">
+            <Button size="sm" className="bg-green-600 text-white" onClick={() => openForm("ingreso")} data-testid="button-ingreso">
+              <Plus className="w-4 h-4 mr-1" /> Registrar Ingreso
+            </Button>
+            <Button size="sm" variant="outline" className="border-red-400 text-red-600" onClick={() => openForm("egreso")} data-testid="button-egreso">
+              <Minus className="w-4 h-4 mr-1" /> Registrar Egreso
+            </Button>
+          </div>
+        )}
       </div>
+
+      {/* Subscription pending banner */}
+      {!hasFullAccess && (
+        <Card className="border-amber-300 bg-amber-50/60">
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-md bg-amber-100 flex items-center justify-center flex-shrink-0">
+                <Lock className="w-4 h-4 text-amber-600" />
+              </div>
+              <div>
+                <p className="font-semibold text-amber-900 text-sm">Suscripción pago pendiente</p>
+                <p className="text-xs text-amber-700 mt-0.5">
+                  Para acceder al historial completo de movimientos y todas las funciones de la plataforma, 
+                  realiza el pago de tu suscripción o contacta al administrador.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* KPIs */}
       <div className="grid gap-3 sm:grid-cols-3">
-        <Card className="hover-elevate border-l-4 border-l-green-500">
+        <Card className="hover-elevate">
           <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Saldo en Caja</CardTitle>
             <div className="w-8 h-8 rounded-md bg-green-100 flex items-center justify-center">
@@ -181,13 +285,15 @@ export default function CajaPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-green-600" data-testid="saldo-caja">
-              ${saldo.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+              {hasFullAccess
+                ? `$${saldo.toLocaleString("en-US", { minimumFractionDigits: 2 })}`
+                : "••••••"}
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">USD — Actualizado ahora</p>
           </CardContent>
         </Card>
 
-        <Card className="hover-elevate border-l-4 border-l-blue-500">
+        <Card className="hover-elevate">
           <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Ingresos Hoy</CardTitle>
             <div className="w-8 h-8 rounded-md bg-blue-100 flex items-center justify-center">
@@ -196,13 +302,13 @@ export default function CajaPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-blue-600">
-              ${ingresos.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+              {hasFullAccess ? `$${ingresos.toLocaleString("en-US", { minimumFractionDigits: 2 })}` : "••••••"}
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5">{movements.filter(m => m.type === "ingreso").length} movimientos</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{movements.filter(m => m.type === "ingreso").length} operaciones</p>
           </CardContent>
         </Card>
 
-        <Card className="hover-elevate border-l-4 border-l-red-500">
+        <Card className="hover-elevate">
           <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Egresos Hoy</CardTitle>
             <div className="w-8 h-8 rounded-md bg-red-100 flex items-center justify-center">
@@ -211,16 +317,16 @@ export default function CajaPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-red-600">
-              ${egresos.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+              {hasFullAccess ? `$${egresos.toLocaleString("en-US", { minimumFractionDigits: 2 })}` : "••••••"}
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5">{movements.filter(m => m.type === "egreso").length} movimientos</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{movements.filter(m => m.type === "egreso").length} operaciones</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Registration Form */}
-      {showForm && (
-        <Card className={`hover-elevate border-2 ${showForm === "ingreso" ? "border-green-400" : "border-red-400"}`}>
+      {showForm && isAdmin && (
+        <Card className={`border-2 ${showForm === "ingreso" ? "border-green-400" : "border-red-400"}`}>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className={`flex items-center gap-2 ${showForm === "ingreso" ? "text-green-700" : "text-red-700"}`}>
@@ -248,15 +354,12 @@ export default function CajaPage() {
                       <FormMessage />
                     </FormItem>
                   )} />
-
                   <FormField control={form.control} name="category" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Categoría</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
-                          <SelectTrigger data-testid="select-category">
-                            <SelectValue placeholder="Seleccionar..." />
-                          </SelectTrigger>
+                          <SelectTrigger data-testid="select-category"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
                         </FormControl>
                         <SelectContent>
                           {(showForm === "ingreso" ? INGRESO_CATS : EGRESO_CATS).map(c => (
@@ -268,29 +371,27 @@ export default function CajaPage() {
                     </FormItem>
                   )} />
                 </div>
-
                 <div className="grid gap-4 sm:grid-cols-2">
                   <FormField control={form.control} name="description" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Descripción</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="Descripción del movimiento" data-testid="input-descripcion" />
+                        <Input {...field} placeholder="Descripción de la operación" data-testid="input-descripcion" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
                   <FormField control={form.control} name="reference" render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Referencia (Opcional)</FormLabel>
+                      <FormLabel>Referencia / Auth (Opcional)</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="REF-001" className="font-mono" data-testid="input-referencia" />
+                        <Input {...field} placeholder="AUTH-000000" className="font-mono" data-testid="input-referencia" />
                       </FormControl>
                     </FormItem>
                   )} />
                 </div>
-
                 <div className="flex gap-3">
-                  <Button type="submit" className={showForm === "ingreso" ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"} data-testid="button-guardar-mov">
+                  <Button type="submit" className={showForm === "ingreso" ? "bg-green-600 text-white" : "bg-red-600 text-white"} data-testid="button-guardar-mov">
                     <Check className="w-4 h-4 mr-1" /> Guardar
                   </Button>
                   <Button type="button" variant="outline" onClick={() => setShowForm(null)}>Cancelar</Button>
@@ -310,7 +411,9 @@ export default function CajaPage() {
                 <CardTitle className="flex items-center gap-2">
                   <FileText className="w-4 h-4" /> Movimientos
                 </CardTitle>
-                <CardDescription>Registro del día</CardDescription>
+                <CardDescription>
+                  {hasFullAccess ? "Registro del día" : `Mostrando ${USER_PREVIEW_LIMIT} de ${allFiltered.length} operaciones`}
+                </CardDescription>
               </div>
               <div className="flex gap-1">
                 {(["all", "ingreso", "egreso"] as const).map(f => (
@@ -328,15 +431,25 @@ export default function CajaPage() {
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y">
-              {filtered.map((mov) => (
-                <div key={mov.id} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors" data-testid={`row-mov-${mov.id}`}>
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${mov.type === "ingreso" ? "bg-green-100" : "bg-red-100"}`}>
+              {visibleMovements.map((mov) => (
+                <div key={mov.id} className="flex items-start gap-3 px-4 py-3 hover:bg-muted/30 transition-colors" data-testid={`row-mov-${mov.id}`}>
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${mov.type === "ingreso" ? "bg-green-100" : "bg-red-100"}`}>
                     {mov.type === "ingreso" ? <ArrowUpRight className="w-4 h-4 text-green-600" /> : <ArrowDownRight className="w-4 h-4 text-red-600" />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold truncate">{mov.description}</p>
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap mt-0.5">
                       <span className="text-xs text-muted-foreground">{mov.category}</span>
+                      {mov.protocol && (
+                        <Badge className="bg-blue-100 text-blue-700 border-blue-200 no-default-active-elevate text-[10px] px-1.5">
+                          {mov.protocol}
+                        </Badge>
+                      )}
+                      {mov.cardType && (
+                        <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                          <CreditCard className="w-3 h-3" /> {mov.cardType}
+                        </span>
+                      )}
                       {mov.reference && <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded">{mov.reference}</span>}
                     </div>
                   </div>
@@ -349,39 +462,26 @@ export default function CajaPage() {
                 </div>
               ))}
             </div>
+
+            {/* Subscription lock overlay */}
+            {!hasFullAccess && hiddenCount > 0 && (
+              <div className="border-t border-border px-4 py-6 flex flex-col items-center gap-3 bg-muted/20 text-center">
+                <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                  <Lock className="w-5 h-5 text-amber-600" />
+                </div>
+                <div>
+                  <p className="font-semibold text-sm">Suscripción pago pendiente</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {hiddenCount} movimiento{hiddenCount > 1 ? "s" : ""} oculto{hiddenCount > 1 ? "s" : ""}. Para acceder al historial completo, activa tu suscripción.
+                  </p>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
         {/* Sidebar */}
         <div className="space-y-4">
-          {/* Denomination breakdown */}
-          <Card className="hover-elevate">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Banknote className="w-4 h-4 text-[#c8322b]" /> Denominaciones en Caja
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-1.5">
-              {denominations.map((d, i) => (
-                <div key={i} className="flex items-center justify-between py-1 border-b border-border last:border-0">
-                  <span className="text-sm font-semibold">{d.bill}</span>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-muted-foreground">{d.qty} billetes</span>
-                    <span className="text-sm font-bold text-green-600">
-                      ${(parseInt(d.bill.replace(/\D/g, "")) * d.qty).toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-              ))}
-              <div className="pt-2 flex items-center justify-between font-bold">
-                <span className="text-sm">Total Efectivo</span>
-                <span className="text-green-600">
-                  ${denominations.reduce((s, d) => s + parseInt(d.bill.replace(/\D/g, "")) * d.qty, 0).toLocaleString()}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Summary */}
           <Card className="hover-elevate bg-slate-900 text-white">
             <CardHeader className="pb-2">
@@ -391,10 +491,10 @@ export default function CajaPage() {
             </CardHeader>
             <CardContent className="space-y-2">
               {[
-                { label: "Saldo apertura", value: "$45,890.00", color: "text-slate-300" },
-                { label: "Total ingresos", value: `+$${ingresos.toLocaleString("en-US", { minimumFractionDigits: 2 })}`, color: "text-green-400" },
-                { label: "Total egresos", value: `-$${egresos.toLocaleString("en-US", { minimumFractionDigits: 2 })}`, color: "text-red-400" },
-                { label: "Saldo actual", value: `$${saldo.toLocaleString("en-US", { minimumFractionDigits: 2 })}`, color: "text-white font-bold" },
+                { label: "Saldo apertura", value: hasFullAccess ? "$45,890.00" : "••••", color: "text-slate-300" },
+                { label: "Total ingresos", value: hasFullAccess ? `+$${ingresos.toLocaleString("en-US", { minimumFractionDigits: 2 })}` : "••••", color: "text-green-400" },
+                { label: "Total egresos",  value: hasFullAccess ? `-$${egresos.toLocaleString("en-US", { minimumFractionDigits: 2 })}` : "••••", color: "text-red-400" },
+                { label: "Saldo actual",   value: hasFullAccess ? `$${saldo.toLocaleString("en-US", { minimumFractionDigits: 2 })}` : "••••", color: "text-white font-bold" },
               ].map((item, i) => (
                 <div key={i} className={`flex items-center justify-between py-1.5 ${i === 3 ? "border-t border-slate-600 mt-1 pt-2" : "border-b border-slate-700"}`}>
                   <span className="text-xs text-slate-400">{item.label}</span>
@@ -404,23 +504,63 @@ export default function CajaPage() {
             </CardContent>
           </Card>
 
+          {/* Info: sin efectivo */}
+          <Card className="hover-elevate border-blue-200 bg-blue-50/40">
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-semibold text-blue-800">Solo operaciones electrónicas</p>
+                  <p className="text-xs text-blue-700 mt-0.5">
+                    Depósitos en efectivo no disponibles. Retiros únicamente via protocolo 1643 POS.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Controls (admin only) */}
+          {isAdmin && (
+            <Card className="hover-elevate">
+              <CardContent className="pt-4 pb-3">
+                <div className="flex items-center gap-2 mb-3">
+                  <ShieldCheck className="w-4 h-4 text-green-600" />
+                  <span className="text-sm font-semibold">Controles</span>
+                </div>
+                <div className="space-y-2">
+                  <Button variant="outline" size="sm" className="w-full justify-start text-xs" onClick={handleCierreCaja} data-testid="button-cierre-caja">
+                    <FileText className="w-3.5 h-3.5 mr-2" /> Cierre de Caja
+                  </Button>
+                  <Button variant="outline" size="sm" className="w-full justify-start text-xs" onClick={handleArqueo} data-testid="button-arqueo">
+                    <Calculator className="w-3.5 h-3.5 mr-2" /> Arqueo de Caja
+                  </Button>
+                  <Button variant="outline" size="sm" className="w-full justify-start text-xs" onClick={handleReporteDiario} data-testid="button-reporte">
+                    <BarChart2 className="w-3.5 h-3.5 mr-2" /> Reporte Diario
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Protocol reference */}
           <Card className="hover-elevate">
-            <CardContent className="pt-4 pb-3">
-              <div className="flex items-center gap-2 mb-3">
-                <ShieldCheck className="w-4 h-4 text-green-600" />
-                <span className="text-sm font-semibold">Controles</span>
-              </div>
-              <div className="space-y-2">
-                <Button variant="outline" size="sm" className="w-full justify-start text-xs" onClick={handleCierreCaja} data-testid="button-cierre-caja">
-                  <FileText className="w-3.5 h-3.5 mr-2" /> Cierre de Caja
-                </Button>
-                <Button variant="outline" size="sm" className="w-full justify-start text-xs" onClick={handleArqueo} data-testid="button-arqueo">
-                  <Calculator className="w-3.5 h-3.5 mr-2" /> Arqueo de Caja
-                </Button>
-                <Button variant="outline" size="sm" className="w-full justify-start text-xs" onClick={handleReporteDiario} data-testid="button-reporte">
-                  <BarChart2 className="w-3.5 h-3.5 mr-2" /> Reporte Diario
-                </Button>
-              </div>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Protocolos Activos</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1.5 pb-4">
+              {[
+                { code: "101.1 M1", label: "Transferencia nacional" },
+                { code: "101.2 M2", label: "Transferencia internacional" },
+                { code: "101.3 M3", label: "Transferencia segura" },
+                { code: "201.1",    label: "Pago nacional" },
+                { code: "201.2",    label: "Pago internacional" },
+                { code: "1643",     label: "Retiro POS" },
+              ].map(p => (
+                <div key={p.code} className="flex items-center justify-between text-xs">
+                  <Badge className="bg-[#c8322b]/10 text-[#c8322b] border-[#c8322b]/20 no-default-active-elevate font-mono">{p.code}</Badge>
+                  <span className="text-muted-foreground">{p.label}</span>
+                </div>
+              ))}
             </CardContent>
           </Card>
         </div>
