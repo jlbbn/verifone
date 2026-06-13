@@ -6,13 +6,17 @@ import {
   FileText, 
   Bitcoin, 
   Lock,
-  LogOut
+  LogOut,
+  MonitorSmartphone,
+  Users,
+  ChevronRight,
 } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -39,14 +43,20 @@ const menuItems = [
   { title: "Transacciones", url: "/transacciones", icon: RefreshCw },
   { title: "Caja", url: "/caja", icon: Wallet },
   { title: "Enrutamiento POS", url: "/pos", icon: Store },
+  { title: "POS Virtual", url: "/pos-virtual", icon: MonitorSmartphone },
   { title: "Registros", url: "/registros", icon: FileText },
   { title: "Exchange Crypto", url: "/exchange", icon: Bitcoin },
   { title: "Claves Encriptadas", url: "/claves", icon: Lock },
 ];
 
+const adminItems = [
+  { title: "Gestión de Usuarios", url: "/admin/usuarios", icon: Users },
+];
+
 export function AppSidebar() {
   const [location] = useLocation();
   const { user, logout, isLoggingOut } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
 
   return (
     <Sidebar className="border-r border-sidebar-border">
@@ -76,7 +86,7 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     asChild
                     className={location === item.url ? "bg-sidebar-accent" : ""}
-                    data-testid={`nav-${item.title.toLowerCase().replace(' ', '-')}`}
+                    data-testid={`nav-${item.title.toLowerCase().replace(/ /g, "-")}`}
                   >
                     <Link href={item.url}>
                       <item.icon className="w-4 h-4" />
@@ -88,6 +98,32 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {isAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-xs text-sidebar-foreground/50 uppercase tracking-wider px-3 flex items-center gap-1">
+              <ChevronRight className="w-3 h-3" /> Administración
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {adminItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      className={location === item.url ? "bg-sidebar-accent" : ""}
+                      data-testid={`nav-${item.title.toLowerCase().replace(/ /g, "-")}`}
+                    >
+                      <Link href={item.url}>
+                        <item.icon className="w-4 h-4" />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       <SidebarFooter className="p-4 border-t border-sidebar-border">

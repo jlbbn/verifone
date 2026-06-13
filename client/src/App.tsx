@@ -14,9 +14,11 @@ import Dashboard from "@/pages/dashboard";
 import NewTransactionPage from "@/pages/new-transaction";
 import CajaPage from "@/pages/caja";
 import POSPage from "@/pages/pos";
+import POSVirtualPage from "@/pages/pos-virtual";
 import RegistrosPage from "@/pages/registros";
 import ExchangePage from "@/pages/exchange";
 import ClavesPage from "@/pages/claves";
+import AdminUsuariosPage from "@/pages/admin-users";
 import NotFound from "@/pages/not-found";
 
 function AppLayout({ children }: { children: React.ReactNode }) {
@@ -68,6 +70,12 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
+function AdminGuard({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (user?.role !== "ADMIN") return <Redirect to="/dashboard" />;
+  return <>{children}</>;
+}
+
 function Router() {
   return (
     <Switch>
@@ -89,6 +97,10 @@ function Router() {
       <Route path="/pos">
         <AppLayout><POSPage /></AppLayout>
       </Route>
+
+      <Route path="/pos-virtual">
+        <AppLayout><POSVirtualPage /></AppLayout>
+      </Route>
       
       <Route path="/registros">
         <AppLayout><RegistrosPage /></AppLayout>
@@ -100,6 +112,12 @@ function Router() {
       
       <Route path="/claves">
         <AppLayout><ClavesPage /></AppLayout>
+      </Route>
+
+      <Route path="/admin/usuarios">
+        <AppLayout>
+          <AdminGuard><AdminUsuariosPage /></AdminGuard>
+        </AppLayout>
       </Route>
       
       <Route component={NotFound} />
