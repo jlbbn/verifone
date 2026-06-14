@@ -180,17 +180,41 @@ export class DatabaseStorage implements IStorage {
 
     // --- Seed protocolos bancarios (upsert por code) ---
     const seedProtocols: BankingProtocol[] = [
-      { id: "p1",  code: "101.1", name: "Venta en línea con PIN de 4 dígitos",                       description: "Venta en línea autenticada con PIN de 4 dígitos. Requiere conexión en tiempo real con la red.",           category: "payment",    requiresSecurity: true  },
-      { id: "p2",  code: "101.2", name: "Venta en línea con PIN de 6 dígitos",                       description: "Venta en línea autenticada con PIN de 6 dígitos. Mayor seguridad que el PIN de 4 dígitos.",             category: "payment",    requiresSecurity: true  },
-      { id: "p3",  code: "101.3", name: "Compras en línea con PIN de 4 dígitos",                     description: "Transacción de compra en línea con autenticación de PIN de 4 dígitos.",                                  category: "payment",    requiresSecurity: true  },
-      { id: "p10", code: "101.6", name: "Pre-autorización y finalización en línea (1:1)",             description: "Flujo de dos pasos: pre-autoriza el monto y lo finaliza en una sola sesión conectada (ratio 1:1).",      category: "payment",    requiresSecurity: true  },
-      { id: "p11", code: "101.8", name: "En línea sin PIN",                                          description: "Venta en línea sin requerir PIN. Apta para montos bajos o tarjetas con perfil sin PIN habilitado.",      category: "payment",    requiresSecurity: false },
-      { id: "p4",  code: "201.1", name: "Finalización en un solo paso en línea con PIN de 6 dígitos",description: "Cierra y finaliza la transacción en un único paso con PIN de 6 dígitos. Requiere conexión activa.",      category: "payment",    requiresSecurity: true  },
-      { id: "p5",  code: "201.2", name: "Venta forzada sin conexión con PIN de 6 dígitos",           description: "Venta forzada en modo fuera de línea con PIN de 6 dígitos. Se sincroniza al recuperar conexión.",        category: "payment",    requiresSecurity: true  },
-      { id: "p6",  code: "201.3", name: "Sin conexión con PIN de 6 dígitos",                         description: "Transacción offline autenticada con PIN de 6 dígitos. Procesada en batch al restaurarse la conexión.",   category: "payment",    requiresSecurity: true  },
-      { id: "p7",  code: "301.1", name: "Depósito cuenta",                                           description: "Depósito directo a cuenta bancaria.",                                                                     category: "deposit",    requiresSecurity: false },
-      { id: "p8",  code: "301.2", name: "Depósito efectivo",                                         description: "Depósito en efectivo en ventanilla o terminal.",                                                          category: "deposit",    requiresSecurity: false },
-      { id: "p9",  code: "401.1", name: "Retiro ATM",                                                description: "Retiro en cajero automático.",                                                                             category: "withdrawal", requiresSecurity: true  },
+      // ── Transferencias (101.x) ────────────────────────────────────────────
+      { id: "p1", code: "101.1", name: "Transferencia básica",
+        description: "Transferencia estándar entre cuentas. Sin requisitos adicionales de validación. Procesamiento en línea.",
+        category: "transfer", requiresSecurity: false },
+      { id: "p2", code: "101.2", name: "Transferencia con validación",
+        description: "Transferencia con validación de seguridad en dos etapas. Requiere confirmación del banco emisor antes de liquidar.",
+        category: "transfer", requiresSecurity: true },
+      { id: "p3", code: "101.3", name: "Transferencia segura (recomendado)",
+        description: "Transferencia con cifrado AES-256 y validación EMV completa. Protocolo recomendado para operaciones de alto valor.",
+        category: "transfer", requiresSecurity: true },
+      // ── Pagos (201.x) ─────────────────────────────────────────────────────
+      { id: "p4", code: "201.1", name: "Pago nacional",
+        description: "Pago procesado por red bancaria local (SPEI/CoDi). Compensación en 24 horas hábiles.",
+        category: "payment", requiresSecurity: false },
+      { id: "p5", code: "201.2", name: "Pago internacional",
+        description: "Pago internacional con conversión de divisa. Procesado vía SWIFT / Visa Network. Aplica T/C vigente.",
+        category: "payment", requiresSecurity: true },
+      { id: "p6", code: "201.3", name: "Pago express",
+        description: "Liquidación inmediata con prioridad en la red. Comisión adicional aplicable. Disponible 24/7.",
+        category: "payment", requiresSecurity: true },
+      // ── Depósitos (301.x) ─────────────────────────────────────────────────
+      { id: "p7", code: "301.1", name: "Depósito cuenta",
+        description: "Depósito directo a cuenta bancaria registrada. Sin límite de monto con validación previa.",
+        category: "deposit", requiresSecurity: false },
+      { id: "p8", code: "301.2", name: "Depósito efectivo",
+        description: "Depósito en efectivo en ventanilla o terminal autorizada. Acreditación inmediata.",
+        category: "deposit", requiresSecurity: false },
+      // ── Retiros (401.x) ───────────────────────────────────────────────────
+      { id: "p9", code: "401.1", name: "Retiro ATM",
+        description: "Retiro en cajero automático. Límite diario según perfil de cuenta. Requiere PIN válido.",
+        category: "withdrawal", requiresSecurity: true },
+      // ── Especial: Venta Forzada (1643) ────────────────────────────────────
+      { id: "p12", code: "1643", name: "Venta forzada terminal manual",
+        description: "Venta forzada en modo offline para terminales sin conexión. Sincronización diferida al recuperar red. Alto valor.",
+        category: "payment", requiresSecurity: true },
     ];
 
     for (const p of seedProtocols) {
