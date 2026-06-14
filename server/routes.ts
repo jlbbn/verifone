@@ -1069,6 +1069,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ─── Subscription endpoints ─────────────────────────────────────────────────
+  const completedPayments = new Set<string>();
+
+  app.get("/api/subscription", requireSession, async (req, res) => {
+    const user = req.currentUser!;
+    const isPatricio = user.email === "patricioarroyo510@gmail.com";
+    const isPaid = completedPayments.has(user.id);
+
+    if (isPatricio) {
+      return res.json({
+        userId:          user.id,
+        userName:        user.fullName,
+        userEmail:       user.email,
+        plan:            "Usuario Banxico+ Annual",
+        totalAmount:     750,
+        paidAmount:      isPaid ? 750 : 499,
+        remainingAmount: isPaid ? 0 : 251,
+        currency:        "USDT",
+        contractDate:    "2026-06-12",
+        contractTerm:    "12 months",
+        status:          isPaid ? "complete" : "partial",
+        posUnlocked:     isPaid,
+        walletAddress:   "0xa8FAaC0297897d9c3b14a037BfDe794c1aFBa7d3",
+        walletNetwork:   "ETHEREUM (ERC20)",
+        walletToken:     "USDT",
+        company:         "Xpress Internacional",
+        phone:           "+593979632394",
+        signerName:      "José Luis Barrientos Terreros",
+        signerTitle:     "Founder",
+        supplierAddress: "7652 Sawmill Road, Suite 341, Dublin, Ohio 43016",
+      });
+    }
+
+    return res.json({
+      userId:          user.id,
+      userName:        user.fullName,
+      userEmail:       user.email,
+      plan:            "Enterprise Banking",
+      totalAmount:     750,
+      paidAmount:      750,
+      remainingAmount: 0,
+      currency:        "USD",
+      contractDate:    "2025-06-03",
+      contractTerm:    "12 months",
+      status:          "complete",
+      posUnlocked:     true,
+      walletAddress:   null,
+      walletNetwork:   null,
+      walletToken:     null,
+      company:         "Banxico Plus LLC",
+      phone:           "+1 614-000-0000",
+      signerName:      "José Luis Barrientos Terreros",
+      signerTitle:     "Founder",
+      supplierAddress: "7652 Sawmill Road, Suite 341, Dublin, Ohio 43016",
+    });
+  });
+
+  app.post("/api/subscription/complete-payment", requireSession, async (req, res) => {
+    const user = req.currentUser!;
+    completedPayments.add(user.id);
+    return res.json({ success: true, status: "complete", posUnlocked: true, message: "Payment verified successfully" });
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
