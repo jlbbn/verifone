@@ -120,6 +120,21 @@ export const posTerminals = pgTable("pos_terminals", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Claves criptográficas (persistentes por usuario)
+export const cryptoKeys = pgTable("crypto_keys", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  type: text("type").notNull(),
+  scope: text("scope").notNull(),
+  value: text("value").notNull(),
+  status: text("status").notNull().default("Activa"),
+  usage: integer("usage").notNull().default(0),
+  createdBy: text("created_by").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  lastUsedAt: timestamp("last_used_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });
 export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
@@ -128,6 +143,7 @@ export const insertPaymentMethodSchema = createInsertSchema(paymentMethods).omit
 export const insertSecurityTokenSchema = createInsertSchema(securityTokens).omit({ id: true, issuedAt: true });
 export const insertTransactionLogSchema = createInsertSchema(transactionLogs).omit({ id: true, timestamp: true });
 export const insertBankingProtocolSchema = createInsertSchema(bankingProtocols).omit({ id: true });
+export const insertCryptoKeySchema = createInsertSchema(cryptoKeys).omit({ id: true, createdAt: true });
 
 // Types
 export type User = typeof users.$inferSelect;
@@ -150,6 +166,9 @@ export type InsertTransactionLog = z.infer<typeof insertTransactionLogSchema>;
 
 export type BankingProtocol = typeof bankingProtocols.$inferSelect;
 export type InsertBankingProtocol = z.infer<typeof insertBankingProtocolSchema>;
+
+export type CryptoKey = typeof cryptoKeys.$inferSelect;
+export type InsertCryptoKey = z.infer<typeof insertCryptoKeySchema>;
 
 export type PosTerminal = typeof posTerminals.$inferSelect;
 

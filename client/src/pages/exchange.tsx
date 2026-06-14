@@ -5,8 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import type { Transaction } from "@shared/schema";
 import {
-  ArrowRightLeft, TrendingUp, TrendingDown, RefreshCw,
+  ArrowRightLeft, RefreshCw,
   DollarSign, Zap, BarChart2, Clock, Check, AlertTriangle,
   ChevronUp, ChevronDown
 } from "lucide-react";
@@ -35,14 +38,6 @@ const BASE_PRICES: Crypto[] = [
   { id: "doge", name: "Dogecoin",   symbol: "DOGE",price:     0.19, change24h: -2.1,  volume24h:  1200000000, marketCap: "$25B",   color: "text-yellow-500" },
 ];
 
-const HISTORY = [
-  { from: "0.5 BTC",    to: "$33,620.25",  rate: "1 BTC = $67,240.50", time: "Hace 10 min", status: "ok" },
-  { from: "2.5 ETH",    to: "$8,640.50",   rate: "1 ETH = $3,456.20",  time: "Hace 25 min", status: "ok" },
-  { from: "$5,000 USD", to: "0.0743 BTC",  rate: "1 BTC = $67,240.50", time: "Hace 1 hr",   status: "ok" },
-  { from: "100 ADA",    to: "$82.00",      rate: "1 ADA = $0.82",      time: "Hace 2 hrs",  status: "ok" },
-  { from: "50 SOL",     to: "$9,765.00",   rate: "1 SOL = $195.30",    time: "Hace 3 hrs",  status: "ok" },
-  { from: "1,000 XRP",  to: "$520.00",     rate: "1 XRP = $0.52",      time: "Hace 4 hrs",  status: "fail"},
-];
 
 function CryptoIcon({ symbol, className }: { symbol: string; className?: string }) {
   switch (symbol) {
@@ -60,8 +55,35 @@ export default function ExchangePage() {
   const [fromCrypto, setFromCrypto] = useState("BTC");
   const [toCurrency, setToCurrency] = useState("USD");
   const [fromAmount, setFromAmount] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(new Date());
+
+  const { data: allTransactions = [] } = useQuery<Transaction[]>({ queryKey: ["/api/transactions"] });
+  const exchangeHistory = allTransactions.filter(tx => tx.type === "exchange").slice(0, 6);
+
+  const exchangeMutation = useMutation({
+    mutationFn: async (payload: { fromCrypto: string; fromAmount: string; toAmount: string; rate: number }) => {
+      const txId = `EXC-${Date.now().toString(36).toUpperCase()}`;
+      return apiRequest("POST", "/api/transactions", {
+        transactionId: txId,
+        protocol: "201.1",
+        type: "exchange",
+        amount: payload.toAmount,
+        currency: "USD",
+        status: "completed",
+        fromAccount: `EXCHANGE · ${payload.fromCrypto} · ${payload.fromAmount}`,
+        toAccount: `USD · ${payload.toAmount}`,
+        description: `Exchange ${payload.fromAmount} ${payload.fromCrypto} → $${payload.toAmount} USD (1 ${payload.fromCrypto} = $${payload.rate.toFixed(2)})`,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
+      toast({ title: "Intercambio realizado", description: `${fromAmount} ${fromCrypto} → $${toAmount} USD` });
+      setFromAmount("");
+    },
+    onError: () => {
+      toast({ title: "Error al procesar intercambio", variant: "destructive" });
+    },
+  });
 
   // Simulate live price fluctuations
   useEffect(() => {
@@ -83,12 +105,7 @@ export default function ExchangePage() {
       toast({ title: "Monto inválido", description: "Ingresa un monto mayor a 0", variant: "destructive" });
       return;
     }
-    setIsProcessing(true);
-    setTimeout(() => {
-      setIsProcessing(false);
-      toast({ title: "Intercambio realizado", description: `${fromAmount} ${fromCrypto} → $${toAmount} USD` });
-      setFromAmount("");
-    }, 1500);
+    exchangeMutation.mutate({ fromCrypto, fromAmount, toAmount, rate: selectedCrypto.price });
   }
 
   return (
@@ -244,11 +261,11 @@ export default function ExchangePage() {
 
             <Button
               onClick={handleExchange}
-              disabled={isProcessing || !fromAmount}
+              disabled={exchangeMutation.isPending || !fromAmount}
               className="w-full h-11 bg-[#c8322b] hover:bg-[#a62822] font-bold"
               data-testid="button-exchange"
             >
-              {isProcessing ? (
+              {exchangeMutation.isPending ? (
                 <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Procesando...</>
               ) : (
                 <><Zap className="w-4 h-4 mr-2" /> Realizar Intercambio</>
@@ -266,20 +283,36 @@ export default function ExchangePage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="divide-y">
-                {HISTORY.map((h, i) => (
-                  <div key={i} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors" data-testid={`row-history-${i}`}>
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${h.status === "ok" ? "bg-green-100" : "bg-red-100"}`}>
-                      {h.status === "ok" ? <Check className="w-3 h-3 text-green-600" /> : <AlertTriangle className="w-3 h-3 text-red-600" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold">{h.from} <span className="text-muted-foreground font-normal">→</span> {h.to}</p>
-                      <p className="text-[10px] text-muted-foreground font-mono">{h.rate}</p>
-                    </div>
-                    <span className="text-[10px] text-muted-foreground">{h.time}</span>
-                  </div>
-                ))}
-              </div>
+              {exchangeHistory.length === 0 ? (
+                <div className="py-8 text-center text-muted-foreground text-sm">
+                  <ArrowRightLeft className="w-6 h-6 mx-auto mb-2 opacity-30" />
+                  No hay intercambios registrados aún
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {exchangeHistory.map((tx, i) => {
+                    const parts = (tx.description ?? "").split(" → ");
+                    const from = parts[0]?.replace("Exchange ", "") ?? tx.fromAccount ?? "";
+                    const to = parts[1]?.split(" (")[0] ?? tx.toAccount ?? "";
+                    const rate = (tx.description ?? "").match(/\((.+)\)/)?.[1] ?? "";
+                    const diff = Date.now() - new Date(tx.createdAt).getTime();
+                    const mins = Math.floor(diff / 60000);
+                    const timeStr = mins < 1 ? "Ahora" : mins < 60 ? `Hace ${mins} min` : `Hace ${Math.floor(mins/60)} h`;
+                    return (
+                      <div key={tx.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors" data-testid={`row-history-${i}`}>
+                        <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 bg-green-100">
+                          <Check className="w-3 h-3 text-green-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold truncate">{from} <span className="text-muted-foreground font-normal">→</span> {to}</p>
+                          <p className="text-[10px] text-muted-foreground font-mono">{rate}</p>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground">{timeStr}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
 
