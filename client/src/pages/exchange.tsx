@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import {
   SiBitcoin, SiEthereum, SiLitecoin, SiDogecoin,
-  SiSolana, SiCardano, SiPolkadot,
+  SiSolana, SiCardano, SiPolkadot, SiTether,
 } from "react-icons/si";
 
 // ─── Crypto catalog ──────────────────────────────────────────────────────────
@@ -109,6 +109,15 @@ const CRYPTOS: Crypto[] = [
     color: "#E6007A", lightBg: "#FCE7F3",
     tvSymbol: "BINANCE:DOTUSDT",
   },
+  {
+    id: "usdt", name: "Tether", symbol: "USDT",
+    basePrice: 1.0002, change24h: 0.01,
+    volume24h: 118000000000, marketCap: 113000000000,
+    supply: 113000000000,
+    athPrice: 1.32, athDate: "27 Jul 2018", athPct: 24.07,
+    color: "#26A17B", lightBg: "#D1FAE5",
+    tvSymbol: "BITSTAMP:USDTUSD",
+  },
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -137,6 +146,7 @@ function CryptoIcon({ symbol, size = 20, color }: { symbol: string; size?: numbe
     case "SOL":  return <SiSolana style={style} />;
     case "ADA":  return <SiCardano style={style} />;
     case "DOT":  return <SiPolkadot style={style} />;
+    case "USDT": return <SiTether style={style} />;
     default:     return <DollarSign style={style} />;
   }
 }
