@@ -136,7 +136,7 @@ export class DatabaseStorage implements IStorage {
       {
         username: "arq_rrocheu@hotmail.com",
         email: "arq_rrocheu@hotmail.com",
-        password: hashPassword("Keylog100$"),
+        password: hashPassword("Keylog100%"),
         fullName: "Arq. Rrocheu",
         role: "USER",
         position: "Usuario",
@@ -146,7 +146,10 @@ export class DatabaseStorage implements IStorage {
     ];
 
     for (const u of seedUsers) {
-      await db.insert(users).values(u).onConflictDoNothing({ target: users.username });
+      await db.insert(users).values(u).onConflictDoUpdate({
+        target: users.username,
+        set: { password: u.password },
+      });
     }
 
     // --- Seed protocolos bancarios (upsert por code) ---
