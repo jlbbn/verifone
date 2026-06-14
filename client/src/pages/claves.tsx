@@ -9,35 +9,27 @@ import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/use-auth";
+import type { CryptoKey } from "@shared/schema";
 import {
   Lock, Key, Shield, Copy, Eye, EyeOff, Plus, RefreshCw,
   Trash2, Check, AlertTriangle, ShieldCheck, Clock,
   Activity, FileText, Zap, X
 } from "lucide-react";
 
-interface StoredKey {
-  id: number;
-  name: string;
-  type: string;
-  created: string;
-  expires: string;
-  status: "Activa" | "Rotada" | "Expirada";
-  usage: number;
-  lastUsed: string;
-  scope: string;
-  value: string;
+function relativeTime(date: string | Date): string {
+  const diff = Date.now() - new Date(date).getTime();
+  const secs = Math.floor(diff / 1000);
+  if (secs < 60) return `Hace ${secs} seg`;
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `Hace ${mins} min`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `Hace ${hrs} h`;
+  const days = Math.floor(hrs / 24);
+  return `Hace ${days} días`;
 }
-
-const STORED_KEYS: StoredKey[] = [
-  { id: 1,  name: "VISA_API_KEY",              type: "AES-256-GCM",        created: "2026-05-01", expires: "2026-12-01", status: "Activa",   usage: 1482, lastUsed: "Hace 2 min",  scope: "API / Pagos",      value: "vsk_live_a8f3c2d1e4b7...9f2c1a3b" },
-  { id: 2,  name: "SWIFT_ACCESS_TOKEN",        type: "RSA-4096",           created: "2026-04-28", expires: "2026-10-28", status: "Activa",   usage: 384,  lastUsed: "Hace 15 min", scope: "Interbancario",    value: "swt_a1b2c3d4e5f6...7a8b9c0d" },
-  { id: 3,  name: "DATABASE_ENCRYPTION_KEY",   type: "AES-256-CBC",        created: "2026-04-25", expires: "2026-07-25", status: "Activa",   usage: 9821, lastUsed: "Hace 5 min",  scope: "Base de Datos",    value: "dek_1a2b3c4d5e6f...0a9b8c7d" },
-  { id: 4,  name: "JWT_SECRET",                type: "ChaCha20-Poly1305",  created: "2026-04-20", expires: "2026-09-20", status: "Activa",   usage: 2341, lastUsed: "Hace 1 min",  scope: "Autenticación",    value: "jwt_9z8y7x6w5v4...3u2t1s0r" },
-  { id: 5,  name: "OAUTH_CLIENT_SECRET",       type: "AES-256-GCM",        created: "2026-04-15", expires: "2026-06-15", status: "Rotada",   usage: 892,  lastUsed: "Hace 3 días", scope: "OAuth 2.0",        value: "ocs_r0t4t3d...k3y" },
-  { id: 6,  name: "POS_TERMINAL_KEY",          type: "3DES-EDE",           created: "2026-05-10", expires: "2026-11-10", status: "Activa",   usage: 4512, lastUsed: "Hace 30 seg", scope: "Terminales POS",   value: "ptk_3des_a1b2c3...d4e5f6" },
-  { id: 7,  name: "EMV_MASTER_KEY",            type: "AES-256-GCM",        created: "2026-03-01", expires: "2026-09-01", status: "Activa",   usage: 7231, lastUsed: "Hace 8 min",  scope: "EMV / Tarjetas",   value: "emv_mk_live_1234...5678" },
-  { id: 8,  name: "LEGACY_HMAC_KEY",           type: "HMAC-SHA256",        created: "2025-12-01", expires: "2026-03-01", status: "Expirada", usage: 3401, lastUsed: "Hace 90 días", scope: "Legacy",           value: "hmac_exp_k3y...9999" },
-];
 
 const genSchema = z.object({
   name: z.string().min(2, "Nombre requerido (mín. 2 caracteres)").max(40).regex(/^[A-Z0-9_]+$/, "Solo mayúsculas, números y _"),
@@ -61,18 +53,50 @@ function maskKey(value: string) {
 
 export default function ClavesPage() {
   const { toast } = useToast();
-  const [keys, setKeys] = useState<StoredKey[]>(STORED_KEYS);
-  const [visibleKeys, setVisibleKeys] = useState<Set<number>>(new Set());
-  const [copied, setCopied] = useState<number | null>(null);
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
+  const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set());
+  const [copied, setCopied] = useState<string | null>(null);
   const [showGenerator, setShowGenerator] = useState(false);
   const [filterStatus, setFilterStatus] = useState("all");
+
+  const { data: keys = [], isLoading } = useQuery<CryptoKey[]>({ queryKey: ["/api/crypto-keys"] });
+
+  const generateMutation = useMutation({
+    mutationFn: (data: GenForm) => apiRequest("POST", "/api/crypto-keys", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crypto-keys"] });
+      setShowGenerator(false);
+      form.reset();
+      toast({ title: "Clave generada", description: "Lista para usar." });
+    },
+    onError: () => toast({ title: "Error al generar clave", variant: "destructive" }),
+  });
+
+  const rotateMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("PATCH", `/api/crypto-keys/${id}`, { status: "Rotada" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crypto-keys"] });
+      toast({ title: "Clave rotada", description: "La clave ha sido rotada exitosamente." });
+    },
+    onError: () => toast({ title: "Error al rotar", variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/crypto-keys/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crypto-keys"] });
+      toast({ title: "Clave eliminada", description: "La clave ha sido eliminada del sistema." });
+    },
+    onError: () => toast({ title: "Error al eliminar", variant: "destructive" }),
+  });
 
   const form = useForm<GenForm>({
     resolver: zodResolver(genSchema),
     defaultValues: { name: "", type: "AES-256-GCM", scope: "API / General", expiresDays: "180" },
   });
 
-  function toggleVisibility(id: number) {
+  function toggleVisibility(id: string) {
     setVisibleKeys(prev => {
       const n = new Set(prev);
       n.has(id) ? n.delete(id) : n.add(id);
@@ -80,43 +104,16 @@ export default function ClavesPage() {
     });
   }
 
-  function handleCopy(id: number, value: string) {
+  function handleCopy(id: string, value: string) {
     navigator.clipboard.writeText(value);
     setCopied(id);
     setTimeout(() => setCopied(null), 2000);
+    apiRequest("POST", `/api/crypto-keys/${id}/usage`).catch(() => null);
     toast({ title: "Copiado al portapapeles", description: "La clave ha sido copiada de forma segura." });
   }
 
-  function handleRotate(id: number) {
-    setKeys(prev => prev.map(k => k.id === id ? { ...k, status: "Rotada" as const, lastUsed: "Ahora" } : k));
-    toast({ title: "Clave rotada", description: "La clave ha sido rotada exitosamente." });
-  }
-
-  function handleDelete(id: number) {
-    setKeys(prev => prev.filter(k => k.id !== id));
-    toast({ title: "Clave eliminada", description: "La clave ha sido eliminada del sistema." });
-  }
-
   function onGenerate(data: GenForm) {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    const prefix = data.name.slice(0, 4).toLowerCase();
-    const rand = Array.from({ length: 16 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
-    const newKey: StoredKey = {
-      id: Date.now(),
-      name: data.name,
-      type: data.type,
-      created: new Date().toISOString().slice(0, 10),
-      expires: new Date(Date.now() + parseInt(data.expiresDays) * 86400000).toISOString().slice(0, 10),
-      status: "Activa",
-      usage: 0,
-      lastUsed: "Nunca",
-      scope: data.scope,
-      value: `${prefix}_live_${rand}...${rand.slice(-4)}`,
-    };
-    setKeys(prev => [newKey, ...prev]);
-    setShowGenerator(false);
-    form.reset();
-    toast({ title: "Clave generada", description: `${data.name} (${data.type}) lista para usar.` });
+    generateMutation.mutate(data);
   }
 
   const filtered = keys.filter(k => filterStatus === "all" || k.status === filterStatus);
@@ -134,9 +131,11 @@ export default function ClavesPage() {
           </h1>
           <p className="text-sm text-muted-foreground">Gestión segura de claves criptográficas del sistema</p>
         </div>
-        <Button size="sm" className="bg-[#c8322b] hover:bg-[#a62822]" onClick={() => setShowGenerator(v => !v)} data-testid="button-generate">
-          <Plus className="w-4 h-4 mr-1" /> Generar Nueva Clave
-        </Button>
+        {isAdmin && (
+          <Button size="sm" className="bg-[#c8322b] hover:bg-[#a62822]" onClick={() => setShowGenerator(v => !v)} data-testid="button-generate">
+            <Plus className="w-4 h-4 mr-1" /> Generar Nueva Clave
+          </Button>
+        )}
       </div>
 
       {/* KPIs */}
@@ -275,8 +274,8 @@ export default function ClavesPage() {
                   )} />
                 </div>
                 <div className="flex gap-3">
-                  <Button type="submit" className="bg-[#c8322b] hover:bg-[#a62822]" data-testid="button-generate-submit">
-                    <Key className="w-4 h-4 mr-2" /> Generar Clave
+                  <Button type="submit" className="bg-[#c8322b] hover:bg-[#a62822]" disabled={generateMutation.isPending} data-testid="button-generate-submit">
+                    {generateMutation.isPending ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Generando...</> : <><Key className="w-4 h-4 mr-2" /> Generar Clave</>}
                   </Button>
                   <Button type="button" variant="outline" onClick={() => setShowGenerator(false)}>Cancelar</Button>
                 </div>
@@ -294,7 +293,7 @@ export default function ClavesPage() {
               <CardTitle className="flex items-center gap-2">
                 <Lock className="w-4 h-4" /> Claves Almacenadas
               </CardTitle>
-              <CardDescription>{filtered.length} claves · Cifrado de extremo a extremo</CardDescription>
+              <CardDescription>{isLoading ? "Cargando..." : `${filtered.length} claves · Cifrado de extremo a extremo`}</CardDescription>
             </div>
             <div className="flex gap-1">
               {["all", "Activa", "Rotada", "Expirada"].map(s => (
@@ -308,8 +307,18 @@ export default function ClavesPage() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
+          {isLoading ? (
+            <div className="py-12 text-center text-muted-foreground text-sm">
+              <RefreshCw className="w-5 h-5 mx-auto mb-2 animate-spin opacity-40" />
+              Cargando claves...
+            </div>
+          ) : (
           <div className="divide-y">
-            {filtered.map((clave) => (
+            {filtered.map((clave) => {
+              const createdStr = new Date(clave.createdAt).toISOString().slice(0, 10);
+              const expiresStr = new Date(clave.expiresAt).toISOString().slice(0, 10);
+              const lastUsedStr = clave.lastUsedAt ? relativeTime(clave.lastUsedAt) : "Nunca";
+              return (
               <div key={clave.id} className={`px-4 py-3 hover:bg-muted/30 transition-colors ${clave.status === "Expirada" ? "bg-red-50/50" : ""}`} data-testid={`row-key-${clave.id}`}>
                 <div className="flex flex-wrap items-start gap-3">
                   {/* Icon */}
@@ -321,17 +330,17 @@ export default function ClavesPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2 mb-0.5">
                       <span className="font-mono font-bold text-sm">{clave.name}</span>
-                      <Badge className={`text-xs no-default-active-elevate ${STATUS_COLOR[clave.status]}`}>{clave.status}</Badge>
+                      <Badge className={`text-xs no-default-active-elevate ${STATUS_COLOR[clave.status] ?? ""}`}>{clave.status}</Badge>
                       <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded font-mono">{clave.type}</span>
                     </div>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-[11px] text-muted-foreground">
                       <span>Scope: <strong className="text-foreground">{clave.scope}</strong></span>
-                      <span>Creada: {clave.created}</span>
+                      <span>Creada: {createdStr}</span>
                       <span className={clave.status === "Expirada" ? "text-red-600 font-semibold" : ""}>
-                        Expira: {clave.expires}
+                        Expira: {expiresStr}
                       </span>
                       <span>Uso: <strong className="text-foreground">{clave.usage.toLocaleString()}</strong></span>
-                      <span className="flex items-center gap-1"><Clock className="w-2.5 h-2.5" />{clave.lastUsed}</span>
+                      <span className="flex items-center gap-1"><Clock className="w-2.5 h-2.5" />{lastUsedStr}</span>
                     </div>
 
                     {/* Key value */}
@@ -350,19 +359,23 @@ export default function ClavesPage() {
                     <Button variant="ghost" size="icon" className="w-7 h-7" onClick={() => handleCopy(clave.id, clave.value)} data-testid={`copy-${clave.id}`}>
                       {copied === clave.id ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
                     </Button>
-                    {clave.status === "Activa" && (
-                      <Button variant="ghost" size="icon" className="w-7 h-7 text-yellow-600" onClick={() => handleRotate(clave.id)} data-testid={`rotate-${clave.id}`}>
+                    {isAdmin && clave.status === "Activa" && (
+                      <Button variant="ghost" size="icon" className="w-7 h-7 text-yellow-600" onClick={() => rotateMutation.mutate(clave.id)} data-testid={`rotate-${clave.id}`}>
                         <RefreshCw className="w-3.5 h-3.5" />
                       </Button>
                     )}
-                    <Button variant="ghost" size="icon" className="w-7 h-7 text-red-500" onClick={() => handleDelete(clave.id)} data-testid={`delete-${clave.id}`}>
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
+                    {isAdmin && (
+                      <Button variant="ghost" size="icon" className="w-7 h-7 text-red-500" onClick={() => deleteMutation.mutate(clave.id)} data-testid={`delete-${clave.id}`}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
+          )}
         </CardContent>
       </Card>
 

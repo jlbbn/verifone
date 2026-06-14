@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { useSystemSettings } from "@/hooks/use-system-settings";
 import type { Transaction } from "@shared/schema";
 import {
   DollarSign, Users, Activity,
@@ -27,7 +28,7 @@ const PROTOCOL_GROUPS = [
   { label: "Retiros", prefix: "401", color: "bg-yellow-500" },
 ];
 
-const hourlyData = [42, 58, 71, 65, 89, 94, 108, 127, 143, 138, 156, 172];
+// hourlyData computed below from real transactions
 
 function relativeTime(iso: string | Date): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -46,12 +47,20 @@ function cardFromDescription(desc: string | null): string {
   return m ? m[1].trim() : "";
 }
 
+interface HealthData {
+  database: string; bankingApi: string; visaMcNetwork: string;
+  swiftGateway: string; posTerminals: string; securityAes: string;
+  failedLast24h: number; totalTransactions: number; activeTerminals: number;
+}
+
 export default function Dashboard() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
   const isAdmin = user?.role === "ADMIN";
   const [currentTime, setCurrentTime] = useState(new Date());
   const { data: transactions = [] } = useQuery<Transaction[]>({ queryKey: ["/api/transactions"] });
+  const { data: settings } = useSystemSettings();
+  const { data: healthData } = useQuery<HealthData>({ queryKey: ["/api/health"], refetchInterval: 30000 });
 
   useEffect(() => {
     const t = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -77,6 +86,23 @@ export default function Dashboard() {
   }, [transactions]);
 
   const recentActivity = useMemo(() => transactions.slice(0, 7), [transactions]);
+
+  const { hourlyData, hourLabels } = useMemo(() => {
+    const now = new Date();
+    const slots = Array.from({ length: 12 }, (_, i) => {
+      const h = (now.getHours() - 11 + i + 24) % 24;
+      return h;
+    });
+    const labels = slots.map(h => {
+      const ampm = h >= 12 ? "pm" : "am";
+      const display = h === 0 ? 12 : h > 12 ? h - 12 : h;
+      return `${display}${ampm}`;
+    });
+    const counts = slots.map(h =>
+      transactions.filter(tx => new Date(tx.createdAt).getHours() === h).length
+    );
+    return { hourlyData: counts, hourLabels: labels };
+  }, [transactions]);
 
   const firstName = user?.fullName?.split(" ")[0] || user?.username || "Usuario";
 
@@ -124,7 +150,9 @@ export default function Dashboard() {
         <div className="flex items-center gap-3">
           <div className="text-right">
             <p className="text-xs text-muted-foreground">Saldo Disponible</p>
-            <p className="text-2xl font-bold text-green-600" data-testid="balance">$1,250,000.00 <span className="text-sm font-semibold text-muted-foreground">USD</span></p>
+            <p className="text-2xl font-bold text-green-600" data-testid="balance">
+              {fmtMoney(settings?.saldoSistemaUSD ?? 1250000)} <span className="text-sm font-semibold text-muted-foreground">USD</span>
+            </p>
           </div>
           <Button size="sm" className="bg-[#c8322b] hover:bg-[#a62822]" onClick={() => setLocation("/transacciones")} data-testid="button-nueva-tx">
             <Zap className="w-4 h-4 mr-1" /> Nueva TX
@@ -162,7 +190,7 @@ export default function Dashboard() {
                 <CardTitle className="flex items-center gap-2">
                   <BarChart2 className="w-4 h-4 text-[#c8322b]" /> Actividad por Hora
                 </CardTitle>
-                <CardDescription>Tendencia simulada · últimas 12 horas</CardDescription>
+                <CardDescription>Transacciones reales · últimas 12 horas</CardDescription>
               </div>
               <Badge className="bg-green-100 text-green-700 no-default-active-elevate">En vivo</Badge>
             </div>
@@ -170,21 +198,22 @@ export default function Dashboard() {
           <CardContent>
             <div className="flex items-end gap-1.5 h-28">
               {hourlyData.map((val, i) => {
-                const max = Math.max(...hourlyData);
+                const max = Math.max(...hourlyData, 1);
                 const h = Math.round((val / max) * 100);
                 const isLast = i === hourlyData.length - 1;
                 return (
                   <div key={i} className="flex-1 flex flex-col items-center gap-1">
                     <div
                       className={`w-full rounded-t-sm transition-all ${isLast ? "bg-[#c8322b]" : "bg-blue-400/70"}`}
-                      style={{ height: `${h}%` }}
+                      style={{ height: `${Math.max(h, 3)}%` }}
+                      title={`${val} tx`}
                     />
                   </div>
                 );
               })}
             </div>
             <div className="flex items-center justify-between mt-2 text-[10px] text-muted-foreground">
-              {["10am", "11am", "12pm", "1pm", "2pm", "3pm", "4pm", "5pm", "6pm", "7pm", "8pm", "9pm"].map(h => (
+              {hourLabels.map(h => (
                 <span key={h}>{h}</span>
               ))}
             </div>
@@ -288,23 +317,27 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent className="space-y-2">
               {[
-                { label: "API Banking", ok: true },
-                { label: "Red VISA/MC", ok: true },
-                { label: "SWIFT Gateway", ok: true },
-                { label: "Base de Datos", ok: true },
-                { label: "Terminales POS", ok: true },
-                { label: "Seguridad AES", ok: true },
-              ].map((item, i) => (
-                <div key={i} className="flex items-center justify-between py-1 border-b border-border last:border-0">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-1.5 h-1.5 rounded-full ${item.ok ? "bg-green-500" : "bg-red-500"}`} />
-                    <span className="text-xs">{item.label}</span>
+                { label: "API Banking",    status: healthData?.bankingApi },
+                { label: "Red VISA/MC",    status: healthData?.visaMcNetwork },
+                { label: "SWIFT Gateway",  status: healthData?.swiftGateway },
+                { label: "Base de Datos",  status: healthData?.database },
+                { label: "Terminales POS", status: healthData?.posTerminals },
+                { label: "Seguridad AES",  status: healthData?.securityAes },
+              ].map((item, i) => {
+                const ok = !item.status || item.status === "ok";
+                const loading = !item.status;
+                return (
+                  <div key={i} className="flex items-center justify-between py-1 border-b border-border last:border-0">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-1.5 h-1.5 rounded-full ${loading ? "bg-gray-400 animate-pulse" : ok ? "bg-green-500" : "bg-yellow-500"}`} />
+                      <span className="text-xs">{item.label}</span>
+                    </div>
+                    <span className={`text-xs font-semibold ${loading ? "text-muted-foreground" : ok ? "text-green-600" : "text-yellow-600"}`}>
+                      {loading ? "—" : ok ? "Operativo" : "Degradado"}
+                    </span>
                   </div>
-                  <span className={`text-xs font-semibold ${item.ok ? "text-green-600" : "text-red-600"}`}>
-                    {item.ok ? "Operativo" : "Error"}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </CardContent>
           </Card>
 
@@ -356,7 +389,9 @@ export default function Dashboard() {
               stats.failed > 0
                 ? { msg: `${stats.failed} ${stats.failed === 1 ? "transacción rechazada" : "transacciones rechazadas"} recientemente`, type: "error" }
                 : { msg: "Sin rechazos recientes en tus operaciones", type: "info" },
-              { msg: "Rotación de claves programada para mañana 00:00 hrs", type: "info" },
+              healthData && healthData.failedLast24h > 0
+                ? { msg: `${healthData.failedLast24h} transacción${healthData.failedLast24h > 1 ? "es" : ""} rechazada${healthData.failedLast24h > 1 ? "s" : ""} en las últimas 24 h — revisa los registros`, type: "warn" }
+                : { msg: `Sistema estable · ${healthData?.activeTerminals ?? "—"} terminal${(healthData?.activeTerminals ?? 0) !== 1 ? "es" : ""} activa${(healthData?.activeTerminals ?? 0) !== 1 ? "s" : ""}`, type: "info" },
             ].map((alert, i) => (
               <div key={i} className={`flex items-start gap-2 p-2.5 rounded-md text-xs ${alert.type === "error" ? "bg-red-100 text-red-700" : alert.type === "warn" ? "bg-yellow-100 text-yellow-700" : "bg-blue-100 text-blue-700"}`}>
                 {alert.type === "error" ? <XCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" /> : alert.type === "warn" ? <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" /> : <Bell className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />}

@@ -894,6 +894,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ── Health Check ───────────────────────────────────────────────────────────
+  app.get("/api/health", requireSession, async (_req, res) => {
+    try {
+      const allTx = await storage.getAllTransactions();
+      const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+      const recentTx = allTx.filter(t => new Date(t.createdAt).getTime() > oneDayAgo);
+      const recentFailed = recentTx.filter(t => t.status === "failed").length;
+      const failRate = recentTx.length > 0 ? recentFailed / recentTx.length : 0;
+      const terminals = await storage.getAllTerminals();
+      const activeTerminals = terminals.filter(t => t.status === "Online" || t.status === "Reconfigured" || t.status === "Configured").length;
+      res.json({
+        database: "ok",
+        bankingApi: "ok",
+        visaMcNetwork: failRate < 0.5 ? "ok" : "degraded",
+        swiftGateway: "ok",
+        posTerminals: activeTerminals > 0 ? "ok" : "degraded",
+        securityAes: "ok",
+        totalTransactions: allTx.length,
+        failedLast24h: recentFailed,
+        activeTerminals,
+      });
+    } catch {
+      res.status(500).json({ error: "Health check failed" });
+    }
+  });
+
+  // ── Crypto Keys ─────────────────────────────────────────────────────────────
+  app.get("/api/crypto-keys", requireSession, async (req, res) => {
+    try {
+      const user = req.currentUser!;
+      const keys = await storage.getCryptoKeys(user.username, user.role === "ADMIN");
+      res.json(keys);
+    } catch {
+      res.status(500).json({ error: "Error al obtener claves" });
+    }
+  });
+
+  app.post("/api/crypto-keys", requireSession, requireRole("ADMIN"), async (req, res) => {
+    try {
+      const { name, type, scope, expiresDays } = req.body;
+      if (!name || !type || !scope || !expiresDays) {
+        res.status(400).json({ error: "Faltan campos requeridos" });
+        return;
+      }
+      const user = req.currentUser!;
+      const prefix = name.split("_")[0].toLowerCase();
+      const hash = require("crypto").randomBytes(8).toString("hex");
+      const tail = require("crypto").randomBytes(4).toString("hex");
+      const value = `${prefix}_live_${hash}...${tail}`;
+      const expiresAt = new Date(Date.now() + parseInt(expiresDays) * 24 * 60 * 60 * 1000);
+      const key = await storage.createCryptoKey({
+        name, type, scope, value,
+        status: "Activa", usage: 0,
+        createdBy: user.username,
+        expiresAt, lastUsedAt: null,
+      });
+      res.status(201).json(key);
+    } catch {
+      res.status(500).json({ error: "Error al generar clave" });
+    }
+  });
+
+  app.patch("/api/crypto-keys/:id", requireSession, requireRole("ADMIN"), async (req, res) => {
+    try {
+      const { status } = req.body;
+      if (!status) { res.status(400).json({ error: "Status requerido" }); return; }
+      const updated = await storage.updateCryptoKeyStatus(req.params.id, status);
+      if (!updated) { res.status(404).json({ error: "Clave no encontrada" }); return; }
+      res.json(updated);
+    } catch {
+      res.status(500).json({ error: "Error al actualizar clave" });
+    }
+  });
+
+  app.post("/api/crypto-keys/:id/usage", requireSession, async (req, res) => {
+    try {
+      await storage.incrementKeyUsage(req.params.id);
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ error: "Error al registrar uso" });
+    }
+  });
+
+  app.delete("/api/crypto-keys/:id", requireSession, requireRole("ADMIN"), async (req, res) => {
+    try {
+      await storage.deleteCryptoKey(req.params.id);
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ error: "Error al eliminar clave" });
+    }
+  });
+
   // ── System Settings ────────────────────────────────────────────────────────
   app.get("/api/settings", requireSession, async (_req, res) => {
     try {

@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { eq, and, or, desc } from "drizzle-orm";
+import { eq, and, or, desc, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { hashPassword, maskCardNumber } from "./auth-utils";
 import {
@@ -11,6 +11,7 @@ import {
   bankingProtocols,
   notifications,
   posTerminals,
+  cryptoKeys,
   type User, type InsertUser,
   type Transaction, type InsertTransaction,
   type PaymentMethod, type InsertPaymentMethod,
@@ -19,6 +20,7 @@ import {
   type BankingProtocol, type InsertBankingProtocol,
   type Notification, type InsertNotification,
   type PosTerminal, type InsertPosTerminal,
+  type CryptoKey,
   type SystemSettings, DEFAULT_SYSTEM_SETTINGS,
 } from "@shared/schema";
 
@@ -73,6 +75,13 @@ export interface IStorage {
   // Users (admin)
   getAllUsers(): Promise<User[]>;
 
+  // Crypto Keys
+  getCryptoKeys(username: string, isAdmin: boolean): Promise<CryptoKey[]>;
+  createCryptoKey(data: Omit<CryptoKey, "id" | "createdAt">): Promise<CryptoKey>;
+  updateCryptoKeyStatus(id: string, status: string): Promise<CryptoKey | undefined>;
+  deleteCryptoKey(id: string): Promise<void>;
+  incrementKeyUsage(id: string): Promise<void>;
+
   // System Settings
   getSettings(): Promise<SystemSettings>;
   updateSettings(patch: Partial<SystemSettings>): Promise<SystemSettings>;
@@ -81,6 +90,23 @@ export interface IStorage {
 export class DatabaseStorage implements IStorage {
 
   async initialize() {
+    // --- Ensure crypto_keys table exists ---
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS crypto_keys (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        scope TEXT NOT NULL,
+        value TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'Activa',
+        usage INTEGER NOT NULL DEFAULT 0,
+        created_by TEXT NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        last_used_at TIMESTAMP,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+
     // --- Seed users (idempotente: ignora conflictos por username) ---
     const seedUsers = [
       {
@@ -299,6 +325,25 @@ export class DatabaseStorage implements IStorage {
         createdAt: new Date(now - s.minsAgo * 60000),
       }));
       await db.insert(txTable).values(txValues);
+    }
+
+    // --- Seed crypto keys (idempotente: solo si tabla vacía) ---
+    const existingKeys = await db.select({ id: cryptoKeys.id }).from(cryptoKeys).limit(1);
+    if (existingKeys.length === 0) {
+      const now2 = new Date();
+      const seedKeys = [
+        { name: "VISA_API_KEY",            type: "AES-256-GCM",       scope: "API / Pagos",     value: "vsk_live_a8f3c2d1e4b7...9f2c1a3b", status: "Activa",   usage: 1482, createdBy: "Admin", expiresAt: new Date("2026-12-01"), lastUsedAt: new Date(now2.getTime() - 2*60000) },
+        { name: "SWIFT_ACCESS_TOKEN",      type: "RSA-4096",          scope: "Interbancario",   value: "swt_a1b2c3d4e5f6...7a8b9c0d",   status: "Activa",   usage: 384,  createdBy: "Admin", expiresAt: new Date("2026-10-28"), lastUsedAt: new Date(now2.getTime() - 15*60000) },
+        { name: "DATABASE_ENCRYPTION_KEY", type: "AES-256-CBC",       scope: "Base de Datos",   value: "dek_1a2b3c4d5e6f...0a9b8c7d",   status: "Activa",   usage: 9821, createdBy: "Admin", expiresAt: new Date("2026-07-25"), lastUsedAt: new Date(now2.getTime() - 5*60000) },
+        { name: "JWT_SECRET",              type: "ChaCha20-Poly1305", scope: "Autenticación",   value: "jwt_9z8y7x6w5v4...3u2t1s0r",    status: "Activa",   usage: 2341, createdBy: "Admin", expiresAt: new Date("2026-09-20"), lastUsedAt: new Date(now2.getTime() - 1*60000) },
+        { name: "OAUTH_CLIENT_SECRET",     type: "AES-256-GCM",       scope: "OAuth 2.0",       value: "ocs_r0t4t3d...k3y",              status: "Rotada",   usage: 892,  createdBy: "Admin", expiresAt: new Date("2026-06-15"), lastUsedAt: new Date(now2.getTime() - 3*24*60*60000) },
+        { name: "POS_TERMINAL_KEY",        type: "3DES-EDE",          scope: "Terminales POS",  value: "ptk_3des_a1b2c3...d4e5f6",      status: "Activa",   usage: 4512, createdBy: "Admin", expiresAt: new Date("2026-11-10"), lastUsedAt: new Date(now2.getTime() - 30000) },
+        { name: "EMV_MASTER_KEY",          type: "AES-256-GCM",       scope: "EMV / Tarjetas",  value: "emv_mk_live_1234...5678",        status: "Activa",   usage: 7231, createdBy: "Admin", expiresAt: new Date("2026-09-01"), lastUsedAt: new Date(now2.getTime() - 8*60000) },
+        { name: "LEGACY_HMAC_KEY",         type: "HMAC-SHA256",       scope: "Legacy",           value: "hmac_exp_k3y...9999",            status: "Expirada", usage: 3401, createdBy: "Admin", expiresAt: new Date("2026-03-01"), lastUsedAt: new Date(now2.getTime() - 90*24*60*60000) },
+      ];
+      for (const k of seedKeys) {
+        await db.insert(cryptoKeys).values(k);
+      }
     }
 
     const allUsers = await db.select({ id: users.id }).from(users);
@@ -525,6 +570,32 @@ export class DatabaseStorage implements IStorage {
       if (!isNaN(num) && num > max) max = num;
     }
     return `T${max + 1}`;
+  }
+
+  // --- Crypto Keys ---
+  async getCryptoKeys(username: string, isAdmin: boolean): Promise<CryptoKey[]> {
+    if (isAdmin) return db.select().from(cryptoKeys).orderBy(desc(cryptoKeys.createdAt));
+    return db.select().from(cryptoKeys).where(eq(cryptoKeys.createdBy, username)).orderBy(desc(cryptoKeys.createdAt));
+  }
+
+  async createCryptoKey(data: Omit<CryptoKey, "id" | "createdAt">): Promise<CryptoKey> {
+    const [key] = await db.insert(cryptoKeys).values(data).returning();
+    return key;
+  }
+
+  async updateCryptoKeyStatus(id: string, status: string): Promise<CryptoKey | undefined> {
+    const [updated] = await db.update(cryptoKeys).set({ status }).where(eq(cryptoKeys.id, id)).returning();
+    return updated;
+  }
+
+  async deleteCryptoKey(id: string): Promise<void> {
+    await db.delete(cryptoKeys).where(eq(cryptoKeys.id, id));
+  }
+
+  async incrementKeyUsage(id: string): Promise<void> {
+    await db.update(cryptoKeys)
+      .set({ usage: sql`${cryptoKeys.usage} + 1`, lastUsedAt: new Date() })
+      .where(eq(cryptoKeys.id, id));
   }
 
   // --- Users (admin) ---

@@ -234,7 +234,7 @@ export default function CajaPage() {
       `Operador: ${user?.fullName ?? "Admin"}`,
       `T/C : ${TC} MXN/USD`,
       "----------------------------------------",
-      `Saldo apertura  : $45,890.00 USD`,
+      `Saldo apertura  : $${fmtUSD(settings?.saldoAperturaUSD ?? DEFAULT_SYSTEM_SETTINGS.saldoAperturaUSD)} USD`,
       `Total ingresos  : +$${fmtUSD(ingresosUSD)} USD  (+$${fmtUSD(ingresosUSD * TC)} MXN)`,
       `Total egresos   : -$${fmtUSD(egresosUSD)} USD  (-$${fmtUSD(egresosUSD * TC)} MXN)`,
       "----------------------------------------",
