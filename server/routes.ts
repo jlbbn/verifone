@@ -486,19 +486,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // TRANSACCIONES
   // ====================================================================
   
+  const genericTxSchema = z.object({
+    protocol:    z.string().min(1).max(20),
+    type:        z.string().min(1).max(50),
+    amount:      z.union([z.string(), z.number()]).transform(v => String(v)),
+    currency:    z.string().default("USD"),
+    status:      z.enum(["pending", "completed", "processing", "failed"]).default("pending"),
+    fromAccount: z.string().optional(),
+    toAccount:   z.string().optional(),
+    description: z.string().optional(),
+    authCode:    z.string().optional(),
+    tokenId:     z.string().optional(),
+    // El frontend puede sugerir un ID; si no, se auto-genera.
+    transactionId: z.string().optional(),
+  });
+
   app.post("/api/transactions", async (req, res) => {
     try {
-      const parsed = insertTransactionSchema
-        .omit({ transactionId: true, status: true, createdBy: true })
-        .safeParse(req.body);
+      const parsed = genericTxSchema.safeParse(req.body);
       if (!parsed.success) {
-        res.status(400).json({ error: "Datos de transacción inválidos" });
+        res.status(400).json({ error: "Datos de transacción inválidos", details: parsed.error.flatten() });
         return;
       }
+      const { transactionId: suggestedId, ...rest } = parsed.data;
       const transactionData = {
-        ...parsed.data,
-        transactionId: `TXN-${Date.now()}-${randomBytes(4).toString('hex').toUpperCase()}`,
-        status: "pending",
+        ...rest,
+        transactionId: suggestedId || `TXN-${Date.now()}-${randomBytes(4).toString('hex').toUpperCase()}`,
         // El propietario siempre se fija desde la sesión (nunca desde el body).
         createdBy: req.currentUser!.username,
       };
@@ -509,8 +522,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.createTransactionLog({
         transactionId: transaction.id,
         action: "CREATE",
-        status: "pending",
-        message: "Transacción creada"
+        status: transactionData.status,
+        message: `Transacción ${transactionData.type} creada con estado ${transactionData.status}`,
       });
       
       res.json(transaction);

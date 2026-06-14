@@ -327,6 +327,87 @@ export class DatabaseStorage implements IStorage {
       await db.insert(txTable).values(txValues);
     }
 
+    // --- Seed transacciones completadas (idempotente: solo si no existen "completed") ---
+    const existingCompleted = await db.select({ id: txTable.id }).from(txTable)
+      .where(eq(txTable.status, "completed")).limit(1);
+    if (existingCompleted.length === 0) {
+      const now = Date.now();
+      const completedSeeds = [
+        {
+          owner: "Admin", type: "payment", protocol: "201.1", amount: "48500.00", currency: "USD",
+          status: "completed", minsAgo: 2,
+          from: "JOSÉ LUIS BARRIENTOS · VISA · **** **** **** 4491",
+          to:   "TERMINAL T1001 · SUCURSAL CENTRO · VERIFONE VX 690",
+          auth: `AUTH-${Date.now()-100}-A1B2C3D4`,
+          description: "Pago con VISA - **** 4491",
+        },
+        {
+          owner: "Admin", type: "transfer", protocol: "101.3", amount: "125000.00", currency: "USD",
+          status: "completed", minsAgo: 18,
+          from: "JOSÉ LUIS BARRIENTOS · BANAMEX · **** **** **** 7741",
+          to:   "TRANSFERENCIA SPEI · BANORTE · CLABE 0214****5521",
+          auth: `AUTH-${Date.now()-200}-E5F6A7B8`,
+          description: "Transferencia SPEI protocolo 101.3 — autorización exitosa.",
+        },
+        {
+          owner: "Admin", type: "deposit", protocol: "301.2", amount: "350000.00", currency: "USD",
+          status: "completed", minsAgo: 45,
+          from: "WIRE TRANSFER · CITI BANK · SWIFT CITIUSX",
+          to:   "JOSÉ LUIS BARRIENTOS · BANAMEX · CUENTA PRINCIPAL",
+          auth: `AUTH-${Date.now()-300}-C9D0E1F2`,
+          description: "Depósito en efectivo protocolo 301.2 — procesado en sucursal.",
+        },
+        {
+          owner: "Admin", type: "payment", protocol: "201.3", amount: "9800.00", currency: "USD",
+          status: "completed", minsAgo: 95,
+          from: "JOSÉ LUIS BARRIENTOS · MASTERCARD · **** **** **** 6612",
+          to:   "TERMINAL T1004 · SUCURSAL OESTE · VERIFONE VX 520",
+          auth: `AUTH-${Date.now()-400}-G3H4I5J6`,
+          description: "Pago con Mastercard - **** 6612",
+        },
+        {
+          owner: "Admin", type: "withdrawal", protocol: "401.1", amount: "15000.00", currency: "USD",
+          status: "completed", minsAgo: 130,
+          from: "JOSÉ LUIS BARRIENTOS · BBVA · **** **** **** 5512",
+          to:   "ATM CORPORATIVO · TERMINAL T1001 · SUCURSAL CENTRO",
+          auth: `AUTH-${Date.now()-500}-K7L8M9N0`,
+          description: "Retiro ATM protocolo 401.1 — aprobado.",
+        },
+        {
+          owner: "angoestradacontacto@gmail.com", type: "payment", protocol: "201.1", amount: "3200.00", currency: "USD",
+          status: "completed", minsAgo: 60,
+          from: "ÁNGEL ESTRADA · VISA · **** **** **** 1134",
+          to:   "TERMINAL T1005 · SUCURSAL ESTE · INGENICO iWL250",
+          auth: `AUTH-${Date.now()-600}-P1Q2R3S4`,
+          description: "Pago con Débito VISA - **** 1134",
+        },
+        {
+          owner: "angoestradacontacto@gmail.com", type: "transfer", protocol: "101.3", amount: "7500.00", currency: "MXN",
+          status: "completed", minsAgo: 110,
+          from: "ÁNGEL ESTRADA · HSBC · **** **** **** 4102",
+          to:   "CUENTA SPEI DESTINO · BANCOMER · CLABE 0121****9901",
+          auth: `AUTH-${Date.now()-700}-T5U6V7W8`,
+          description: "Transferencia SPEI protocolo 101.3 — exitosa.",
+        },
+      ];
+      const completedValues = completedSeeds.map((s, i) => ({
+        transactionId: `TXN-${20000 + i}`,
+        protocol: s.protocol,
+        type: s.type,
+        amount: s.amount,
+        currency: s.currency,
+        status: s.status,
+        fromAccount: s.from,
+        toAccount: s.to,
+        description: s.description,
+        authCode: s.auth,
+        tokenId: null,
+        createdBy: s.owner,
+        createdAt: new Date(now - s.minsAgo * 60000),
+      }));
+      await db.insert(txTable).values(completedValues);
+    }
+
     // --- Seed crypto keys (idempotente: solo si tabla vacía) ---
     const existingKeys = await db.select({ id: cryptoKeys.id }).from(cryptoKeys).limit(1);
     if (existingKeys.length === 0) {
