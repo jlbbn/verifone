@@ -149,21 +149,26 @@ export class DatabaseStorage implements IStorage {
       await db.insert(users).values(u).onConflictDoNothing({ target: users.username });
     }
 
-    // --- Seed protocolos bancarios (idempotente por code) ---
+    // --- Seed protocolos bancarios (upsert por code) ---
     const seedProtocols: BankingProtocol[] = [
-      { id: "p1", code: "101.1", name: "Transferencia básica", description: "Transferencia entre cuentas sin validación adicional", category: "transfer", requiresSecurity: false },
-      { id: "p2", code: "101.2", name: "Transferencia con validación", description: "Transferencia con verificación de datos", category: "transfer", requiresSecurity: true },
-      { id: "p3", code: "101.3", name: "Transferencia segura", description: "Transferencia con máxima seguridad", category: "transfer", requiresSecurity: true },
-      { id: "p4", code: "201.1", name: "Pago nacional", description: "Procesamiento de pago dentro del país", category: "payment", requiresSecurity: true },
-      { id: "p5", code: "201.2", name: "Pago internacional", description: "Procesamiento de pago internacional", category: "payment", requiresSecurity: true },
-      { id: "p6", code: "201.3", name: "Pago express", description: "Pago con procesamiento acelerado", category: "payment", requiresSecurity: true },
-      { id: "p7", code: "301.1", name: "Depósito cuenta", description: "Depósito directo a cuenta bancaria", category: "deposit", requiresSecurity: false },
-      { id: "p8", code: "301.2", name: "Depósito efectivo", description: "Depósito en efectivo", category: "deposit", requiresSecurity: false },
-      { id: "p9", code: "401.1", name: "Retiro ATM", description: "Retiro en cajero automático", category: "withdrawal", requiresSecurity: true },
+      { id: "p1",  code: "101.1", name: "Venta en línea con PIN de 4 dígitos",                       description: "Venta en línea autenticada con PIN de 4 dígitos. Requiere conexión en tiempo real con la red.",           category: "payment",    requiresSecurity: true  },
+      { id: "p2",  code: "101.2", name: "Venta en línea con PIN de 6 dígitos",                       description: "Venta en línea autenticada con PIN de 6 dígitos. Mayor seguridad que el PIN de 4 dígitos.",             category: "payment",    requiresSecurity: true  },
+      { id: "p3",  code: "101.3", name: "Compras en línea con PIN de 4 dígitos",                     description: "Transacción de compra en línea con autenticación de PIN de 4 dígitos.",                                  category: "payment",    requiresSecurity: true  },
+      { id: "p10", code: "101.6", name: "Pre-autorización y finalización en línea (1:1)",             description: "Flujo de dos pasos: pre-autoriza el monto y lo finaliza en una sola sesión conectada (ratio 1:1).",      category: "payment",    requiresSecurity: true  },
+      { id: "p11", code: "101.8", name: "En línea sin PIN",                                          description: "Venta en línea sin requerir PIN. Apta para montos bajos o tarjetas con perfil sin PIN habilitado.",      category: "payment",    requiresSecurity: false },
+      { id: "p4",  code: "201.1", name: "Finalización en un solo paso en línea con PIN de 6 dígitos",description: "Cierra y finaliza la transacción en un único paso con PIN de 6 dígitos. Requiere conexión activa.",      category: "payment",    requiresSecurity: true  },
+      { id: "p5",  code: "201.2", name: "Venta forzada sin conexión con PIN de 6 dígitos",           description: "Venta forzada en modo fuera de línea con PIN de 6 dígitos. Se sincroniza al recuperar conexión.",        category: "payment",    requiresSecurity: true  },
+      { id: "p6",  code: "201.3", name: "Sin conexión con PIN de 6 dígitos",                         description: "Transacción offline autenticada con PIN de 6 dígitos. Procesada en batch al restaurarse la conexión.",   category: "payment",    requiresSecurity: true  },
+      { id: "p7",  code: "301.1", name: "Depósito cuenta",                                           description: "Depósito directo a cuenta bancaria.",                                                                     category: "deposit",    requiresSecurity: false },
+      { id: "p8",  code: "301.2", name: "Depósito efectivo",                                         description: "Depósito en efectivo en ventanilla o terminal.",                                                          category: "deposit",    requiresSecurity: false },
+      { id: "p9",  code: "401.1", name: "Retiro ATM",                                                description: "Retiro en cajero automático.",                                                                             category: "withdrawal", requiresSecurity: true  },
     ];
 
     for (const p of seedProtocols) {
-      await db.insert(bankingProtocols).values(p).onConflictDoNothing({ target: bankingProtocols.code });
+      await db.insert(bankingProtocols).values(p).onConflictDoUpdate({
+        target: bankingProtocols.code,
+        set: { name: p.name, description: p.description, category: p.category, requiresSecurity: p.requiresSecurity },
+      });
     }
 
     // --- Seed terminales POS base (idempotente por terminalId) ---

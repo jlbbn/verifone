@@ -31,12 +31,14 @@ const CARD_TYPES = [
 ];
 
 const PROTOCOLS = [
-  { code: "101.1",  label: "101.1 — Transferencia red Visa Network (USD)" },
-  { code: "101.2",  label: "101.2 M2 — Transferencia internacional" },
-  { code: "101.3",  label: "101.3 M3 — Transferencia segura" },
-  { code: "201.1",  label: "201.1 — Pago nacional" },
-  { code: "201.2",  label: "201.2 — Pago internacional" },
-  { code: "201.3",  label: "201.3 — Pago express" },
+  { code: "101.1",  label: "101.1 — Venta en línea con PIN de 4 dígitos" },
+  { code: "101.2",  label: "101.2 — Venta en línea con PIN de 6 dígitos" },
+  { code: "101.3",  label: "101.3 — Compras en línea con PIN de 4 dígitos" },
+  { code: "101.6",  label: "101.6 — Pre-autorización y finalización en línea (1:1)" },
+  { code: "101.8",  label: "101.8 — En línea sin PIN" },
+  { code: "201.1",  label: "201.1 — Finalización en un solo paso en línea con PIN de 6 dígitos" },
+  { code: "201.2",  label: "201.2 — Venta forzada sin conexión con PIN de 6 dígitos" },
+  { code: "201.3",  label: "201.3 — Sin conexión con PIN de 6 dígitos" },
   { code: "301.1",  label: "301.1 — Depósito cuenta" },
   { code: "401.1",  label: "401.1 — Retiro ATM" },
   { code: "1643",   label: "1643 — Venta forzada terminal manual" },
