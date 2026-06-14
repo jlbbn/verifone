@@ -174,6 +174,17 @@ export function AppSidebar() {
               </div>
             </div>
 
+            {/* ── Subscription link ── */}
+            <Separator />
+            <div className="p-3">
+              <Link href="/subscription">
+                <button className="flex items-center gap-2.5 w-full px-2 py-2 rounded-md hover-elevate text-sm text-muted-foreground" data-testid="link-profile-subscription">
+                  <CreditCard className="w-3.5 h-3.5 text-[#c8322b]" />
+                  <span className="text-xs">My Subscription & Contract</span>
+                </button>
+              </Link>
+            </div>
+
             {/* ── Admin settings link ── */}
             {isAdmin && (
               <>

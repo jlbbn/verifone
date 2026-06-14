@@ -21,6 +21,8 @@ import ClavesPage from "@/pages/claves";
 import AdminUsuariosPage from "@/pages/admin-users";
 import AdminSettingsPage from "@/pages/admin-settings";
 import POSIntelligencePage from "@/pages/pos-intelligence";
+import SubscriptionPage from "@/pages/subscription";
+import SubscriptionPaymentPage from "@/pages/subscription-payment";
 import NotFound from "@/pages/not-found";
 
 function AppLayout({ children }: { children: React.ReactNode }) {
@@ -118,6 +120,14 @@ function Router() {
 
       <Route path="/pos-intelligence">
         <AppLayout><POSIntelligencePage /></AppLayout>
+      </Route>
+
+      <Route path="/subscription/payment">
+        <AppLayout><SubscriptionPaymentPage /></AppLayout>
+      </Route>
+
+      <Route path="/subscription">
+        <AppLayout><SubscriptionPage /></AppLayout>
       </Route>
 
       <Route path="/admin/usuarios">
