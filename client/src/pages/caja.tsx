@@ -6,17 +6,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { useSystemSettings } from "@/hooks/use-system-settings";
+import { useSystemSettings, useUpdateSettings } from "@/hooks/use-system-settings";
 import { DEFAULT_SYSTEM_SETTINGS } from "@shared/schema";
 import {
   Wallet, TrendingUp, TrendingDown, DollarSign, Plus, Minus,
   ArrowUpRight, ArrowDownRight, BarChart2, Calculator,
   FileText, ShieldCheck, X, Check, Lock, AlertTriangle, CreditCard,
-  MonitorSmartphone, Radio, Activity, Zap, RefreshCw
+  MonitorSmartphone, Radio, Activity, Zap, RefreshCw, SlidersHorizontal, Loader2
 } from "lucide-react";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -94,34 +97,23 @@ const LIVE_POOL: Omit<LiveTx, "id" | "date" | "time" | "isNew">[] = [
 
 function randFrom<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
 
-// ─── Admin initial movements ──────────────────────────────────────────────────
-const INIT_MOVEMENTS: Movement[] = [
-  { id: "MOV-001", type: "ingreso", amountUSD: 2000000, category: "Venta tarjeta internacional",
-    description: "Venta Mastercard Internacional — GRUPO ASGE", reference: "AUTH-596122",
-    time: "18:55", user: "Admin", protocol: "201.2", cardType: "Mastercard", authCode: "596122" },
-  { id: "MOV-002", type: "ingreso", amountUSD: 1850000, category: "Liquidación POS",
-    description: "Liquidación terminal T1004 — VISA Internacional", reference: "AUTH-441829",
-    time: "17:40", user: "Admin", protocol: "101.2 M2", cardType: "VISA", authCode: "441829" },
-  { id: "MOV-003", type: "ingreso", amountUSD: 2150000, category: "Venta tarjeta internacional",
-    description: "Venta Mastercard Internacional — OPER 12 LOTE 1", reference: "AUTH-334211",
-    time: "16:22", user: "Admin", protocol: "201.2", cardType: "Mastercard", authCode: "334211" },
-  { id: "MOV-004", type: "ingreso", amountUSD: 31500, category: "Venta tarjeta internacional",
-    description: "Venta forzada terminal manual 1643 — T1005", reference: "AUTH-881203",
-    time: "14:30", user: "Admin", protocol: "1643", cardType: "VISA" },
-  { id: "MOV-005", type: "ingreso", amountUSD: 2350000, category: "Venta tarjeta nacional",
-    description: "Venta Mastercard Internacional — Terminal T1001", reference: "AUTH-774019",
-    time: "10:15", user: "Admin", protocol: "101.2 M2", cardType: "Mastercard", authCode: "774019" },
-  { id: "MOV-006", type: "egreso",  amountUSD: 1200, category: "Comisión procesadora",
-    description: "Comisión red EMV — Procesadora internacional", reference: "COM-EMV-042",
-    time: "09:50", user: "Admin", protocol: "201.1" },
-  { id: "MOV-007", type: "ingreso", amountUSD: 28700, category: "Venta tarjeta internacional",
-    description: "Venta forzada manual 1643 — T1002 OPER 6", reference: "AUTH-221087",
-    time: "09:05", user: "Admin", protocol: "1643", cardType: "Mastercard" },
-  // 101.1 from last week
-  { id: "MOV-008", type: "ingreso", amountUSD: 5000000, category: "Liquidación POS",
-    description: "Visa Network Transfer 101.1 — VISAINC/BANXICO LLC — LOTE 1", reference: "AUTH-978877",
-    time: "06/06 10:47", user: "Admin", protocol: "101.1", cardType: "VISA", authCode: "978877" },
-];
+// ─── Admin initial movements (settings-driven) ────────────────────────────────
+function buildAdminMovements(s: typeof DEFAULT_SYSTEM_SETTINGS): Movement[] {
+  const pos   = s.feedPosRegularUSD;
+  const f1643 = s.feed1643USD;
+  const visa  = s.feedVisaNet101USD;
+  const m1    = s.feedMerchant1;
+  return [
+    { id: "MOV-001", type: "ingreso", amountUSD: pos,                       category: "Venta tarjeta internacional", description: `Venta Mastercard Internacional — ${m1}`, reference: "AUTH-596122", time: "18:55", user: "Admin", protocol: "201.2",    cardType: "Mastercard", authCode: "596122" },
+    { id: "MOV-002", type: "ingreso", amountUSD: Math.round(pos * 0.925),   category: "Liquidación POS",             description: "Liquidación terminal T1004 — VISA Internacional",           reference: "AUTH-441829", time: "17:40", user: "Admin", protocol: "101.2 M2", cardType: "VISA",       authCode: "441829" },
+    { id: "MOV-003", type: "ingreso", amountUSD: Math.round(pos * 1.075),   category: "Venta tarjeta internacional", description: "Venta Mastercard Internacional — OPER 12 LOTE 1",            reference: "AUTH-334211", time: "16:22", user: "Admin", protocol: "201.2",    cardType: "Mastercard", authCode: "334211" },
+    { id: "MOV-004", type: "ingreso", amountUSD: Math.round(f1643 * 1.05),  category: "Venta tarjeta internacional", description: "Venta forzada terminal manual 1643 — T1005",                 reference: "AUTH-881203", time: "14:30", user: "Admin", protocol: "1643",      cardType: "VISA" },
+    { id: "MOV-005", type: "ingreso", amountUSD: Math.round(pos * 1.175),   category: "Venta tarjeta nacional",      description: "Venta Mastercard Internacional — Terminal T1001",            reference: "AUTH-774019", time: "10:15", user: "Admin", protocol: "101.2 M2", cardType: "Mastercard", authCode: "774019" },
+    { id: "MOV-006", type: "egreso",  amountUSD: 1200,                      category: "Comisión procesadora",        description: "Comisión red EMV — Procesadora internacional",               reference: "COM-EMV-042", time: "09:50", user: "Admin", protocol: "201.1" },
+    { id: "MOV-007", type: "ingreso", amountUSD: Math.round(f1643 * 0.957), category: "Venta tarjeta internacional", description: "Venta forzada manual 1643 — T1002 OPER 6",                   reference: "AUTH-221087", time: "09:05", user: "Admin", protocol: "1643",      cardType: "Mastercard" },
+    { id: "MOV-008", type: "ingreso", amountUSD: visa,                      category: "Liquidación POS",             description: "Visa Network Transfer 101.1 — VISAINC/BANXICO LLC — LOTE 1", reference: "AUTH-978877", time: "06/06 10:47", user: "Admin", protocol: "101.1", cardType: "VISA", authCode: "978877" },
+  ];
+}
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function CajaPage() {
@@ -130,13 +122,24 @@ export default function CajaPage() {
   const isAdmin = user?.role === "ADMIN";
   const showLiveView = !isAdmin;
   const { data: settings } = useSystemSettings();
+  const { mutate: saveSettings, isPending: isSavingSettings } = useUpdateSettings();
   const TC = settings?.tipoCambio ?? DEFAULT_SYSTEM_SETTINGS.tipoCambio;
   const fmtMXN = (usd: number) => (usd * TC).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const settingsRef = useRef(settings);
+  const movementsInitialized = useRef(false);
 
-  const [movements, setMovements] = useState<Movement[]>(INIT_MOVEMENTS);
+  const [movements, setMovements] = useState<Movement[]>(() => buildAdminMovements(DEFAULT_SYSTEM_SETTINGS));
   const [showForm, setShowForm] = useState<"ingreso" | "egreso" | null>(null);
   const [filterType, setFilterType] = useState<"all" | "ingreso" | "egreso">("all");
+
+  // ── Configurar Montos dialog state ──
+  const [showMontos, setShowMontos] = useState(false);
+  const [draftMontos, setDraftMontos] = useState({
+    saldoAperturaUSD:  DEFAULT_SYSTEM_SETTINGS.saldoAperturaUSD,
+    feedPosRegularUSD: DEFAULT_SYSTEM_SETTINGS.feedPosRegularUSD,
+    feed1643USD:       DEFAULT_SYSTEM_SETTINGS.feed1643USD,
+    feedVisaNet101USD: DEFAULT_SYSTEM_SETTINGS.feedVisaNet101USD,
+  });
 
   const [liveTxs, setLiveTxs] = useState<LiveTx[]>(() => buildLiveSeed(DEFAULT_SYSTEM_SETTINGS));
   const [liveCounter, setLiveCounter] = useState(0);
@@ -147,6 +150,22 @@ export default function CajaPage() {
   });
 
   useEffect(() => { settingsRef.current = settings; }, [settings]);
+
+  // rebuild movements once real settings arrive (only on first load)
+  useEffect(() => {
+    if (settings && !movementsInitialized.current) {
+      movementsInitialized.current = true;
+      setMovements(buildAdminMovements(settings));
+      setDraftMontos({
+        saldoAperturaUSD:  settings.saldoAperturaUSD,
+        feedPosRegularUSD: settings.feedPosRegularUSD,
+        feed1643USD:       settings.feed1643USD,
+        feedVisaNet101USD: settings.feedVisaNet101USD,
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings]);
+
   useEffect(() => {
     if (settings && showLiveView) setLiveTxs(buildLiveSeed(settings));
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -253,6 +272,33 @@ export default function CajaPage() {
 
   const allFiltered = movements.filter(m => filterType === "all" || m.type === filterType);
 
+  function openMontos() {
+    setDraftMontos({
+      saldoAperturaUSD:  settings?.saldoAperturaUSD  ?? DEFAULT_SYSTEM_SETTINGS.saldoAperturaUSD,
+      feedPosRegularUSD: settings?.feedPosRegularUSD ?? DEFAULT_SYSTEM_SETTINGS.feedPosRegularUSD,
+      feed1643USD:       settings?.feed1643USD       ?? DEFAULT_SYSTEM_SETTINGS.feed1643USD,
+      feedVisaNet101USD: settings?.feedVisaNet101USD ?? DEFAULT_SYSTEM_SETTINGS.feedVisaNet101USD,
+    });
+    setShowMontos(true);
+  }
+
+  function saveMontos() {
+    if (!settings) return;
+    const updated = { ...settings, ...draftMontos };
+    saveSettings(updated, {
+      onSuccess: () => {
+        movementsInitialized.current = false;
+        setMovements(buildAdminMovements(updated));
+        movementsInitialized.current = true;
+        setShowMontos(false);
+        toast({ title: "Montos actualizados", description: "Los saldos y montos de caja ya están activos." });
+      },
+      onError: (e) => {
+        toast({ title: "Error al guardar", description: e.message, variant: "destructive" });
+      },
+    });
+  }
+
   function protocolBadge(p?: string) {
     if (!p) return null;
     if (p === "101.1")
@@ -288,22 +334,6 @@ export default function CajaPage() {
           </div>
         </div>
 
-        {/* Subscription banner */}
-        <Card className="border-amber-300 bg-amber-50/60">
-          <CardContent className="pt-3 pb-3">
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-md bg-amber-100 flex items-center justify-center flex-shrink-0">
-                <Lock className="w-4 h-4 text-amber-600" />
-              </div>
-              <div>
-                <p className="font-semibold text-amber-900 text-sm">Suscripción pago pendiente</p>
-                <p className="text-xs text-amber-700 mt-0.5">
-                  Para acceder al desglose completo de caja, saldos y reportes, contacta al administrador.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
         {/* Stats */}
         <div className="grid gap-3 sm:grid-cols-3">
@@ -474,7 +504,10 @@ export default function CajaPage() {
             TC: {TC} MXN/USD · {new Date().toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" })}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <Button size="sm" variant="outline" onClick={openMontos} data-testid="button-configurar-montos">
+            <SlidersHorizontal className="w-4 h-4 mr-1" /> Configurar Montos
+          </Button>
           <Button size="sm" className="bg-green-600 text-white" onClick={() => openForm("ingreso")} data-testid="button-ingreso">
             <Plus className="w-4 h-4 mr-1" /> Ingreso
           </Button>
@@ -671,7 +704,7 @@ export default function CajaPage() {
             </CardHeader>
             <CardContent className="space-y-2">
               {[
-                { label: "Saldo apertura", usd: 45890, color: "text-slate-300" },
+                { label: "Saldo apertura", usd: settings?.saldoAperturaUSD ?? DEFAULT_SYSTEM_SETTINGS.saldoAperturaUSD, color: "text-slate-300" },
                 { label: "Total ingresos", usd: ingresosUSD, color: "text-green-400", prefix: "+" },
                 { label: "Total egresos",  usd: egresosUSD, color: "text-red-400", prefix: "–" },
                 { label: "Saldo actual",   usd: saldoUSD, color: "text-white font-bold", isFinal: true },
@@ -725,6 +758,152 @@ export default function CajaPage() {
           </Card>
         </div>
       </div>
+
+      {/* ── Configurar Montos Dialog ── */}
+      <Dialog open={showMontos} onOpenChange={setShowMontos}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <SlidersHorizontal className="w-5 h-5 text-[#c8322b]" />
+              Configurar Montos de Caja
+            </DialogTitle>
+            <DialogDescription>
+              Ajusta los saldos base y los montos de las operaciones. Los cambios se reflejan inmediatamente en la tabla de movimientos.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5 py-2">
+            {/* Saldo Apertura */}
+            <div className="space-y-1.5">
+              <Label htmlFor="dm-apertura" className="text-sm font-medium">Saldo de Apertura de Caja (USD)</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">$</span>
+                <Input
+                  id="dm-apertura"
+                  type="number"
+                  step="1000"
+                  min="0"
+                  className="pl-6"
+                  value={draftMontos.saldoAperturaUSD}
+                  onChange={e => setDraftMontos(d => ({ ...d, saldoAperturaUSD: parseFloat(e.target.value) || 0 }))}
+                  data-testid="input-dm-apertura"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">Base de la caja antes de sumar ingresos / egresos del día</p>
+            </div>
+
+            <Separator />
+
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Montos de Operaciones en Feed</p>
+
+            {/* POS Regular */}
+            <div className="space-y-1.5">
+              <Label htmlFor="dm-pos" className="text-sm font-medium">Monto POS Regular (USD)</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">$</span>
+                <Input
+                  id="dm-pos"
+                  type="number"
+                  step="10000"
+                  min="0"
+                  className="pl-6"
+                  value={draftMontos.feedPosRegularUSD}
+                  onChange={e => setDraftMontos(d => ({ ...d, feedPosRegularUSD: parseFloat(e.target.value) || 0 }))}
+                  data-testid="input-dm-pos"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Operaciones POS 201.x / 101.2 — actualmente:{" "}
+                <span className="font-mono">${draftMontos.feedPosRegularUSD.toLocaleString("en-US")} USD</span>
+              </p>
+            </div>
+
+            {/* 1643 */}
+            <div className="space-y-1.5">
+              <Label htmlFor="dm-1643" className="text-sm font-medium">Monto Protocolo 1643 (USD)</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">$</span>
+                <Input
+                  id="dm-1643"
+                  type="number"
+                  step="1000"
+                  min="0"
+                  className="pl-6"
+                  value={draftMontos.feed1643USD}
+                  onChange={e => setDraftMontos(d => ({ ...d, feed1643USD: parseFloat(e.target.value) || 0 }))}
+                  data-testid="input-dm-1643"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Ventas forzadas manuales — actualmente:{" "}
+                <span className="font-mono">${draftMontos.feed1643USD.toLocaleString("en-US")} USD</span>
+              </p>
+            </div>
+
+            {/* Visa Net 101.1 */}
+            <div className="space-y-1.5">
+              <Label htmlFor="dm-visa" className="text-sm font-medium">Monto Visa Network 101.1 (USD)</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">$</span>
+                <Input
+                  id="dm-visa"
+                  type="number"
+                  step="100000"
+                  min="0"
+                  className="pl-6"
+                  value={draftMontos.feedVisaNet101USD}
+                  onChange={e => setDraftMontos(d => ({ ...d, feedVisaNet101USD: parseFloat(e.target.value) || 0 }))}
+                  data-testid="input-dm-visa"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Transferencias Visa Network — actualmente:{" "}
+                <span className="font-mono">${draftMontos.feedVisaNet101USD.toLocaleString("en-US")} USD</span>
+              </p>
+            </div>
+
+            {/* Preview totals */}
+            <div className="rounded-md bg-muted/50 p-3 text-xs space-y-1">
+              <p className="font-semibold text-sm mb-1.5">Vista previa del total de ingresos</p>
+              {(() => {
+                const pos   = draftMontos.feedPosRegularUSD;
+                const f1643 = draftMontos.feed1643USD;
+                const visa  = draftMontos.feedVisaNet101USD;
+                const total = pos + Math.round(pos*0.925) + Math.round(pos*1.075) + Math.round(f1643*1.05) + Math.round(pos*1.175) + Math.round(f1643*0.957) + visa - 1200;
+                return (
+                  <>
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>5× POS (201.x / 101.2)</span>
+                      <span className="font-mono">${(pos + Math.round(pos*0.925) + Math.round(pos*1.075) + Math.round(pos*1.175)).toLocaleString("en-US")} USD</span>
+                    </div>
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>2× Protocolo 1643</span>
+                      <span className="font-mono">${(Math.round(f1643*1.05) + Math.round(f1643*0.957)).toLocaleString("en-US")} USD</span>
+                    </div>
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>1× Visa Network 101.1</span>
+                      <span className="font-mono">${visa.toLocaleString("en-US")} USD</span>
+                    </div>
+                    <Separator className="my-1" />
+                    <div className="flex justify-between font-semibold">
+                      <span>Saldo en caja estimado</span>
+                      <span className="font-mono text-green-600">${(draftMontos.saldoAperturaUSD + total).toLocaleString("en-US")} USD</span>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowMontos(false)}>Cancelar</Button>
+            <Button onClick={saveMontos} disabled={isSavingSettings} data-testid="button-save-montos">
+              {isSavingSettings ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Check className="w-4 h-4 mr-1.5" />}
+              Guardar Montos
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
