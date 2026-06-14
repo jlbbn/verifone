@@ -238,6 +238,16 @@ export class DatabaseStorage implements IStorage {
       await db.insert(posTerminals).values(t).onConflictDoNothing({ target: posTerminals.terminalId });
     }
 
+    // --- Fix: marcar todas las transacciones de Patricio Arroyo como fallidas ---
+    // Razón: No authorized connection with the bank host (ERR_NO_AUTH_BANK_HOST)
+    await db.execute(sql`
+      UPDATE transactions
+      SET status    = 'failed',
+          auth_code = 'ERR_NO_AUTH_BANK_HOST'
+      WHERE created_by = 'patricioarroyo510@gmail.com'
+        AND status != 'failed'
+    `);
+
     // --- Seed notificaciones (sólo si la tabla está vacía) ---
     const existingNotifs = await db.select({ id: notifications.id }).from(notifications).limit(1);
     if (existingNotifs.length === 0) {
