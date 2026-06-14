@@ -121,7 +121,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         description: "Pago con Mastercard Internacional - ****0074 · VISA NET QUANTUM 9.0 GLOBAL SERVER",
       })
       .where(eq(txTable.transactionId, "TXN-1781464598687-06C7AB21"));
-  } catch (_) { /* ignore if tx doesn't exist */ }
+  } catch (_) { /* ignore */ }
+
+  // Patch Arévalo y Asociados transactions ownership
+  try {
+    for (const tid of ["TXN-ADM-001","TXN-ADM-002","TXN-ADM-003","TXN-ADM-004","TXN-ADM-005","TXN-ADM-006"]) {
+      await db.update(txTable)
+        .set({ createdBy: "corp.arevalo.asociados@gmail.com" })
+        .where(eq(txTable.transactionId, tid));
+    }
+  } catch (_) { /* ignore */ }
 
   // ====================================================================
   // AUTENTICACIÓN
