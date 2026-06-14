@@ -231,7 +231,7 @@ export class DatabaseStorage implements IStorage {
           status: "failed", minsAgo: 4,
           from: "JOSÉ LUIS BARRIENTOS · BANAMEX · **** **** **** 7741",
           to:   "CUENTA DESTINO · HSBC MÉXICO · **** **** **** 2209",
-          description: "Bloque EMV: monto supera límite diario de transferencia autorizado. Protocolo 101.3 — operación revertida por host bancario.",
+          description: "Error de bloque de protocolo 101.3: la secuencia de autorización no se completó exitosamente. Transacción revertida por fallo en el handshake con el host bancario.",
           auth: null,
         },
         {
