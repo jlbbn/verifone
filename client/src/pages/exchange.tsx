@@ -1,353 +1,541 @@
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useEffect, useRef } from "react";
+import { useToast } from "@/hooks/use-toast";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Transaction } from "@shared/schema";
+import { Card, CardContent } from "@/components/ui/card";
 import {
-  ArrowRightLeft, RefreshCw,
-  DollarSign, Zap, BarChart2, Clock, Check, AlertTriangle,
-  ChevronUp, ChevronDown
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
+  ArrowRightLeft, Lock, RefreshCw, TrendingUp, BarChart2,
+  Activity, Coins, DollarSign, TrendingDown, Clock,
 } from "lucide-react";
-import { SiBitcoin, SiEthereum, SiLitecoin, SiDogecoin } from "react-icons/si";
+import {
+  SiBitcoin, SiEthereum, SiLitecoin, SiDogecoin,
+  SiSolana, SiCardano, SiPolkadot,
+} from "react-icons/si";
+
+// ─── Crypto catalog ──────────────────────────────────────────────────────────
 
 interface Crypto {
   id: string;
   name: string;
   symbol: string;
-  price: number;
+  basePrice: number;
   change24h: number;
   volume24h: number;
-  marketCap: string;
+  marketCap: number;
+  supply: number;
+  athPrice: number;
+  athDate: string;
+  athPct: number;
   color: string;
+  lightBg: string;
+  tvSymbol: string;
 }
 
-const BASE_PRICES: Crypto[] = [
-  { id: "usdt", name: "Tether",     symbol: "USDT",price:     1.00, change24h:  0.01, volume24h: 84000000000, marketCap: "$112B",  color: "text-green-600"  },
-  { id: "btc",  name: "Bitcoin",    symbol: "BTC", price: 67240.50, change24h:  2.4,  volume24h: 32100000000, marketCap: "$1.32T", color: "text-orange-500" },
-  { id: "eth",  name: "Ethereum",   symbol: "ETH", price:  3456.20, change24h:  1.8,  volume24h: 18400000000, marketCap: "$415B",  color: "text-purple-500" },
-  { id: "xrp",  name: "XRP",        symbol: "XRP", price:     0.52, change24h: -1.2,  volume24h:  2100000000, marketCap: "$28B",   color: "text-blue-500"   },
-  { id: "ltc",  name: "Litecoin",   symbol: "LTC", price:   142.87, change24h:  3.2,  volume24h:   890000000, marketCap: "$10.5B", color: "text-gray-500"   },
-  { id: "ada",  name: "Cardano",    symbol: "ADA", price:     0.82, change24h: -0.5,  volume24h:   540000000, marketCap: "$29B",   color: "text-blue-400"   },
-  { id: "dot",  name: "Polkadot",   symbol: "DOT", price:    10.45, change24h:  1.1,  volume24h:   320000000, marketCap: "$15B",   color: "text-pink-500"   },
-  { id: "sol",  name: "Solana",     symbol: "SOL", price:   195.30, change24h:  4.7,  volume24h:  4200000000, marketCap: "$87B",   color: "text-purple-400" },
-  { id: "doge", name: "Dogecoin",   symbol: "DOGE",price:     0.19, change24h: -2.1,  volume24h:  1200000000, marketCap: "$25B",   color: "text-yellow-500" },
+const CRYPTOS: Crypto[] = [
+  {
+    id: "btc", name: "Bitcoin", symbol: "BTC",
+    basePrice: 54325.75, change24h: 1.23,
+    volume24h: 28900000000, marketCap: 1071000000000,
+    supply: 19700000,
+    athPrice: 73737.94, athDate: "14 Mar 2024", athPct: 26.23,
+    color: "#F7931A", lightBg: "#FEF3C7",
+    tvSymbol: "BITSTAMP:BTCUSD",
+  },
+  {
+    id: "eth", name: "Ethereum", symbol: "ETH",
+    basePrice: 2670.36, change24h: 0.1094,
+    volume24h: 5941013667, marketCap: 202199926337,
+    supply: 120684209,
+    athPrice: 4953.73, athDate: "24 Aug 2025", athPct: 46.11,
+    color: "#627EEA", lightBg: "#EDE9FE",
+    tvSymbol: "BITSTAMP:ETHUSD",
+  },
+  {
+    id: "xrp", name: "XRP", symbol: "XRP",
+    basePrice: 0.52, change24h: -0.8,
+    volume24h: 2100000000, marketCap: 28000000000,
+    supply: 58000000000,
+    athPrice: 3.84, athDate: "4 Jan 2018", athPct: 86.46,
+    color: "#00AAE4", lightBg: "#E0F2FE",
+    tvSymbol: "BITSTAMP:XRPUSD",
+  },
+  {
+    id: "ltc", name: "Litecoin", symbol: "LTC",
+    basePrice: 142.87, change24h: 2.1,
+    volume24h: 890000000, marketCap: 10500000000,
+    supply: 73400000,
+    athPrice: 410.26, athDate: "10 May 2021", athPct: 65.19,
+    color: "#A6A9AA", lightBg: "#F3F4F6",
+    tvSymbol: "BITSTAMP:LTCUSD",
+  },
+  {
+    id: "doge", name: "Dogecoin", symbol: "DOGE",
+    basePrice: 0.19, change24h: -1.4,
+    volume24h: 1200000000, marketCap: 25000000000,
+    supply: 144000000000,
+    athPrice: 0.74, athDate: "8 May 2021", athPct: 74.32,
+    color: "#C2A633", lightBg: "#FEF9C3",
+    tvSymbol: "BINANCE:DOGEUSDT",
+  },
+  {
+    id: "sol", name: "Solana", symbol: "SOL",
+    basePrice: 195.30, change24h: 3.2,
+    volume24h: 4200000000, marketCap: 87000000000,
+    supply: 444000000,
+    athPrice: 259.96, athDate: "19 Nov 2021", athPct: 24.88,
+    color: "#9945FF", lightBg: "#F3E8FF",
+    tvSymbol: "BINANCE:SOLUSDT",
+  },
+  {
+    id: "ada", name: "Cardano", symbol: "ADA",
+    basePrice: 0.82, change24h: -0.3,
+    volume24h: 540000000, marketCap: 29000000000,
+    supply: 35000000000,
+    athPrice: 3.10, athDate: "2 Sep 2021", athPct: 73.55,
+    color: "#0033AD", lightBg: "#EFF6FF",
+    tvSymbol: "BINANCE:ADAUSDT",
+  },
+  {
+    id: "dot", name: "Polkadot", symbol: "DOT",
+    basePrice: 10.45, change24h: 0.9,
+    volume24h: 320000000, marketCap: 15000000000,
+    supply: 1430000000,
+    athPrice: 55.00, athDate: "4 Nov 2021", athPct: 81.00,
+    color: "#E6007A", lightBg: "#FCE7F3",
+    tvSymbol: "BINANCE:DOTUSDT",
+  },
 ];
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function CryptoIcon({ symbol, className }: { symbol: string; className?: string }) {
+function fmtNum(n: number, decimals = 4) {
+  return n.toLocaleString("en-US", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
+
+function fmtCompact(n: number) {
+  if (n >= 1e12) return `$${(n / 1e12).toFixed(4)}T`;
+  if (n >= 1e9)  return `$${(n / 1e9).toFixed(4)}B`;
+  if (n >= 1e6)  return `$${(n / 1e6).toFixed(4)}M`;
+  return `$${n.toFixed(4)}`;
+}
+
+function CryptoIcon({ symbol, size = 20, color }: { symbol: string; size?: number; color?: string }) {
+  const style: React.CSSProperties = { width: size, height: size, color: color ?? "currentColor" };
   switch (symbol) {
-    case "BTC":  return <SiBitcoin  className={className} />;
-    case "ETH":  return <SiEthereum className={className} />;
-    case "LTC":  return <SiLitecoin className={className} />;
-    case "DOGE": return <SiDogecoin className={className} />;
-    default:     return <DollarSign className={className} />;
+    case "BTC":  return <SiBitcoin style={style} />;
+    case "ETH":  return <SiEthereum style={style} />;
+    case "LTC":  return <SiLitecoin style={style} />;
+    case "DOGE": return <SiDogecoin style={style} />;
+    case "SOL":  return <SiSolana style={style} />;
+    case "ADA":  return <SiCardano style={style} />;
+    case "DOT":  return <SiPolkadot style={style} />;
+    default:     return <DollarSign style={style} />;
   }
 }
 
+// ─── TradingView chart ────────────────────────────────────────────────────────
+
+function TradingViewChart({ tvSymbol }: { tvSymbol: string }) {
+  const idRef = useRef(`tvw-${Math.random().toString(36).slice(2)}`);
+  const id = idRef.current;
+
+  useEffect(() => {
+    const container = document.getElementById(id);
+    if (container) container.innerHTML = "";
+
+    function build() {
+      if (!(window as { TradingView?: { widget: new (o: object) => void } }).TradingView) return;
+      const container2 = document.getElementById(id);
+      if (!container2) return;
+      new (window as unknown as { TradingView: { widget: new (o: object) => void } }).TradingView.widget({
+        autosize: true,
+        symbol: tvSymbol,
+        interval: "D",
+        timezone: "America/Mexico_City",
+        theme: "light",
+        style: "1",
+        locale: "en",
+        toolbar_bg: "#f8f8f8",
+        enable_publishing: false,
+        hide_side_toolbar: false,
+        allow_symbol_change: false,
+        save_image: false,
+        container_id: id,
+      });
+    }
+
+    const w = window as { TradingView?: unknown };
+    if (w.TradingView) {
+      build();
+    } else {
+      const existing = document.getElementById("tv-script-loader");
+      if (existing) {
+        existing.addEventListener("load", build);
+        return () => existing.removeEventListener("load", build);
+      }
+      const s = document.createElement("script");
+      s.id = "tv-script-loader";
+      s.src = "https://s3.tradingview.com/tv.js";
+      s.async = true;
+      s.onload = build;
+      document.head.appendChild(s);
+    }
+  }, [tvSymbol, id]);
+
+  return <div id={id} className="w-full" style={{ height: 420 }} />;
+}
+
+// ─── Crypto picker ────────────────────────────────────────────────────────────
+
+function CryptoPicker({
+  value, onChange, exclude,
+}: {
+  value: string; onChange: (v: string) => void; exclude?: string;
+}) {
+  const coin = CRYPTOS.find(c => c.id === value)!;
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger
+        className="border-0 bg-transparent p-0 h-auto focus:ring-0 shadow-none gap-1"
+        data-testid={`picker-${value}`}
+      >
+        <div className="flex items-center gap-2 min-w-[96px]">
+          <div
+            className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
+            style={{ backgroundColor: coin.lightBg }}
+          >
+            <CryptoIcon symbol={coin.symbol} size={18} color={coin.color} />
+          </div>
+          <div className="text-left">
+            <p className="font-bold text-sm leading-none text-foreground">{coin.symbol}</p>
+            <span
+              className="text-[9px] font-bold px-1.5 py-0.5 rounded-sm mt-0.5 inline-block"
+              style={{ backgroundColor: coin.color + "22", color: coin.color }}
+            >
+              {coin.symbol}
+            </span>
+          </div>
+        </div>
+      </SelectTrigger>
+      <SelectContent>
+        {CRYPTOS.filter(c => c.id !== exclude).map(c => (
+          <SelectItem key={c.id} value={c.id}>
+            <div className="flex items-center gap-2 py-0.5">
+              <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: c.lightBg }}>
+                <CryptoIcon symbol={c.symbol} size={13} color={c.color} />
+              </div>
+              <span className="font-semibold text-sm">{c.symbol}</span>
+              <span className="text-xs text-muted-foreground">{c.name}</span>
+            </div>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function ExchangePage() {
   const { toast } = useToast();
-  const [cryptos, setCryptos] = useState<Crypto[]>(BASE_PRICES);
-  const [fromCrypto, setFromCrypto] = useState("BTC");
-  const [toCurrency, setToCurrency] = useState("USD");
-  const [fromAmount, setFromAmount] = useState("");
-  const [lastRefresh, setLastRefresh] = useState(new Date());
 
-  const { data: allTransactions = [] } = useQuery<Transaction[]>({ queryKey: ["/api/transactions"] });
-  const exchangeHistory = allTransactions.filter(tx => tx.type === "exchange").slice(0, 6);
+  const [fromId, setFromId] = useState("eth");
+  const [toId, setToId]     = useState("btc");
+  const [fromAmount, setFromAmount] = useState("0.1");
+  const [prices, setPrices] = useState<Record<string, number>>(
+    Object.fromEntries(CRYPTOS.map(c => [c.id, c.basePrice]))
+  );
+  const [updatedAt, setUpdatedAt] = useState(new Date());
+
+  const fromCoin = CRYPTOS.find(c => c.id === fromId)!;
+  const toCoin   = CRYPTOS.find(c => c.id === toId)!;
+  const fromPrice = prices[fromId] ?? fromCoin.basePrice;
+  const toPrice   = prices[toId]   ?? toCoin.basePrice;
+  const rate = fromPrice / toPrice;
+  const toAmount = fromAmount && parseFloat(fromAmount) > 0
+    ? (parseFloat(fromAmount) * rate).toFixed(8)
+    : "";
+
+  // Live price simulation
+  useEffect(() => {
+    const t = setInterval(() => {
+      setPrices(prev => {
+        const next = { ...prev };
+        CRYPTOS.forEach(c => {
+          const base = prev[c.id] ?? c.basePrice;
+          const delta = (Math.random() - 0.49) * base * 0.0015;
+          next[c.id] = Math.max(base + delta, 0.0001);
+        });
+        return next;
+      });
+      setUpdatedAt(new Date());
+    }, 4000);
+    return () => clearInterval(t);
+  }, []);
+
+  function handleSwap() {
+    const tmp = fromId;
+    setFromId(toId);
+    setToId(tmp);
+  }
+
+  function handleFromChange(id: string) {
+    if (id === toId) setToId(fromId);
+    setFromId(id);
+  }
+  function handleToChange(id: string) {
+    if (id === fromId) setFromId(toId);
+    setToId(id);
+  }
 
   const exchangeMutation = useMutation({
-    mutationFn: async (payload: { fromCrypto: string; fromAmount: string; toAmount: string; rate: number }) => {
+    mutationFn: async () => {
       const txId = `EXC-${Date.now().toString(36).toUpperCase()}`;
-      return apiRequest("POST", "/api/transactions", {
+      const res = await apiRequest("POST", "/api/transactions", {
         transactionId: txId,
-        protocol: "201.1",
+        protocol: "201.3",
         type: "exchange",
-        amount: payload.toAmount,
+        amount: (parseFloat(fromAmount) * fromPrice).toFixed(2),
         currency: "USD",
         status: "completed",
-        fromAccount: `EXCHANGE · ${payload.fromCrypto} · ${payload.fromAmount}`,
-        toAccount: `USD · ${payload.toAmount}`,
-        description: `Exchange ${payload.fromAmount} ${payload.fromCrypto} → $${payload.toAmount} USD (1 ${payload.fromCrypto} = $${payload.rate.toFixed(2)})`,
+        fromAccount: `EXCHANGE · ${fromCoin.symbol} · ${fromAmount}`,
+        toAccount: `${toCoin.symbol} · ${toAmount}`,
+        description: `Exchange ${fromAmount} ${fromCoin.symbol} → ${toAmount} ${toCoin.symbol} (rate: ${rate.toFixed(8)})`,
       });
+      if (!res.ok) throw new Error("Error");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
-      toast({ title: "Intercambio realizado", description: `${fromAmount} ${fromCrypto} → $${toAmount} USD` });
-      setFromAmount("");
+      toast({ title: "Intercambio realizado", description: `${fromAmount} ${fromCoin.symbol} → ${toAmount} ${toCoin.symbol}` });
     },
     onError: () => {
       toast({ title: "Error al procesar intercambio", variant: "destructive" });
     },
   });
 
-  // Simulate live price fluctuations
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCryptos(prev => prev.map(c => {
-        const delta = (Math.random() - 0.49) * c.price * 0.002;
-        return { ...c, price: Math.max(c.price + delta, 0.001) };
-      }));
-      setLastRefresh(new Date());
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const selectedCrypto = cryptos.find(c => c.symbol === fromCrypto) || cryptos[0];
-  const toAmount = fromAmount ? (parseFloat(fromAmount) * selectedCrypto.price).toFixed(2) : "";
-
   function handleExchange() {
     if (!fromAmount || parseFloat(fromAmount) <= 0) {
       toast({ title: "Monto inválido", description: "Ingresa un monto mayor a 0", variant: "destructive" });
       return;
     }
-    exchangeMutation.mutate({ fromCrypto, fromAmount, toAmount, rate: selectedCrypto.price });
+    exchangeMutation.mutate();
   }
 
+  const price24hChange = fromCoin.change24h;
+  const positive = price24hChange >= 0;
+
+  // Stat rows for the selected coin
+  const statsRows = [
+    {
+      icon: <DollarSign className="w-3.5 h-3.5" />,
+      label: `${fromCoin.symbol} Price`,
+      value: `$ ${fmtNum(fromPrice, fromPrice < 1 ? 4 : 4)}`,
+    },
+    {
+      icon: positive ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />,
+      label: "24h % Change",
+      value: `${price24hChange >= 0 ? "+" : ""}${Math.abs(price24hChange).toFixed(4)}%`,
+      valueColor: positive ? "text-green-600" : "text-red-500",
+    },
+    {
+      icon: <BarChart2 className="w-3.5 h-3.5" />,
+      label: "Market Cap",
+      value: `$ ${fmtNum(fromCoin.marketCap, 4)}`,
+    },
+    {
+      icon: <Activity className="w-3.5 h-3.5" />,
+      label: "24h Volume",
+      value: `$ ${fmtNum(fromCoin.volume24h, 4)}`,
+    },
+    {
+      icon: <Coins className="w-3.5 h-3.5" />,
+      label: "Circulating Supply",
+      value: fmtNum(fromCoin.supply, 4),
+    },
+  ];
+
+  const updStr = updatedAt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+
   return (
-    <div className="p-4 md:p-6 space-y-5">
-      {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
-            <ArrowRightLeft className="w-7 h-7 text-[#c8322b]" /> Exchange Crypto
-          </h1>
-          <p className="text-sm text-muted-foreground">Intercambio de criptomonedas en tiempo real</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted px-3 py-1.5 rounded-md">
-            <RefreshCw className="w-3 h-3 animate-spin" />
-            {lastRefresh.toLocaleTimeString("es-MX")}
-          </div>
-          <Badge className="bg-green-100 text-green-700 no-default-active-elevate text-xs">Mercado Abierto</Badge>
-        </div>
-      </div>
+    <div className="p-4 md:p-6 pb-20 max-w-2xl mx-auto space-y-5">
 
-      {/* Crypto ticker cards */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {cryptos.slice(0, 8).map((crypto) => (
-          <Card
-            key={crypto.id}
-            className={`hover-elevate cursor-pointer transition-all ${fromCrypto === crypto.symbol ? "ring-2 ring-[#c8322b]" : ""}`}
-            onClick={() => setFromCrypto(crypto.symbol)}
-            data-testid={`card-crypto-${crypto.symbol}`}
-          >
-            <CardContent className="pt-3 pb-3">
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <CryptoIcon symbol={crypto.symbol} className={`w-5 h-5 ${crypto.color}`} />
-                  <div>
-                    <p className="text-sm font-bold">{crypto.symbol}</p>
-                    <p className="text-[10px] text-muted-foreground">{crypto.name}</p>
-                  </div>
-                </div>
-                <div className={`flex items-center gap-0.5 text-xs font-bold px-1.5 py-0.5 rounded ${crypto.change24h >= 0 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
-                  {crypto.change24h >= 0 ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                  {Math.abs(crypto.change24h).toFixed(1)}%
-                </div>
-              </div>
-              <p className="text-lg font-bold font-mono">
-                ${crypto.price < 1 ? crypto.price.toFixed(4) : crypto.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </p>
-              <div className="flex items-center justify-between mt-1">
-                <p className="text-[10px] text-muted-foreground">Cap: {crypto.marketCap}</p>
-                <p className={`text-[10px] font-medium ${crypto.change24h >= 0 ? "text-green-600" : "text-red-600"}`}>
-                  {crypto.change24h >= 0 ? "▲" : "▼"} 24h
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Exchange + History */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        {/* Exchange form */}
-        <Card className="hover-elevate">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2">
-              <ArrowRightLeft className="w-4 h-4 text-[#c8322b]" /> Realizar Intercambio
-            </CardTitle>
-            <CardDescription>Tasa en tiempo real · Sin comisión de conversión</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* From */}
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Desde</label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Input
-                    placeholder="0.00000"
-                    type="number"
-                    step="0.00001"
-                    value={fromAmount}
-                    onChange={e => setFromAmount(e.target.value)}
-                    className="pr-16 font-mono text-lg"
-                    data-testid="input-from-amount"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">{fromCrypto}</span>
-                </div>
-                <Select value={fromCrypto} onValueChange={setFromCrypto}>
-                  <SelectTrigger className="w-36" data-testid="select-from-crypto">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {cryptos.map(c => (
-                      <SelectItem key={c.id} value={c.symbol}>
-                        <span className="flex items-center gap-2">
-                          <CryptoIcon symbol={c.symbol} className={`w-3.5 h-3.5 ${c.color}`} />
-                          {c.symbol}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Rate display */}
+      {/* ── Exchange widget ─────────────────────────────────────────────── */}
+      <Card className="border shadow-sm">
+        <CardContent className="p-0">
+          {/* You send */}
+          <div className="px-5 pt-5 pb-4 border-b">
+            <p className="text-xs text-muted-foreground mb-2">You send</p>
             <div className="flex items-center gap-3">
-              <div className="flex-1 h-px bg-border" />
-              <div className="flex flex-col items-center gap-1">
-                <div className="w-9 h-9 rounded-full border-2 border-[#c8322b] flex items-center justify-center bg-background">
-                  <ArrowRightLeft className="w-4 h-4 text-[#c8322b]" />
-                </div>
-                <p className="text-[10px] text-muted-foreground font-mono">
-                  1 {fromCrypto} = ${selectedCrypto.price < 1 ? selectedCrypto.price.toFixed(4) : selectedCrypto.price.toLocaleString("en-US", { maximumFractionDigits: 2 })} USD
-                </p>
-              </div>
-              <div className="flex-1 h-px bg-border" />
+              <Input
+                value={fromAmount}
+                onChange={e => setFromAmount(e.target.value)}
+                type="number"
+                step="0.0001"
+                placeholder="0.1"
+                className="flex-1 border-0 text-2xl font-light p-0 h-auto focus-visible:ring-0 shadow-none bg-transparent"
+                data-testid="input-from-amount"
+              />
+              <CryptoPicker value={fromId} onChange={handleFromChange} exclude={toId} />
             </div>
+          </div>
 
-            {/* To */}
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Hacia</label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Input
-                    value={toAmount}
-                    readOnly
-                    placeholder="0.00"
-                    className="pr-16 font-mono text-lg bg-muted/40"
-                    data-testid="input-to-amount"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">USD</span>
-                </div>
-                <Select value={toCurrency} onValueChange={setToCurrency}>
-                  <SelectTrigger className="w-36" data-testid="select-to-currency">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {["USD", "MXN", "EUR", "CAD"].map(c => (
-                      <SelectItem key={c} value={c}>{c}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+          {/* Floating rate row */}
+          <div className="flex items-center justify-between px-5 py-3 bg-muted/30">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Lock className="w-3.5 h-3.5" />
+              <span>Floating rate</span>
             </div>
+            <button
+              onClick={handleSwap}
+              className="w-7 h-7 rounded-md bg-background border flex items-center justify-center hover-elevate"
+              data-testid="button-swap"
+              title="Swap currencies"
+            >
+              <ArrowRightLeft className="w-3.5 h-3.5 text-muted-foreground" />
+            </button>
+          </div>
 
-            {/* Info */}
+          {/* You get */}
+          <div className="px-5 pt-4 pb-5 border-b">
+            <p className="text-xs text-muted-foreground mb-2">You get</p>
+            <div className="flex items-center gap-3">
+              <div className="flex-1 text-2xl font-light text-muted-foreground">
+                {toAmount ? `≈ ${toAmount}` : <span className="text-muted-foreground/50">—</span>}
+              </div>
+              <CryptoPicker value={toId} onChange={handleToChange} exclude={fromId} />
+            </div>
+          </div>
+
+          {/* Exchange button */}
+          <div className="px-5 py-4">
             {fromAmount && parseFloat(fromAmount) > 0 && (
-              <div className="bg-muted/40 rounded-md px-3 py-2 space-y-1 text-xs">
-                <div className="flex justify-between"><span className="text-muted-foreground">Recibirás</span><span className="font-bold text-green-600">${parseFloat(toAmount).toLocaleString("en-US", { minimumFractionDigits: 2 })} {toCurrency}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Tasa</span><span className="font-mono">1 {fromCrypto} = ${selectedCrypto.price.toLocaleString("en-US", { maximumFractionDigits: 2 })} {toCurrency}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Comisión</span><span className="text-green-600 font-bold">$0.00</span></div>
-              </div>
+              <p className="text-xs text-muted-foreground mb-3 text-center font-mono">
+                1 {fromCoin.symbol} ≈ {rate.toFixed(8)} {toCoin.symbol}
+              </p>
             )}
-
             <Button
               onClick={handleExchange}
-              disabled={exchangeMutation.isPending || !fromAmount}
-              className="w-full h-11 bg-[#c8322b] hover:bg-[#a62822] font-bold"
+              disabled={exchangeMutation.isPending || !fromAmount || parseFloat(fromAmount) <= 0}
+              className="w-full h-11 font-semibold text-base"
+              style={{ backgroundColor: "#1a56db" }}
               data-testid="button-exchange"
             >
-              {exchangeMutation.isPending ? (
-                <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Procesando...</>
-              ) : (
-                <><Zap className="w-4 h-4 mr-2" /> Realizar Intercambio</>
-              )}
+              {exchangeMutation.isPending
+                ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Processing...</>
+                : "Exchange"
+              }
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </CardContent>
+      </Card>
 
-        {/* History + market overview */}
-        <div className="space-y-4">
-          <Card className="hover-elevate">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-sm">
-                <Clock className="w-4 h-4" /> Historial de Intercambios
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              {exchangeHistory.length === 0 ? (
-                <div className="py-8 text-center text-muted-foreground text-sm">
-                  <ArrowRightLeft className="w-6 h-6 mx-auto mb-2 opacity-30" />
-                  No hay intercambios registrados aún
-                </div>
-              ) : (
-                <div className="divide-y">
-                  {exchangeHistory.map((tx, i) => {
-                    const parts = (tx.description ?? "").split(" → ");
-                    const from = parts[0]?.replace("Exchange ", "") ?? tx.fromAccount ?? "";
-                    const to = parts[1]?.split(" (")[0] ?? tx.toAccount ?? "";
-                    const rate = (tx.description ?? "").match(/\((.+)\)/)?.[1] ?? "";
-                    const diff = Date.now() - new Date(tx.createdAt).getTime();
-                    const mins = Math.floor(diff / 60000);
-                    const timeStr = mins < 1 ? "Ahora" : mins < 60 ? `Hace ${mins} min` : `Hace ${Math.floor(mins/60)} h`;
-                    return (
-                      <div key={tx.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors" data-testid={`row-history-${i}`}>
-                        <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 bg-green-100">
-                          <Check className="w-3 h-3 text-green-600" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold truncate">{from} <span className="text-muted-foreground font-normal">→</span> {to}</p>
-                          <p className="text-[10px] text-muted-foreground font-mono">{rate}</p>
-                        </div>
-                        <span className="text-[10px] text-muted-foreground">{timeStr}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Market overview */}
-          <Card className="hover-elevate bg-slate-900 text-white">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-slate-200 flex items-center gap-2">
-                <BarChart2 className="w-4 h-4 text-green-400" /> Resumen de Mercado
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-1.5">
-              {cryptos.slice(0, 6).map((c, i) => (
-                <div key={i} className="flex items-center justify-between py-1 border-b border-slate-700 last:border-0">
-                  <div className="flex items-center gap-2">
-                    <CryptoIcon symbol={c.symbol} className={`w-3.5 h-3.5 ${c.color}`} />
-                    <span className="text-xs font-bold text-slate-200">{c.symbol}</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-16 h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full ${c.change24h >= 0 ? "bg-green-500" : "bg-red-500"}`}
-                        style={{ width: `${Math.min(Math.abs(c.change24h) * 15 + 30, 100)}%` }} />
-                    </div>
-                    <span className={`text-xs font-mono w-14 text-right ${c.change24h >= 0 ? "text-green-400" : "text-red-400"}`}>
-                      {c.change24h >= 0 ? "+" : ""}{c.change24h.toFixed(1)}%
-                    </span>
-                    <span className="text-xs font-mono text-slate-300 w-20 text-right">
-                      ${c.price < 1 ? c.price.toFixed(4) : c.price.toLocaleString("en-US", { maximumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+      {/* ── Market Data + TradingView chart ─────────────────────────────── */}
+      <Card className="border shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-3 border-b">
+          <div>
+            <p className="font-semibold text-sm">
+              {fromCoin.name} ({fromCoin.symbol}) Market Data
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Clock className="w-3 h-3" />
+            <span>upd at {updStr}</span>
+            <RefreshCw className="w-3 h-3 animate-spin" />
+          </div>
         </div>
-      </div>
+        <TradingViewChart key={fromCoin.tvSymbol} tvSymbol={fromCoin.tvSymbol} />
+      </Card>
+
+      {/* ── Coin detail stats ───────────────────────────────────────────── */}
+      <Card className="border shadow-sm">
+        <CardContent className="p-0">
+          {/* Coin header */}
+          <div className="flex items-center gap-3 px-5 py-4 border-b">
+            <div
+              className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0"
+              style={{ backgroundColor: fromCoin.lightBg }}
+            >
+              <CryptoIcon symbol={fromCoin.symbol} size={24} color={fromCoin.color} />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">{fromCoin.symbol} Price</p>
+              <p className="text-xl font-bold font-mono">
+                $ {fmtNum(fromPrice, fromPrice < 1 ? 4 : 4)}
+              </p>
+            </div>
+          </div>
+
+          {/* Stats list */}
+          <div className="divide-y">
+            {statsRows.slice(1).map((s, i) => (
+              <div key={i} className="flex items-start gap-3 px-5 py-3.5">
+                <div className="mt-0.5 text-muted-foreground flex-shrink-0">{s.icon}</div>
+                <div>
+                  <p className="text-xs font-medium" style={{ color: "#0d9488" }}>{s.label}</p>
+                  <p className={`text-base font-semibold font-mono mt-0.5 ${s.valueColor ?? "text-foreground"}`}>
+                    {s.value}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── All Time High ───────────────────────────────────────────────── */}
+      <Card className="border shadow-sm">
+        <CardContent className="px-5 py-5 space-y-4">
+          <h2 className="text-base font-semibold">
+            {fromCoin.name} ({fromCoin.symbol}) All Time High
+          </h2>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            {fromCoin.symbol} reached its all-time high price of{" "}
+            <span className="font-semibold text-foreground">
+              ${fmtNum(fromCoin.athPrice, 2)}
+            </span>{" "}
+            on {fromCoin.athDate}. Based on the current market price of{" "}
+            <span className="font-semibold text-foreground">
+              ${fmtNum(fromPrice, 2)}
+            </span>{" "}
+            in USD, {fromCoin.name} ({fromCoin.symbol}) is currently trading approximately{" "}
+            <span className="font-semibold text-red-500">
+              {fromCoin.athPct.toFixed(2)}% below
+            </span>{" "}
+            its record peak.
+          </p>
+
+          <div className="pt-1">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Stats</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-muted/40 rounded-md px-4 py-3">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <DollarSign className="w-3.5 h-3.5 text-muted-foreground" />
+                  <p className="text-xs font-medium" style={{ color: "#0d9488" }}>ATH Price</p>
+                </div>
+                <p className="text-base font-bold font-mono">
+                  ${fmtNum(fromCoin.athPrice, 2)}
+                </p>
+              </div>
+              <div className="bg-muted/40 rounded-md px-4 py-3">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                  <p className="text-xs font-medium" style={{ color: "#0d9488" }}>ATH Date</p>
+                </div>
+                <p className="text-base font-bold">{fromCoin.athDate}</p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
     </div>
   );
 }
