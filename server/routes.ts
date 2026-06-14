@@ -694,6 +694,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const authCode = `AUTH-${Date.now()}-${randomBytes(4).toString('hex').toUpperCase()}`;
       const transactionId = `TXN-${Date.now()}-${randomBytes(4).toString('hex').toUpperCase()}`;
       
+      const op = req.currentUser!;
       // Crear transacción (tarjeta siempre enmascarada en la descripción)
       const transaction = await storage.createTransaction({
         transactionId,
@@ -703,8 +704,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         currency: "USD",
         status: "processing",
         authCode,
+        fromAccount: `${(holderName || "TITULAR").toUpperCase()} · ${cardType.toUpperCase()} · ${maskCardNumber(cardNumber)}`,
+        toAccount:   `${op.fullName.toUpperCase()} · ${op.username} · TERMINAL POS`,
         description: `Pago con ${cardType} - ${maskCardNumber(cardNumber)}`,
-        createdBy: req.currentUser!.username,
+        createdBy: op.username,
       });
       
       // Crear método de pago (CVV/PIN nunca se persisten, tarjeta enmascarada)
