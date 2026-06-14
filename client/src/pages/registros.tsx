@@ -12,10 +12,11 @@ import {
 } from "lucide-react";
 
 const TYPE_LABEL: Record<string, string> = {
-  payment: "Pago",
-  transfer: "Transferencia",
-  deposit: "Depósito",
+  payment:    "Pago",
+  transfer:   "Transferencia",
+  deposit:    "Depósito",
   withdrawal: "Retiro",
+  exchange:   "Exchange",
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -37,6 +38,7 @@ const TYPE_COLOR: Record<string, string> = {
   Transferencia: "bg-blue-100 text-blue-700",
   Depósito:      "bg-green-100 text-green-700",
   Retiro:        "bg-orange-100 text-orange-700",
+  Exchange:      "bg-cyan-100 text-cyan-700",
 };
 
 interface Row {
