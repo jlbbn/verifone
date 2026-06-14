@@ -173,6 +173,151 @@ function VisaNetReceiptModal({ tx, onClose }: { tx: Transaction; onClose: () => 
   );
 }
 
+// ── Visa Logo SVG ────────────────────────────────────────────────────────────
+function VisaLogoSvg({ height = 20 }: { height?: number }) {
+  const w = height * 3.1;
+  return (
+    <svg width={w} height={height} viewBox="0 0 93 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="93" height="30" rx="4" fill="#1A1F71" />
+      <text x="7" y="22" fontFamily="Arial, sans-serif" fontStyle="italic" fontWeight="bold"
+        fontSize="20" fill="white" letterSpacing="1">VISA</text>
+    </svg>
+  );
+}
+
+// ── Contactless Icon ─────────────────────────────────────────────────────────
+function ContactlessIcon({ size = 36 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="10" cy="18" r="3.5" fill="#222" />
+      <path d="M16 10 A11 11 0 0 1 16 26" stroke="#222" strokeWidth="2.2" strokeLinecap="round" fill="none" />
+      <path d="M20 6 A16 16 0 0 1 20 30" stroke="#222" strokeWidth="2.2" strokeLinecap="round" fill="none" />
+      <path d="M24 2 A21 21 0 0 1 24 34" stroke="#222" strokeWidth="2.2" strokeLinecap="round" fill="none" />
+    </svg>
+  );
+}
+
+// ── POS Receipt Modal ─────────────────────────────────────────────────────────
+function POSReceiptModal({ tx, onClose }: { tx: Transaction; onClose: () => void }) {
+  const isMC = (tx.fromAccount ?? "").toLowerCase().includes("mastercard");
+  const cardMatch = (tx.fromAccount ?? "").match(/\*+\s*(\d{4})\s*$/);
+  const cardLast4 = cardMatch ? cardMatch[1] : "0000";
+  const cardDisplay = `XXXX-XXXX-XXXX-${cardLast4}`;
+  const holderMatch = (tx.fromAccount ?? "").match(/^([^·]+)/);
+  const holder = holderMatch ? holderMatch[1].trim().toUpperCase() : "TITULAR";
+  const terminalMatch = (tx.toAccount ?? "").match(/TERMINAL\s+(\w+)/);
+  const terminal = terminalMatch ? terminalMatch[1] : "T2001";
+  const modelMatch = (tx.toAccount ?? "").match(/·\s+([^·]+)$/);
+  const terminalModel = modelMatch ? modelMatch[1].trim() : "INGENICO ICT250";
+  const amount = parseFloat(tx.amount ?? "0");
+  const d = new Date(tx.createdAt);
+  const dateStr = `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${String(d.getFullYear()).slice(-2)}`;
+  const timeStr = `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}:${String(d.getSeconds()).padStart(2,"0")}`;
+  const auth = tx.authCode ?? "";
+  const stanMatch = auth.match(/STAN\s+(\d+)/);
+  const stan = stanMatch ? stanMatch[1] : "000000";
+  const codeMatch = auth.match(/AUTH CODE\s+(\w+)/);
+  const authCode = codeMatch ? codeMatch[1] : "XXXXXXX";
+  const rrnMatch = auth.match(/RRN\s+(\d+)/);
+  const rrn = rrnMatch ? rrnMatch[1] : "0000000000";
+  const tdMatch = auth.match(/TD\s+([\w]+)/);
+  const td = tdMatch ? tdMatch[1] : "A0000000041010";
+  const isDebit = (tx.fromAccount ?? "").toLowerCase().includes("debit") || (tx.fromAccount ?? "").toLowerCase().includes("débito");
+  const cardType = isMC
+    ? (isDebit ? "DEBIT MASTERCARD" : "MASTERCARD INTERNACIONAL")
+    : (isDebit ? "VISA DEBITO" : "VISA INTERNACIONAL");
+  const mid = `BXMX${terminal.replace(/\D/g,"").padStart(9,"0")}`;
+  const sep = "=".repeat(33);
+  const dash = "-".repeat(33);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.82)" }}
+      onClick={onClose}
+    >
+      <div className="w-full max-w-xs rounded-lg shadow-2xl overflow-hidden"
+        style={{ fontFamily: "'Courier New', Courier, monospace", background: "#f0ede8", maxHeight: "90vh", overflowY: "auto" }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Close */}
+        <div className="flex justify-end px-3 pt-2 pb-0">
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X className="w-4 h-4" /></button>
+        </div>
+
+        <div className="px-5 pb-6 text-[11px] text-gray-900 leading-relaxed space-y-0.5">
+          {/* Contactless */}
+          <div className="flex justify-center py-3">
+            <ContactlessIcon size={40} />
+          </div>
+
+          {/* Merchant header */}
+          <p className="text-center text-[10px]">{sep}</p>
+          <p className="text-center font-bold text-[13px] tracking-widest py-0.5">BANXICO PLUS</p>
+          <p className="text-center text-[10px]">{sep}</p>
+          <p className="text-center text-[10px] mt-1">VENADO 69, CANCUN Q.ROO MX</p>
+          <p className="text-center text-[10px]">TID:{terminal}{"  "}MID:{mid}</p>
+          <p className="text-center text-[10px]">DATE: {dateStr}{"  "}TIME: {timeStr}</p>
+
+          <p className="text-center text-[10px] pt-1">{dash}</p>
+
+          {/* Card branding */}
+          <div className="flex flex-col items-center gap-1.5 py-2">
+            {isMC ? <MastercardIcon size={26} /> : <VisaLogoSvg height={22} />}
+            <p className="font-bold tracking-wider text-[10px]">{cardType}</p>
+          </div>
+          <p className="text-[10px]">CARD N: {cardDisplay}</p>
+          <p className="text-[10px]">CARD READ</p>
+          <p className="text-[10px]">TITULAR: {holder}</p>
+
+          <p className="text-[10px] pt-1">{dash}</p>
+
+          {/* Payment */}
+          <p className="text-center font-bold tracking-widest py-0.5">PAYMENT</p>
+          <div className="flex justify-between font-bold text-[12px] py-1">
+            <span>AMOUNT</span>
+            <span>${amount.toLocaleString("en-US", { minimumFractionDigits: 2 })} USD</span>
+          </div>
+
+          <p className="text-[10px] pt-0.5">{dash}</p>
+
+          {/* Details */}
+          <p className="text-[10px] py-0.5">NO SIGNATURE REQUIRED</p>
+          <div className="flex justify-between text-[10px]">
+            <span>OPERATOR CODE:</span><span className="font-bold">ADMIN</span>
+          </div>
+          <div className="flex justify-between text-[10px]">
+            <span>REF N:</span><span className="font-bold">{tx.protocol}</span>
+          </div>
+          <div className="flex justify-between text-[10px]">
+            <span>TERMINAL:</span><span className="font-bold">{terminalModel}</span>
+          </div>
+
+          <p className="text-[10px] pt-0.5">{dash}</p>
+
+          {/* Auth block */}
+          <p className="font-bold text-[10px] py-0.5">APPROVED/STAN {stan}/AUTH.</p>
+          <p className="text-[10px]">CODE {authCode}/RRN {rrn}</p>
+          <p className="text-[10px]">TD {td}</p>
+
+          <p className="text-[10px] pt-0.5">{dash}</p>
+
+          {/* Footer */}
+          <p className="text-center text-[10px] py-0.5">I ACCEPT THE TRANSACTION</p>
+          <p className="text-center text-[10px]">RETAIN RECEIPT</p>
+
+          <p className="text-[10px]">{dash}</p>
+
+          {/* Logo + MERCHANT COPY */}
+          <div className="flex items-center justify-center gap-3 pt-2 pb-1">
+            {isMC ? <MastercardIcon size={20} /> : <VisaLogoSvg height={18} />}
+          </div>
+          <p className="text-center font-bold tracking-widest text-[11px]">MERCHANT COPY</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const TYPE_LABEL: Record<string, string> = {
   payment:    "Pago",
   transfer:   "Transferencia",
@@ -256,6 +401,7 @@ export default function RegistrosPage() {
   const isAdmin = user?.role === "ADMIN";
   const [simRunning, setSimRunning] = useState(false);
   const [receiptTx, setReceiptTx] = useState<Transaction | null>(null);
+  const [posReceiptTx, setPosReceiptTx] = useState<Transaction | null>(null);
 
   const { data: transactions = [], isLoading, isFetching, refetch } = useQuery<Transaction[]>({
     queryKey: ["/api/transactions"],
@@ -302,6 +448,10 @@ export default function RegistrosPage() {
     if (isVisaNetError(r.authCode)) {
       const full = txMap.get(r.id);
       if (full) { setReceiptTx(full); return; }
+    }
+    if (r.authCode.startsWith("APPROVED/STAN")) {
+      const full = txMap.get(r.id);
+      if (full) { setPosReceiptTx(full); return; }
     }
     setSelected(selected?.id === r.id ? null : r);
   }
@@ -628,6 +778,11 @@ export default function RegistrosPage() {
       {/* ── Visa Net Quantum 9.0 Receipt Modal ── */}
       {receiptTx && (
         <VisaNetReceiptModal tx={receiptTx} onClose={() => setReceiptTx(null)} />
+      )}
+
+      {/* ── POS Receipt Modal ── */}
+      {posReceiptTx && (
+        <POSReceiptModal tx={posReceiptTx} onClose={() => setPosReceiptTx(null)} />
       )}
     </div>
   );

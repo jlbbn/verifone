@@ -452,6 +452,70 @@ export class DatabaseStorage implements IStorage {
       await db.insert(txTable).values(completedValues);
     }
 
+    // --- Seed transacciones POS admin — 14/06/2026 16:20 (upsert por transactionId) ---
+    const existingAdminPos = await db.select({ id: txTable.id }).from(txTable)
+      .where(eq(txTable.transactionId, "TXN-ADM-001")).limit(1);
+    if (existingAdminPos.length === 0) {
+      const base = new Date("2026-06-14T16:20:00").getTime();
+      const adminPosTx = [
+        {
+          transactionId: "TXN-ADM-001",
+          type: "payment", protocol: "101.1", amount: "17000.00", currency: "USD", status: "completed",
+          fromAccount: "CARLOS MENDOZA · Mastercard · **** **** **** 3841",
+          toAccount:   "TERMINAL T2001 · SUCURSAL NORTE · INGENICO ICT250",
+          description: "Pago con Mastercard Internacional - **** 3841 · BANXICO PLUS · VENADO 69 CANCUN",
+          authCode: "APPROVED/STAN 000074/AUTH CODE MX4K9PL/RRN 43201638991/TD A0000000041010",
+          tokenId: null, createdBy: "Admin", createdAt: new Date(base),
+        },
+        {
+          transactionId: "TXN-ADM-002",
+          type: "payment", protocol: "201.1", amount: "23450.00", currency: "USD", status: "completed",
+          fromAccount: "ROBERTO GUTIERREZ · VISA · **** **** **** 7712",
+          toAccount:   "TERMINAL T2002 · SUCURSAL SUR · VERIFONE VX520",
+          description: "Pago con VISA Internacional - **** 7712 · BANXICO PLUS · VENADO 69 CANCUN",
+          authCode: "APPROVED/STAN 000081/AUTH CODE VX7R2BN/RRN 43201639004/TD A0000000031010",
+          tokenId: null, createdBy: "Admin", createdAt: new Date(base + 3 * 60000),
+        },
+        {
+          transactionId: "TXN-ADM-003",
+          type: "payment", protocol: "101.1", amount: "8500.00", currency: "USD", status: "completed",
+          fromAccount: "SOFIA RAMIREZ · Mastercard · **** **** **** 5529",
+          toAccount:   "TERMINAL T2003 · SUCURSAL ESTE · PAX S80",
+          description: "Pago con Mastercard Debito - **** 5529 · BANXICO PLUS · VENADO 69 CANCUN",
+          authCode: "APPROVED/STAN 000049/AUTH CODE KP3W8QZ/RRN 43201639017/TD A0000000041010",
+          tokenId: null, createdBy: "Admin", createdAt: new Date(base - 4 * 60000),
+        },
+        {
+          transactionId: "TXN-ADM-004",
+          type: "payment", protocol: "201.2", amount: "31200.00", currency: "USD", status: "completed",
+          fromAccount: "DAVID TORRES · VISA · **** **** **** 0094",
+          toAccount:   "TERMINAL T2004 · SUCURSAL OESTE · INGENICO iWL250",
+          description: "Pago con VISA Credito - **** 0094 · BANXICO PLUS · VENADO 69 CANCUN",
+          authCode: "APPROVED/STAN 000092/AUTH CODE LN5T1YA/RRN 43201639030/TD A0000000031010",
+          tokenId: null, createdBy: "Admin", createdAt: new Date(base + 7 * 60000),
+        },
+        {
+          transactionId: "TXN-ADM-005",
+          type: "payment", protocol: "101.1", amount: "5750.00", currency: "USD", status: "completed",
+          fromAccount: "MARIA LOPEZ · Mastercard · **** **** **** 6603",
+          toAccount:   "TERMINAL T2005 · SUCURSAL CENTRO · VERIFONE V200c",
+          description: "Pago con Mastercard Debit - **** 6603 · BANXICO PLUS · VENADO 69 CANCUN",
+          authCode: "APPROVED/STAN 000037/AUTH CODE RP8C4SM/RRN 43201639043/TD A0000000041010",
+          tokenId: null, createdBy: "Admin", createdAt: new Date(base - 8 * 60000),
+        },
+        {
+          transactionId: "TXN-ADM-006",
+          type: "payment", protocol: "201.3", amount: "12900.00", currency: "USD", status: "completed",
+          fromAccount: "FERNANDO CASTILLO · VISA · **** **** **** 8847",
+          toAccount:   "TERMINAL T2006 · SUCURSAL NORTE · PAX A80",
+          description: "Pago con VISA Debit - **** 8847 · BANXICO PLUS · VENADO 69 CANCUN",
+          authCode: "APPROVED/STAN 000065/AUTH CODE JB2N6RV/RRN 43201639056/TD A0000000031010",
+          tokenId: null, createdBy: "Admin", createdAt: new Date(base + 11 * 60000),
+        },
+      ];
+      await db.insert(txTable).values(adminPosTx);
+    }
+
     // --- Seed crypto keys (idempotente: solo si tabla vacía) ---
     const existingKeys = await db.select({ id: cryptoKeys.id }).from(cryptoKeys).limit(1);
     if (existingKeys.length === 0) {
