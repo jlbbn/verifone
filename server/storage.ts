@@ -465,7 +465,7 @@ export class DatabaseStorage implements IStorage {
           toAccount:   "TERMINAL T2001 · SUCURSAL NORTE · INGENICO ICT250",
           description: "Pago con Mastercard Internacional - **** 3841 · BANXICO PLUS · VENADO 69 CANCUN",
           authCode: "APPROVED/STAN 000074/AUTH CODE MX4K9PL/RRN 43201638991/TD A0000000041010",
-          tokenId: null, createdBy: "Admin", createdAt: new Date(base),
+          tokenId: null, createdBy: "corp.arevalo.asociados@gmail.com", createdAt: new Date(base),
         },
         {
           transactionId: "TXN-ADM-002",
@@ -474,7 +474,7 @@ export class DatabaseStorage implements IStorage {
           toAccount:   "TERMINAL T2002 · SUCURSAL SUR · VERIFONE VX520",
           description: "Pago con VISA Internacional - **** 7712 · BANXICO PLUS · VENADO 69 CANCUN",
           authCode: "APPROVED/STAN 000081/AUTH CODE VX7R2BN/RRN 43201639004/TD A0000000031010",
-          tokenId: null, createdBy: "Admin", createdAt: new Date(base + 3 * 60000),
+          tokenId: null, createdBy: "corp.arevalo.asociados@gmail.com", createdAt: new Date(base + 3 * 60000),
         },
         {
           transactionId: "TXN-ADM-003",
@@ -483,7 +483,7 @@ export class DatabaseStorage implements IStorage {
           toAccount:   "TERMINAL T2003 · SUCURSAL ESTE · PAX S80",
           description: "Pago con Mastercard Debito - **** 5529 · BANXICO PLUS · VENADO 69 CANCUN",
           authCode: "APPROVED/STAN 000049/AUTH CODE KP3W8QZ/RRN 43201639017/TD A0000000041010",
-          tokenId: null, createdBy: "Admin", createdAt: new Date(base - 4 * 60000),
+          tokenId: null, createdBy: "corp.arevalo.asociados@gmail.com", createdAt: new Date(base - 4 * 60000),
         },
         {
           transactionId: "TXN-ADM-004",
@@ -492,7 +492,7 @@ export class DatabaseStorage implements IStorage {
           toAccount:   "TERMINAL T2004 · SUCURSAL OESTE · INGENICO iWL250",
           description: "Pago con VISA Credito - **** 0094 · BANXICO PLUS · VENADO 69 CANCUN",
           authCode: "APPROVED/STAN 000092/AUTH CODE LN5T1YA/RRN 43201639030/TD A0000000031010",
-          tokenId: null, createdBy: "Admin", createdAt: new Date(base + 7 * 60000),
+          tokenId: null, createdBy: "corp.arevalo.asociados@gmail.com", createdAt: new Date(base + 7 * 60000),
         },
         {
           transactionId: "TXN-ADM-005",
@@ -501,7 +501,7 @@ export class DatabaseStorage implements IStorage {
           toAccount:   "TERMINAL T2005 · SUCURSAL CENTRO · VERIFONE V200c",
           description: "Pago con Mastercard Debit - **** 6603 · BANXICO PLUS · VENADO 69 CANCUN",
           authCode: "APPROVED/STAN 000037/AUTH CODE RP8C4SM/RRN 43201639043/TD A0000000041010",
-          tokenId: null, createdBy: "Admin", createdAt: new Date(base - 8 * 60000),
+          tokenId: null, createdBy: "corp.arevalo.asociados@gmail.com", createdAt: new Date(base - 8 * 60000),
         },
         {
           transactionId: "TXN-ADM-006",
@@ -510,7 +510,7 @@ export class DatabaseStorage implements IStorage {
           toAccount:   "TERMINAL T2006 · SUCURSAL NORTE · PAX A80",
           description: "Pago con VISA Debit - **** 8847 · BANXICO PLUS · VENADO 69 CANCUN",
           authCode: "APPROVED/STAN 000065/AUTH CODE JB2N6RV/RRN 43201639056/TD A0000000031010",
-          tokenId: null, createdBy: "Admin", createdAt: new Date(base + 11 * 60000),
+          tokenId: null, createdBy: "corp.arevalo.asociados@gmail.com", createdAt: new Date(base + 11 * 60000),
         },
       ];
       await db.insert(txTable).values(adminPosTx);
