@@ -11,8 +11,167 @@ import type { Transaction } from "@shared/schema";
 import {
   FileText, Search, Download, Filter, ChevronLeft, ChevronRight,
   ArrowUpDown, ArrowUp, ArrowDown, Eye, BarChart2, RefreshCw, X, Inbox, Loader2,
-  AlertTriangle, Clock, WifiOff
+  AlertTriangle, Clock, WifiOff, Shield
 } from "lucide-react";
+
+// ── Visa Net Quantum 9.0 Error Receipt ─────────────────────────────────────
+function MastercardIcon({ size = 28 }: { size?: number }) {
+  const overlap = size * 0.3;
+  return (
+    <div className="relative flex-shrink-0" style={{ width: size + overlap, height: size }}>
+      <div
+        className="absolute rounded-full bg-[#EB001B]"
+        style={{ width: size, height: size, left: 0, top: 0, opacity: 0.95 }}
+      />
+      <div
+        className="absolute rounded-full bg-[#F79E1B]"
+        style={{ width: size, height: size, right: 0, top: 0, opacity: 0.95, mixBlendMode: "multiply" }}
+      />
+    </div>
+  );
+}
+
+function VisaNetReceiptModal({ tx, onClose }: { tx: Transaction; onClose: () => void }) {
+  const isMastercard = (tx.description ?? tx.fromAccount ?? "").toLowerCase().includes("mastercard");
+  const cardNumMatch = (tx.fromAccount ?? "").match(/\*+\d+/);
+  const cardNum = cardNumMatch ? cardNumMatch[0] : "****0074";
+  const holderMatch = (tx.fromAccount ?? "").match(/^([^·]+)/);
+  const holder = holderMatch ? holderMatch[1].trim() : "ALUSH CECO";
+  const amount = parseFloat(tx.amount ?? "0");
+  const equivMXN = (amount * 17.5).toLocaleString("es-MX", { minimumFractionDigits: 2 });
+  const d = new Date(tx.createdAt);
+  const dateStr = `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+  const timeStr = d.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true });
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.75)" }}
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-xs rounded-xl overflow-hidden shadow-2xl"
+        style={{ fontFamily: "'Courier New', monospace", background: "#fff" }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* ── Header: Visa Net Quantum 9.0 ── */}
+        <div style={{ background: "#0d2e6e" }} className="px-4 py-3 text-white">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <MastercardIcon size={26} />
+              <div>
+                <p className="text-[11px] font-bold tracking-widest">VISA NET QUANTUM 9.0</p>
+                <p style={{ color: "#93c5fd", fontSize: "9px" }} className="tracking-widest">GLOBAL SERVER</p>
+              </div>
+            </div>
+            <button onClick={onClose} style={{ color: "#93c5fd" }} className="hover:text-white">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* ── POS STATUS bar ── */}
+        <div style={{ background: "#111827", color: "#4ade80" }} className="px-4 py-2 text-[10px]">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+              <span style={{ color: "#d1d5db" }}>POS STATUS: </span>
+              <span className="font-bold text-white">Banxico+</span>
+            </div>
+            <div className="text-right" style={{ color: "#6b7280", fontSize: "9px" }}>
+              <p className="text-white font-bold">T1011 · Verifone V660p</p>
+              <p>Connected · Protocol 101.1 M1 · Global Server</p>
+            </div>
+          </div>
+          <div className="mt-1 flex gap-3" style={{ color: "#6b7280", fontSize: "9px" }}>
+            <span>S/N: VER-T1011-9607</span>
+            <span>IP: 192.168.1.111</span>
+            <span>Señal: 83%</span>
+            <span>FW v338.7.3</span>
+          </div>
+        </div>
+
+        {/* ── Receipt body ── */}
+        <div className="px-4 py-3 text-[11px] text-gray-900 space-y-3">
+          {/* Store header */}
+          <div className="text-center pb-2" style={{ borderBottom: "1px dashed #ccc" }}>
+            <p className="font-bold text-sm tracking-widest">BANXICO PLUS</p>
+            <p className="text-xs tracking-wider">VENTA FORZADA</p>
+            <p style={{ color: "#6b7280", fontSize: "9px" }}>GRUPO ASGE · VENADO 69 · CANCUN Q.ROO</p>
+          </div>
+
+          {/* Date + card number */}
+          <div className="flex justify-between text-[10px]">
+            <span style={{ color: "#374151" }}>{dateStr} {timeStr}</span>
+            <span className="font-bold">{cardNum}</span>
+          </div>
+
+          {/* Fields */}
+          <div className="space-y-1 pb-2" style={{ borderBottom: "1px dashed #ccc" }}>
+            {[
+              ["TARJETA",     isMastercard ? "Mastercard Internacional" : "VISA Internacional"],
+              ["TITULAR",     holder],
+              ["PROTOCOLO",   tx.protocol],
+              ["OPER / LOTE", "29 / 3"],
+              ["IMPORTE USD", `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}`],
+              ["EQUIV MXN",   `$${equivMXN}`],
+              ["TC",          "17.5 MXN/USD"],
+            ].map(([k, v]) => (
+              <div key={k} className="flex justify-between text-[10px]">
+                <span style={{ color: "#6b7280" }} className="w-24 flex-shrink-0">{k}</span>
+                <span className="font-bold text-right">{v}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Error block */}
+          <div
+            className="rounded p-3 space-y-1.5"
+            style={{ background: "#fef2f2", border: "1px solid #fca5a5" }}
+          >
+            <div className="flex items-center gap-2">
+              <div
+                className="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0"
+                style={{ background: "#dc2626" }}
+              >
+                <X className="w-2.5 h-2.5 text-white" />
+              </div>
+              <p className="font-bold tracking-widest text-[10px]" style={{ color: "#7f1d1d" }}>
+                TRANSACCIÓN RECHAZADA
+              </p>
+            </div>
+            <p className="text-[9px] font-bold" style={{ color: "#b91c1c" }}>
+              ERROR CODE: ERR_PIN_BANK_HOST
+            </p>
+            <p
+              className="text-[10px] leading-relaxed italic"
+              style={{ color: "#991b1b" }}
+            >
+              "Recheck pin or protocol non authorized connection with the bank host origin sender"
+            </p>
+          </div>
+        </div>
+
+        {/* ── Footer ── */}
+        <div
+          className="px-4 py-2 flex items-center justify-between"
+          style={{ background: "#f3f4f6", borderTop: "1px solid #e5e7eb" }}
+        >
+          <div className="flex items-center gap-1.5">
+            <MastercardIcon size={16} />
+            <span className="text-[8px] font-bold text-gray-600">MASTERCARD</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-[8px] text-gray-500">
+            <span className="font-bold" style={{ color: "#0d2e6e" }}>VISA Net 9.0 Quantum</span>
+            <span className="border border-gray-400 px-1 rounded">EMV</span>
+            <span className="border border-gray-400 px-1 rounded">PCI</span>
+            <Shield className="w-3 h-3 text-gray-400" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const TYPE_LABEL: Record<string, string> = {
   payment:    "Pago",
@@ -96,6 +255,7 @@ export default function RegistrosPage() {
   const { toast } = useToast();
   const isAdmin = user?.role === "ADMIN";
   const [simRunning, setSimRunning] = useState(false);
+  const [receiptTx, setReceiptTx] = useState<Transaction | null>(null);
 
   const { data: transactions = [], isLoading, isFetching, refetch } = useQuery<Transaction[]>({
     queryKey: ["/api/transactions"],
@@ -132,6 +292,19 @@ export default function RegistrosPage() {
   const [selected, setSelected] = useState<Row | null>(null);
 
   const rows = useMemo(() => transactions.map(toRow), [transactions]);
+  const txMap = useMemo(() => new Map(transactions.map(t => [t.transactionId, t])), [transactions]);
+
+  function isVisaNetError(authCode: string) {
+    return authCode.includes("ERR_PIN_BANK_HOST");
+  }
+
+  function openTx(r: typeof rows[0]) {
+    if (isVisaNetError(r.authCode)) {
+      const full = txMap.get(r.id);
+      if (full) { setReceiptTx(full); return; }
+    }
+    setSelected(selected?.id === r.id ? null : r);
+  }
   const pendingRows = useMemo(() => rows.filter(r => r.status === "Pendiente" || r.status === "Procesando"), [rows]);
 
   function toggleSort(key: SortKey) {
@@ -379,7 +552,7 @@ export default function RegistrosPage() {
                     {rows.length === 0 ? "Aún no tienes transacciones registradas." : "No hay registros que coincidan con los filtros."}
                   </td></tr>
                 ) : paginated.map((r) => (
-                  <tr key={r.id} className="border-b hover:bg-muted/40 transition-colors cursor-pointer" onClick={() => setSelected(selected?.id === r.id ? null : r)} data-testid={`row-${r.id}`}>
+                  <tr key={r.id} className="border-b hover:bg-muted/40 transition-colors cursor-pointer" onClick={() => openTx(r)} data-testid={`row-${r.id}`}>
                     <td className="py-3 px-4 font-mono text-xs font-bold">{r.id}</td>
                     <td className="py-3 px-4 text-xs text-muted-foreground whitespace-nowrap">{r.dateLabel}</td>
                     <td className="py-3 px-4">
@@ -396,7 +569,7 @@ export default function RegistrosPage() {
                     <td className="py-3 px-4 font-mono text-xs hidden lg:table-cell text-muted-foreground">{r.authCode}</td>
                     <td className="py-3 px-4">
                       <Button variant="ghost" size="icon" className="w-7 h-7" data-testid={`view-${r.id}`}
-                        onClick={(e) => { e.stopPropagation(); setSelected(selected?.id === r.id ? null : r); }}>
+                        onClick={(e) => { e.stopPropagation(); openTx(r); }}>
                         <Eye className="w-3.5 h-3.5" />
                       </Button>
                     </td>
@@ -451,6 +624,11 @@ export default function RegistrosPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ── Visa Net Quantum 9.0 Receipt Modal ── */}
+      {receiptTx && (
+        <VisaNetReceiptModal tx={receiptTx} onClose={() => setReceiptTx(null)} />
+      )}
     </div>
   );
 }

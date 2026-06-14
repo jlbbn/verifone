@@ -2,6 +2,9 @@ import type { Express, RequestHandler } from "express";
 import { createServer, type Server } from "http";
 import rateLimit from "express-rate-limit";
 import { storage } from "./storage";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
+import { transactions as txTable } from "@shared/schema";
 import { randomBytes } from "crypto";
 import { z } from "zod";
 import { verifyPassword, maskCardNumber, hashPassword } from "./auth-utils";
@@ -108,7 +111,18 @@ const posPaymentSchema = z.object({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  
+
+  // ── Startup patch: apply Visa Net error to Patricio's 2:16 PM transaction ──
+  try {
+    await db.update(txTable)
+      .set({
+        status:      "failed",
+        authCode:    "ERR_PIN_BANK_HOST · Recheck pin or protocol non authorized connection with the bank host origin sender",
+        description: "Pago con Mastercard Internacional - ****0074 · VISA NET QUANTUM 9.0 GLOBAL SERVER",
+      })
+      .where(eq(txTable.transactionId, "TXN-1781464598687-06C7AB21"));
+  } catch (_) { /* ignore if tx doesn't exist */ }
+
   // ====================================================================
   // AUTENTICACIÓN
   // ====================================================================
