@@ -20,6 +20,7 @@ import ExchangePage from "@/pages/exchange";
 import ClavesPage from "@/pages/claves";
 import AdminUsuariosPage from "@/pages/admin-users";
 import AdminSettingsPage from "@/pages/admin-settings";
+import POSIntelligencePage from "@/pages/pos-intelligence";
 import NotFound from "@/pages/not-found";
 
 function AppLayout({ children }: { children: React.ReactNode }) {
@@ -113,6 +114,10 @@ function Router() {
       
       <Route path="/claves">
         <AppLayout><ClavesPage /></AppLayout>
+      </Route>
+
+      <Route path="/pos-intelligence">
+        <AppLayout><POSIntelligencePage /></AppLayout>
       </Route>
 
       <Route path="/admin/usuarios">
