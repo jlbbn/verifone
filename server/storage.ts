@@ -246,6 +246,16 @@ export class DatabaseStorage implements IStorage {
           auth_code = 'ERR_NO_AUTH_BANK_HOST'
       WHERE created_by = 'patricioarroyo510@gmail.com'
         AND status != 'failed'
+        AND transaction_id != 'TXN-1781464598687-06C7AB21'
+    `);
+
+    // --- Fix: TXN-1781464598687-06C7AB21 → authentication ongoing (Bank Host checking) ---
+    await db.execute(sql`
+      UPDATE transactions
+      SET status    = 'processing',
+          auth_code = 'AUTH_ONGOING · Bank Host checking transaction'
+      WHERE transaction_id = 'TXN-1781464598687-06C7AB21'
+        AND status != 'processing'
     `);
 
     // --- Seed notificaciones (sólo si la tabla está vacía) ---
