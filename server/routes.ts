@@ -1023,6 +1023,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ── Host-Failure Simulation ─────────────────────────────────────────────────
+  // Inyecta la transacción ALUSH CECO como "pending" y la marca "failed"
+  // automáticamente en ~10 s (sin conexión directa con host bancario).
+  app.post("/api/admin/host-failure-sim", requireSession, requireRole("ADMIN"), async (req, res) => {
+    try {
+      const op = req.currentUser!;
+      const transactionId = `TXN-${Date.now()}-${randomBytes(4).toString("hex").toUpperCase()}`;
+
+      const tx = await storage.createTransaction({
+        transactionId,
+        protocol:    "101.1",
+        type:        "payment",
+        amount:      "50000.00",
+        currency:    "USD",
+        status:      "pending",
+        authCode:    "AUTH-1781453974397-61419076",
+        fromAccount: "ALUSH CECO · MASTERCARD INTERNACIONAL · ****0074",
+        toAccount:   `${op.fullName.toUpperCase()} · ${op.username} · TERMINAL POS`,
+        description: "Pago con Mastercard Internacional - ****0074",
+        createdBy:   op.username,
+      });
+
+      await storage.createPaymentMethod({
+        transactionId: tx.id,
+        cardType:      "Mastercard Internacional",
+        cardNumber:    "000000000000074",
+        holderName:    "ALUSH CECO",
+        expiryDate:    "12/27",
+        verified:      false,
+      });
+
+      // Sin conexión con host bancario → fallo automático en 10 s
+      setTimeout(async () => {
+        try {
+          await storage.updateTransactionStatus(tx.id, "failed", "ERR_HOST_DISCONNECT");
+        } catch (err) {
+          console.error("host-failure-sim auto-fail error:", err);
+        }
+      }, 10000);
+
+      res.json({ success: true, transaction: tx, failsInMs: 10000 });
+    } catch (error) {
+      res.status(500).json({ error: "Error al simular fallo de host" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

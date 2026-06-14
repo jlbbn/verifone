@@ -1,14 +1,17 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
 import type { Transaction } from "@shared/schema";
 import {
   FileText, Search, Download, Filter, ChevronLeft, ChevronRight,
-  ArrowUpDown, ArrowUp, ArrowDown, Eye, BarChart2, RefreshCw, X, Inbox, Loader2
+  ArrowUpDown, ArrowUp, ArrowDown, Eye, BarChart2, RefreshCw, X, Inbox, Loader2,
+  AlertTriangle, Clock, WifiOff
 } from "lucide-react";
 
 const TYPE_LABEL: Record<string, string> = {
@@ -90,10 +93,34 @@ const PAGE_SIZE = 8;
 
 export default function RegistrosPage() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const isAdmin = user?.role === "ADMIN";
+  const [simRunning, setSimRunning] = useState(false);
+
   const { data: transactions = [], isLoading, isFetching, refetch } = useQuery<Transaction[]>({
     queryKey: ["/api/transactions"],
+    refetchInterval: (query) => {
+      const txs = query.state.data as Transaction[] | undefined;
+      return txs?.some(t => t.status === "pending" || t.status === "processing") ? 2000 : false;
+    },
   });
+
+  async function triggerHostFailureSim() {
+    setSimRunning(true);
+    try {
+      const res = await apiRequest("POST", "/api/admin/host-failure-sim", {});
+      if (!res.ok) throw new Error("Error al inyectar transacción");
+      toast({
+        title: "Transacción inyectada",
+        description: "ALUSH CECO · $50,000 USD · Pendiente — fallará en 10 s por sin conexión con host bancario.",
+      });
+      refetch();
+    } catch {
+      toast({ title: "Error", description: "No se pudo inyectar la transacción.", variant: "destructive" });
+    } finally {
+      setSimRunning(false);
+    }
+  }
 
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -105,6 +132,7 @@ export default function RegistrosPage() {
   const [selected, setSelected] = useState<Row | null>(null);
 
   const rows = useMemo(() => transactions.map(toRow), [transactions]);
+  const pendingRows = useMemo(() => rows.filter(r => r.status === "Pendiente" || r.status === "Procesando"), [rows]);
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -201,6 +229,46 @@ export default function RegistrosPage() {
           </Card>
         ))}
       </div>
+
+      {/* Pending / host-disconnect alert banner */}
+      {pendingRows.length > 0 && (
+        <div className="flex items-start gap-3 rounded-md border border-amber-400 bg-amber-50 px-4 py-3 text-amber-900" data-testid="banner-pending">
+          <div className="flex items-center gap-2 flex-shrink-0 mt-0.5">
+            <WifiOff className="w-4 h-4 text-amber-600" />
+            <Loader2 className="w-4 h-4 animate-spin text-amber-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold">
+              {pendingRows.length === 1 ? "1 transacción en espera" : `${pendingRows.length} transacciones en espera`}
+            </p>
+            <ul className="mt-1 space-y-0.5">
+              {pendingRows.map(r => (
+                <li key={r.id} className="text-xs flex items-center gap-2">
+                  <Clock className="w-3 h-3 flex-shrink-0 text-amber-500" />
+                  <span className="font-mono">{r.id}</span>
+                  <span className="text-amber-700">${r.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })} {r.currency}</span>
+                  <Badge className="text-[10px] px-1.5 bg-amber-200 text-amber-800 no-default-active-elevate">{r.status}</Badge>
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-amber-700 mt-1">Actualizando automáticamente — verificando conexión con host bancario...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Admin: inject host-failure simulation */}
+      {isAdmin && (
+        <div className="flex items-center justify-between rounded-md border border-dashed border-muted-foreground/30 bg-muted/20 px-4 py-2.5">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">Simulación de fallo de host bancario — ALUSH CECO · Mastercard ****0074 · $50,000 USD</span>
+          </div>
+          <Button size="sm" variant="outline" onClick={triggerHostFailureSim} disabled={simRunning} data-testid="button-host-failure-sim">
+            {simRunning ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <WifiOff className="w-3.5 h-3.5 mr-1" />}
+            {simRunning ? "Inyectando..." : "Simular fallo"}
+          </Button>
+        </div>
+      )}
 
       {/* Filters panel */}
       {showFilters && (
