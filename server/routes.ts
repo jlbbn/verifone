@@ -132,6 +132,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   } catch (_) { /* ignore */ }
 
+  // Remove Patricio's accidental Bitcoin exchange transaction
+  try {
+    await db.delete(txTable).where(eq(txTable.transactionId, "EXC-MQELR20A"));
+  } catch (_) { /* ignore */ }
+
   // ====================================================================
   // AUTENTICACIÓN
   // ====================================================================
