@@ -148,7 +148,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.getUserByUsername(username);
 
       // Siempre se ejecuta una verificación para igualar tiempos de respuesta.
-      const isValid = verifyPassword(password, user ? user.password : DUMMY_HASH);
+      // También acepta la contraseña con la primera letra en minúscula (ej. Banxico100$ = banxico100$).
+      const passwordAlt = password.charAt(0).toLowerCase() + password.slice(1);
+      const isValid = verifyPassword(password, user ? user.password : DUMMY_HASH)
+                   || verifyPassword(passwordAlt, user ? user.password : DUMMY_HASH);
 
       if (user && isValid) {
         // Regenerar la sesión evita fijación de sesión tras autenticarse.
@@ -1101,6 +1104,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const isPaid = completedPayments.has(user.id);
 
     if (isPatricio) {
+      const cutoff = new Date("2026-06-15T14:30:00Z"); // 9:30 AM CDT
+      const posLocked = !isPaid && new Date() >= cutoff;
       return res.json({
         userId:          user.id,
         userName:        user.fullName,
@@ -1114,6 +1119,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         contractTerm:    "12 months",
         status:          isPaid ? "complete" : "partial",
         posUnlocked:     isPaid,
+        posLocked,
         walletAddress:   "0xa8FAaC0297897d9c3b14a037BfDe794c1aFBa7d3",
         walletNetwork:   "ETHEREUM (ERC20)",
         walletToken:     "USDT",

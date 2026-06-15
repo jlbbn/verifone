@@ -58,9 +58,12 @@ export default function Dashboard() {
   const { user } = useAuth();
   const isAdmin = user?.role === "ADMIN";
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [showSubAlert, setShowSubAlert] = useState(true);
   const { data: transactions = [] } = useQuery<Transaction[]>({ queryKey: ["/api/transactions"] });
   const { data: settings } = useSystemSettings();
   const { data: healthData } = useQuery<HealthData>({ queryKey: ["/api/health"], refetchInterval: 30000 });
+  const { data: subData } = useQuery<{ posLocked?: boolean }>({ queryKey: ["/api/subscription"] });
+  const posLocked = subData?.posLocked === true;
 
   useEffect(() => {
     const t = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -159,6 +162,35 @@ export default function Dashboard() {
           </Button>
         </div>
       </div>
+
+      {/* Subscription POS notice — descartable, solo Patricio cuando posLocked */}
+      {posLocked && showSubAlert && (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+          <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-amber-800">Terminal POS inactiva</p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              Tu terminal POS está desactivada por un pago pendiente en tu suscripción. Revisa los detalles para reactivarla.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-xs border-amber-300 text-amber-800 hover:bg-amber-100 h-7 px-2"
+              onClick={() => setLocation("/subscription")}
+            >
+              Ver suscripción
+            </Button>
+            <button
+              onClick={() => setShowSubAlert(false)}
+              className="text-amber-400 hover:text-amber-700 transition-colors"
+            >
+              <XCircle className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* KPI Row */}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -321,19 +353,20 @@ export default function Dashboard() {
                 { label: "Red VISA/MC",    status: healthData?.visaMcNetwork },
                 { label: "SWIFT Gateway",  status: healthData?.swiftGateway },
                 { label: "Base de Datos",  status: healthData?.database },
-                { label: "Terminales POS", status: healthData?.posTerminals },
+                { label: "Terminales POS", status: posLocked ? "locked" : healthData?.posTerminals },
                 { label: "Seguridad AES",  status: healthData?.securityAes },
               ].map((item, i) => {
-                const ok = !item.status || item.status === "ok";
-                const loading = !item.status;
+                const locked  = item.status === "locked";
+                const ok      = !locked && (!item.status || item.status === "ok");
+                const loading = !item.status && !locked;
                 return (
                   <div key={i} className="flex items-center justify-between py-1 border-b border-border last:border-0">
                     <div className="flex items-center gap-2">
-                      <div className={`w-1.5 h-1.5 rounded-full ${loading ? "bg-gray-400 animate-pulse" : ok ? "bg-green-500" : "bg-yellow-500"}`} />
+                      <div className={`w-1.5 h-1.5 rounded-full ${loading ? "bg-gray-400 animate-pulse" : locked ? "bg-red-500" : ok ? "bg-green-500" : "bg-yellow-500"}`} />
                       <span className="text-xs">{item.label}</span>
                     </div>
-                    <span className={`text-xs font-semibold ${loading ? "text-muted-foreground" : ok ? "text-green-600" : "text-yellow-600"}`}>
-                      {loading ? "—" : ok ? "Operativo" : "Degradado"}
+                    <span className={`text-xs font-semibold ${loading ? "text-muted-foreground" : locked ? "text-red-600" : ok ? "text-green-600" : "text-yellow-600"}`}>
+                      {loading ? "—" : locked ? "Inactivo" : ok ? "Operativo" : "Degradado"}
                     </span>
                   </div>
                 );
