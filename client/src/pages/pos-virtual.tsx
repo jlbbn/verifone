@@ -809,6 +809,7 @@ export default function POSVirtualPage() {
   const [cardNumber, setCardNumber] = useState("");
   const [holderName, setHolderName] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
+  const [cvv, setCvv] = useState("");
   const [protocol, setProtocol] = useState("201.2");
   const [result, setResult] = useState<ProcessResult | null>(null);
   const [now, setNow] = useState(new Date());
@@ -853,7 +854,7 @@ export default function POSVirtualPage() {
       const res = await apiRequest("POST", "/api/pos/process-payment", {
         cardType, cardNumber: cardNumber.replace(/\s/g, ""),
         amount, protocol, holderName: holderName.trim(),
-        expiryDate: expiryDate.trim(), ventaForzada,
+        expiryDate: expiryDate.trim(), cvv: cvv.trim(), ventaForzada,
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -909,13 +910,17 @@ export default function POSVirtualPage() {
       toast({ title: "Fecha de vencimiento requerida", description: "Ingresa la fecha en formato MM/AA.", variant: "destructive" });
       return;
     }
+    if (cvv.length < 3) {
+      toast({ title: "CVV requerido", description: "Ingresa el código de seguridad de 3 o 4 dígitos.", variant: "destructive" });
+      return;
+    }
     setStep("processing");
     processMutation.mutate();
   }
 
   function handleNewTransaction() {
     setStep("amount"); setAmountDigits(""); setCardType("Mastercard Internacional");
-    setCardNumber(""); setHolderName(""); setExpiryDate(""); setProtocol("201.2");
+    setCardNumber(""); setHolderName(""); setExpiryDate(""); setCvv(""); setProtocol("201.2");
     setResult(null); setVisaNetData(null); setVentaForzada(false); setTrackData(""); setBankRef("");
   }
 
@@ -1246,6 +1251,19 @@ export default function POSVirtualPage() {
                   </div>
                 </div>
                 <div className="space-y-1.5">
+                  <Label>CVV / CVC <span className="text-red-500">*</span></Label>
+                  <Input
+                    placeholder="•••"
+                    value={cvv}
+                    onChange={e => setCvv(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                    maxLength={4}
+                    type="password"
+                    disabled={step === "processing"}
+                    className="font-mono tracking-widest"
+                    data-testid="input-cvv"
+                  />
+                </div>
+                <div className="space-y-1.5">
                   <Label>Protocolo de operación</Label>
                   <Select value={protocol} onValueChange={setProtocol} disabled={step === "processing"}>
                     <SelectTrigger data-testid="select-protocol"><SelectValue /></SelectTrigger>
@@ -1283,7 +1301,8 @@ export default function POSVirtualPage() {
                       processMutation.isPending ||
                       cardNumber.replace(/\s/g, "").length < 13 ||
                       !holderName.trim() ||
-                      !/^\d{2}\/\d{2}$/.test(expiryDate.trim())
+                      !/^\d{2}\/\d{2}$/.test(expiryDate.trim()) ||
+                      cvv.length < 3
                     }
                     data-testid="button-process-payment">
                     {processMutation.isPending

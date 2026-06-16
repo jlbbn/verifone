@@ -106,7 +106,7 @@ const posPaymentSchema = z.object({
   protocol: z.string().max(20).optional(),
   holderName: z.string().max(120).optional(),
   expiryDate: z.string().max(10).optional(),
-  cvv: z.string().max(4).optional(),
+  cvv: z.string().min(3).max(4),
   pin: z.string().max(8).optional(),
   paymentMethodId: z.string().optional(), // Stripe PaymentMethod token from frontend
   ventaForzada: z.boolean().optional(),
@@ -769,7 +769,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             cardNumber: cardNumber.replace(/\s/g, ""),
             expiryMonth: parseInt(expMM, 10),
             expiryYear: 2000 + parseInt(expYY, 10),
-            securityCode: (parsed.data as any).cvv || "000",
+            securityCode: parsed.data.cvv,
             holderName: holderName ?? "TITULAR",
             holderEmail: "pagos@banxicoplus.mx",
             amount: parseFloat(amount),
@@ -789,7 +789,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return;
           }
         } catch (_mpErr: any) {
-          console.log(`[MP] Error / fallback simulado — ${(_mpErr as any)?.message}`);
+          console.error(`[MP] ERROR — ${(_mpErr as any)?.message ?? JSON.stringify(_mpErr)}`);
           authCode = `AUTH-${Date.now()}-${randomBytes(4).toString("hex").toUpperCase()}`;
         }
       } else {
