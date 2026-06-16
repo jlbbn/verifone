@@ -13,6 +13,7 @@ import {
   posTerminals,
   cryptoKeys,
   documents,
+  supportTickets,
   type User, type InsertUser,
   type Transaction, type InsertTransaction,
   type PaymentMethod, type InsertPaymentMethod,
@@ -23,6 +24,7 @@ import {
   type PosTerminal, type InsertPosTerminal,
   type CryptoKey,
   type Document,
+  type SupportTicket,
   type SystemSettings, DEFAULT_SYSTEM_SETTINGS,
 } from "@shared/schema";
 
@@ -93,11 +95,37 @@ export interface IStorage {
   getDocuments(username: string, isAdmin: boolean): Promise<Omit<Document, "content">[]>;
   getDocument(id: string): Promise<Document | undefined>;
   deleteDocument(id: string): Promise<void>;
+
+  // Support Tickets
+  createSupportTicket(data: Omit<SupportTicket, "id" | "ticketId" | "createdAt" | "updatedAt">): Promise<SupportTicket>;
+  getSupportTickets(username: string, isAdmin: boolean): Promise<SupportTicket[]>;
+  getSupportTicket(id: string): Promise<SupportTicket | undefined>;
+  updateSupportTicket(id: string, patch: Partial<Pick<SupportTicket, "status" | "priority" | "adminNote">>): Promise<SupportTicket | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
 
   async initialize() {
+    // --- Ensure support_tickets table exists ---
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS support_tickets (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        ticket_id TEXT NOT NULL UNIQUE,
+        subject TEXT NOT NULL,
+        category TEXT NOT NULL DEFAULT 'billing',
+        description TEXT NOT NULL,
+        attachment_name TEXT,
+        attachment_mime_type TEXT,
+        attachment_content TEXT,
+        status TEXT NOT NULL DEFAULT 'open',
+        priority TEXT NOT NULL DEFAULT 'medium',
+        submitted_by TEXT NOT NULL,
+        admin_note TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP
+      )
+    `);
+
     // --- Ensure documents table exists ---
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS documents (
@@ -854,6 +882,33 @@ export class DatabaseStorage implements IStorage {
 
   async deleteDocument(id: string): Promise<void> {
     await db.delete(documents).where(eq(documents.id, id));
+  }
+
+  // --- Support Tickets ---
+  async createSupportTicket(data: Omit<SupportTicket, "id" | "ticketId" | "createdAt" | "updatedAt">): Promise<SupportTicket> {
+    const ticketId = `TKT-${Date.now()}-${randomUUID().slice(0, 6).toUpperCase()}`;
+    const [ticket] = await db.insert(supportTickets).values({ ...data, ticketId }).returning();
+    return ticket;
+  }
+
+  async getSupportTickets(username: string, isAdmin: boolean): Promise<SupportTicket[]> {
+    const rows = await db.select().from(supportTickets).orderBy(desc(supportTickets.createdAt));
+    if (isAdmin) return rows;
+    return rows.filter(r => r.submittedBy === username);
+  }
+
+  async getSupportTicket(id: string): Promise<SupportTicket | undefined> {
+    const [ticket] = await db.select().from(supportTickets).where(eq(supportTickets.id, id));
+    return ticket;
+  }
+
+  async updateSupportTicket(id: string, patch: Partial<Pick<SupportTicket, "status" | "priority" | "adminNote">>): Promise<SupportTicket | undefined> {
+    const [updated] = await db
+      .update(supportTickets)
+      .set({ ...patch, updatedAt: new Date() })
+      .where(eq(supportTickets.id, id))
+      .returning();
+    return updated;
   }
 }
 

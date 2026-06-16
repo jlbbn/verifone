@@ -20,6 +20,7 @@ import {
   Zap,
   Coins,
   FolderOpen,
+  AlertTriangle,
 } from "lucide-react";
 import {
   Sidebar,
@@ -62,6 +63,7 @@ const menuItems = [
   { title: "Exchange Crypto",     url: "/exchange",         icon: Bitcoin },
   { title: "Claves Encriptadas",  url: "/claves",           icon: Lock },
   { title: "Documentos",          url: "/documentos",       icon: FolderOpen },
+  { title: "Payment Discrepancies", url: "/support",         icon: AlertTriangle },
 ];
 
 const adminItems = [

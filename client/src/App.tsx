@@ -22,6 +22,7 @@ import AdminUsuariosPage from "@/pages/admin-users";
 import AdminSettingsPage from "@/pages/admin-settings";
 import AdminCajaUSDTPage from "@/pages/admin-caja-usdt";
 import DocumentsPage from "@/pages/documents";
+import SupportPage from "@/pages/support";
 import POSIntelligencePage from "@/pages/pos-intelligence";
 import SubscriptionPage from "@/pages/subscription";
 import SubscriptionPaymentPage from "@/pages/subscription-payment";
@@ -146,6 +147,10 @@ function Router() {
 
       <Route path="/documentos">
         <AppLayout><DocumentsPage /></AppLayout>
+      </Route>
+
+      <Route path="/support">
+        <AppLayout><SupportPage /></AppLayout>
       </Route>
 
       <Route path="/admin/caja-usdt">
