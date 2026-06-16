@@ -1227,6 +1227,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return res.json({ success: true, status: "complete", posUnlocked: true, message: "Payment verified successfully" });
   });
 
+  // ── Documentos seguros ─────────────────────────────────────────────────────
+  app.get("/api/documents", requireSession, async (req, res) => {
+    const user = req.currentUser!;
+    const docs = await storage.getDocuments(user.username, user.role === "ADMIN");
+    res.json(docs);
+  });
+
+  app.post("/api/documents", requireSession, async (req, res) => {
+    const user = req.currentUser!;
+    const schema = z.object({
+      name:     z.string().min(1).max(200),
+      category: z.enum(["contract", "financial", "identity", "other"]),
+      mimeType: z.string().min(1),
+      size:     z.number().int().min(1).max(5 * 1024 * 1024),
+      content:  z.string().min(1),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Datos inválidos", details: parsed.error.flatten() });
+    const doc = await storage.createDocument({ ...parsed.data, uploadedBy: user.username });
+    res.status(201).json(doc);
+  });
+
+  app.get("/api/documents/:id/download", requireSession, async (req, res) => {
+    const user = req.currentUser!;
+    const doc = await storage.getDocument(req.params.id);
+    if (!doc) return res.status(404).json({ error: "Documento no encontrado" });
+    if (user.role !== "ADMIN" && doc.uploadedBy !== user.username)
+      return res.status(403).json({ error: "Acceso denegado" });
+    res.json(doc);
+  });
+
+  app.delete("/api/documents/:id", requireSession, async (req, res) => {
+    const user = req.currentUser!;
+    const doc = await storage.getDocument(req.params.id);
+    if (!doc) return res.status(404).json({ error: "Documento no encontrado" });
+    if (user.role !== "ADMIN" && doc.uploadedBy !== user.username)
+      return res.status(403).json({ error: "Acceso denegado" });
+    await storage.deleteDocument(req.params.id);
+    res.json({ success: true });
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

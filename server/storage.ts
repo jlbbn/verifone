@@ -12,6 +12,7 @@ import {
   notifications,
   posTerminals,
   cryptoKeys,
+  documents,
   type User, type InsertUser,
   type Transaction, type InsertTransaction,
   type PaymentMethod, type InsertPaymentMethod,
@@ -21,6 +22,7 @@ import {
   type Notification, type InsertNotification,
   type PosTerminal, type InsertPosTerminal,
   type CryptoKey,
+  type Document,
   type SystemSettings, DEFAULT_SYSTEM_SETTINGS,
 } from "@shared/schema";
 
@@ -85,11 +87,31 @@ export interface IStorage {
   // System Settings
   getSettings(): Promise<SystemSettings>;
   updateSettings(patch: Partial<SystemSettings>): Promise<SystemSettings>;
+
+  // Documents
+  createDocument(data: Omit<Document, "id" | "createdAt">): Promise<Document>;
+  getDocuments(username: string, isAdmin: boolean): Promise<Omit<Document, "content">[]>;
+  getDocument(id: string): Promise<Document | undefined>;
+  deleteDocument(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
 
   async initialize() {
+    // --- Ensure documents table exists ---
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS documents (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        name TEXT NOT NULL,
+        category TEXT NOT NULL DEFAULT 'other',
+        mime_type TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        content TEXT NOT NULL,
+        uploaded_by TEXT NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+
     // --- Ensure crypto_keys table exists ---
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS crypto_keys (
@@ -800,6 +822,38 @@ export class DatabaseStorage implements IStorage {
   async updateSettings(patch: Partial<SystemSettings>): Promise<SystemSettings> {
     _systemSettings = { ..._systemSettings, ...patch };
     return JSON.parse(JSON.stringify(_systemSettings));
+  }
+
+  // --- Documents ---
+  async createDocument(data: Omit<Document, "id" | "createdAt">): Promise<Document> {
+    const [doc] = await db.insert(documents).values(data).returning();
+    return doc;
+  }
+
+  async getDocuments(username: string, isAdmin: boolean): Promise<Omit<Document, "content">[]> {
+    const rows = await db
+      .select({
+        id: documents.id,
+        name: documents.name,
+        category: documents.category,
+        mimeType: documents.mimeType,
+        size: documents.size,
+        uploadedBy: documents.uploadedBy,
+        createdAt: documents.createdAt,
+      })
+      .from(documents)
+      .orderBy(desc(documents.createdAt));
+    if (isAdmin) return rows;
+    return rows.filter(r => r.uploadedBy === username);
+  }
+
+  async getDocument(id: string): Promise<Document | undefined> {
+    const [doc] = await db.select().from(documents).where(eq(documents.id, id));
+    return doc;
+  }
+
+  async deleteDocument(id: string): Promise<void> {
+    await db.delete(documents).where(eq(documents.id, id));
   }
 }
 
