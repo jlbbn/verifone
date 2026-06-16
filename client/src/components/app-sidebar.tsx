@@ -18,6 +18,7 @@ import {
   Settings,
   BadgeCheck,
   Zap,
+  Coins,
 } from "lucide-react";
 import {
   Sidebar,
@@ -62,8 +63,9 @@ const menuItems = [
 ];
 
 const adminItems = [
-  { title: "Gestión de Usuarios", url: "/admin/usuarios", icon: Users },
-  { title: "Configuración",       url: "/admin/settings", icon: Sliders },
+  { title: "Gestión de Usuarios", url: "/admin/usuarios",   icon: Users  },
+  { title: "Caja USDT",           url: "/admin/caja-usdt",  icon: Coins  },
+  { title: "Configuración",       url: "/admin/settings",   icon: Sliders },
 ];
 
 const PLAN_NAME    = "Enterprise Banking";
@@ -245,7 +247,7 @@ export function AppSidebar() {
         {isAdmin && (
           <SidebarGroup>
             <SidebarGroupLabel className="text-xs text-sidebar-foreground/50 uppercase tracking-wider px-3 flex items-center gap-1">
-              <ChevronRight className="w-3 h-3" /> Administración
+              <ChevronRight className="w-3 h-3" /> Users &amp; Contracts
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
