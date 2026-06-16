@@ -14,9 +14,10 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   MonitorSmartphone, CreditCard, Wifi, ShieldCheck, CheckCircle,
-  X, Delete, RefreshCw, Activity, Loader2, Receipt,
+  X, XCircle, Delete, RefreshCw, Activity, Loader2, Receipt,
   Zap, Clock, Lock, AlertTriangle, Settings, FileBarChart,
-  Radio, Download, Info, ChevronRight, Printer, ArrowDownLeft, Sliders, Link2
+  Radio, Download, Info, ChevronRight, Printer, ArrowDownLeft, Sliders, Link2,
+  TriangleAlert, Router
 } from "lucide-react";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -831,6 +832,15 @@ export default function POSVirtualPage() {
   });
   const canSRLink = user?.role === "ADMIN" || (myTerminals ?? []).some(t => t.status === "active");
 
+  const { data: subData } = useQuery<{ posLocked: boolean }>({
+    queryKey: ["/api/subscription"],
+    enabled: !!user && user.role !== "ADMIN",
+  });
+  const posLocked = !!(subData?.posLocked);
+  const [showSubAlert, setShowSubAlert] = useState(true);
+  // Reset alert every time the page mounts so Patricio sees it on every visit
+  useEffect(() => { setShowSubAlert(true); }, []);
+
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
@@ -955,6 +965,63 @@ export default function POSVirtualPage() {
         </div>
       </div>
 
+      {/* ── Aviso de suscripción pendiente (solo cuando posLocked) ── */}
+      {posLocked && showSubAlert && (
+        <div className="rounded-lg border border-red-300 bg-red-50 px-4 py-4 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-md bg-red-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <TriangleAlert className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <p className="font-bold text-red-800 text-sm">
+                  Mario Patricio Arroyo — Suscripción con pago pendiente
+                </p>
+                <p className="text-xs text-red-700 mt-1 leading-relaxed">
+                  Tu terminal POS física y el <strong>Enrutamiento POS</strong> están desactivados. Sin enrutamiento activo, las transacciones que digites aquí <strong>no tendrán efecto real ni procesamiento concreto.</strong>
+                </p>
+              </div>
+            </div>
+            <button onClick={() => setShowSubAlert(false)} className="text-red-400 hover:text-red-700 transition-colors flex-shrink-0">
+              <XCircle className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Explicación conceptual */}
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            <div className="rounded-md bg-white border border-red-200 px-3 py-2.5 space-y-1">
+              <div className="flex items-center gap-1.5 font-semibold text-gray-700">
+                <MonitorSmartphone className="w-3.5 h-3.5 text-gray-500" />
+                POS Virtual — Digitaliza
+              </div>
+              <p className="text-gray-500 leading-relaxed">
+                Captura y registra los datos de la transacción. <strong>Disponible</strong>, pero sin enrutamiento, su registro queda en espera.
+              </p>
+            </div>
+            <div className="rounded-md bg-red-100 border border-red-300 px-3 py-2.5 space-y-1">
+              <div className="flex items-center gap-1.5 font-semibold text-red-800">
+                <Router className="w-3.5 h-3.5 text-red-600" />
+                Enrutamiento POS — Ejecuta
+              </div>
+              <p className="text-red-700 leading-relaxed">
+                Es quien efectúa el procesamiento real con la red bancaria. <strong>Inactivo</strong> hasta regularizar la suscripción.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between pt-1">
+            <p className="text-[11px] text-red-600">
+              Regulariza tu suscripción para reactivar el enrutamiento y el procesamiento real de pagos.
+            </p>
+            <Button size="sm" variant="outline"
+              className="text-xs border-red-400 text-red-700 hover:bg-red-100 flex-shrink-0 ml-3"
+              onClick={() => window.location.href = "/subscription"}>
+              Ver suscripción
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Protocol info badge */}
       {is101 && (
         <Card className="border-blue-300 bg-blue-50/60">
@@ -1043,13 +1110,24 @@ export default function POSVirtualPage() {
                   </div>
                 )}
 
-                {step === "approved" && (
+                {step === "approved" && !posLocked && (
                   <div className="text-center flex-1 flex flex-col items-center justify-center gap-1">
                     <CheckCircle className="w-8 h-8 text-green-400" />
                     <p className="text-green-400 text-sm font-bold">APROBADO</p>
                     <p className="text-gray-400 text-xs font-mono">{result?.authCode}</p>
                     {isVF && <p className="text-amber-400 text-[10px] font-semibold">VENTA FORZADA</p>}
                     {is101 && <p className="text-blue-300 text-[10px] font-semibold">VISA NETWORK</p>}
+                  </div>
+                )}
+                {step === "approved" && posLocked && (
+                  <div className="text-center flex-1 flex flex-col items-center justify-center gap-1 px-2">
+                    <div className="w-9 h-9 rounded-full bg-amber-500/20 flex items-center justify-center">
+                      <Router className="w-5 h-5 text-amber-400" />
+                    </div>
+                    <p className="text-amber-400 text-xs font-bold tracking-widest mt-0.5">DIGITALIZADO</p>
+                    <p className="text-gray-400 text-[10px] font-mono">{result?.authCode}</p>
+                    <p className="text-amber-600 text-[9px] font-semibold tracking-wide mt-0.5">SIN ENRUTAMIENTO ACTIVO</p>
+                    <p className="text-gray-500 text-[9px] leading-tight mt-1">Registro capturado.<br/>Procesamiento suspendido.</p>
                   </div>
                 )}
               </div>
