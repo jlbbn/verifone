@@ -727,6 +727,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POS VIRTUAL - PROCESAMIENTO DE PAGOS
   // ====================================================================
   
+  // ── Mercado Pago: diagnóstico de conexión (sin cobrar) ───────────────────
+  app.get("/api/mp/status", async (req, res) => {
+    if (!req.currentUser) { res.status(401).json({ error: "No autenticado" }); return; }
+    if (!process.env.MP_ACCESS_TOKEN) {
+      res.json({ connected: false, reason: "MP_ACCESS_TOKEN no configurado" });
+      return;
+    }
+    try {
+      const r = await fetch("https://api.mercadopago.com/v1/payment_methods", {
+        headers: { "Authorization": `Bearer ${process.env.MP_ACCESS_TOKEN}` },
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const methods = await r.json() as any[];
+      res.json({ connected: true, paymentMethods: methods.length, token: "APP_USR-***" });
+    } catch (err: any) {
+      res.json({ connected: false, reason: err.message });
+    }
+  });
+
   app.post("/api/pos/process-payment", paymentLimiter, async (req, res) => {
     try {
       const parsed = posPaymentSchema.safeParse(req.body);
@@ -763,16 +782,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           authCode = mpResult.authorization_code
             ? `MP-${mpResult.authorization_code}`
             : `MP-${mpResult.id}`;
+          console.log(`[MP] Pago procesado | ID:${mpResult.id} | Estado:${mpResult.status} | Detalle:${mpResult.status_detail} | Auth:${authCode}`);
           if (mpResult.status === "rejected") {
+            console.log(`[MP] RECHAZADO — ${mpResult.status_detail}`);
             res.status(402).json({ error: `Tarjeta rechazada: ${mpResult.status_detail}` });
             return;
           }
         } catch (_mpErr: any) {
-          // MP no disponible — flujo simulado
+          console.log(`[MP] Error / fallback simulado — ${(_mpErr as any)?.message}`);
           authCode = `AUTH-${Date.now()}-${randomBytes(4).toString("hex").toUpperCase()}`;
         }
       } else {
-        // Sin token MP configurado — flujo simulado
+        console.log("[MP] Token no configurado — flujo simulado");
         authCode = `AUTH-${Date.now()}-${randomBytes(4).toString("hex").toUpperCase()}`;
       }
 
@@ -832,6 +853,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         authCode,
         tokenId,
         status: "processing",
+        realCharge,
+        mpPaymentId,
         message: "Pago procesado exitosamente"
       });
     } catch (error) {
