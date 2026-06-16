@@ -135,7 +135,20 @@ export const cryptoKeys = pgTable("crypto_keys", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Documentos seguros
+export const documents = pgTable("documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  category: text("category").notNull().default("other"), // contract | financial | identity | other
+  mimeType: text("mime_type").notNull(),
+  size: integer("size").notNull(),
+  content: text("content").notNull(), // base64
+  uploadedBy: text("uploaded_by").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Insert schemas
+export const insertDocumentSchema = createInsertSchema(documents).omit({ id: true, createdAt: true });
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });
 export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
 export const insertTransactionSchema = createInsertSchema(transactions).omit({ id: true, createdAt: true });
@@ -169,6 +182,9 @@ export type InsertBankingProtocol = z.infer<typeof insertBankingProtocolSchema>;
 
 export type CryptoKey = typeof cryptoKeys.$inferSelect;
 export type InsertCryptoKey = z.infer<typeof insertCryptoKeySchema>;
+
+export type Document = typeof documents.$inferSelect;
+export type InsertDocument = z.infer<typeof insertDocumentSchema>;
 
 export type PosTerminal = typeof posTerminals.$inferSelect;
 

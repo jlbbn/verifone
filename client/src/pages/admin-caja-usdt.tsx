@@ -380,7 +380,7 @@ export default function AdminCajaUSDT() {
       {/* ── Lista completa de 15 usuarios ── */}
       <Card>
         <CardContent className="px-5 py-4">
-          <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+          <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 text-[#c8322b]" />
               <span className="text-sm font-semibold">Todos los Suscriptores</span>
@@ -388,6 +388,15 @@ export default function AdminCajaUSDT() {
             <Badge variant="outline" className="text-[10px] no-default-active-elevate">
               ${SUBSCRIPTION_PRICE} USD / año
             </Badge>
+          </div>
+
+          {/* Banner resumen pagos */}
+          <div className="flex items-center gap-3 px-3 py-2.5 rounded-md bg-green-50 border border-green-200 mb-3">
+            <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+            <p className="text-xs text-green-800 leading-relaxed">
+              <strong>14 de 15 suscriptores</strong> han liquidado la suscripción anual completa
+              de <strong>${SUBSCRIPTION_PRICE} USD</strong>. Solo 1 usuario con saldo pendiente.
+            </p>
           </div>
 
           <div className="hidden md:grid grid-cols-12 gap-2 px-3 py-2 bg-muted/40 rounded-md mb-1">
@@ -400,45 +409,85 @@ export default function AdminCajaUSDT() {
           </div>
 
           <div className="divide-y divide-border">
-            {userList.map((u) => (
-              <div key={u.id} className="grid grid-cols-12 gap-2 items-center px-3 py-2.5" data-testid={`row-user-${u.id}`}>
-                <div className="col-span-1 text-xs text-muted-foreground font-mono">
-                  {String(u.id).padStart(2, "0")}
-                </div>
-                <div className="col-span-6 md:col-span-4 min-w-0">
-                  <p className="text-xs font-mono font-medium truncate" data-testid={`text-email-${u.id}`}>{u.email}</p>
-                </div>
-                <div className="hidden md:block col-span-2">
-                  <p className="text-[11px] text-muted-foreground">{u.date}</p>
-                </div>
-                <div className="hidden md:flex col-span-2 items-center gap-1">
-                  {u.renewals === 3 ? (
-                    <Badge className="text-[10px] bg-purple-100 text-purple-800 border-purple-200 no-default-active-elevate">
-                      3 ciclos
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-[10px] no-default-active-elevate">1 ciclo</Badge>
+            {userList.map((u) => {
+              const isPatricio = u.id === 10;
+              const pct = Math.round((u.paid / SUBSCRIPTION_PRICE) * 100);
+              return (
+                <div
+                  key={u.id}
+                  className={`px-3 py-2.5 ${isPatricio ? "bg-amber-50/80 rounded-md border border-amber-200 my-0.5" : ""}`}
+                  data-testid={`row-user-${u.id}`}
+                >
+                  <div className="grid grid-cols-12 gap-2 items-center">
+                    <div className="col-span-1 text-xs text-muted-foreground font-mono">
+                      {String(u.id).padStart(2, "0")}
+                    </div>
+                    <div className="col-span-6 md:col-span-4 min-w-0">
+                      <p className="text-xs font-mono font-medium truncate" data-testid={`text-email-${u.id}`}>
+                        {u.email}
+                      </p>
+                      {isPatricio && (
+                        <p className="text-[10px] text-amber-700 font-semibold mt-0.5">
+                          Patricio Arroyo — saldo pendiente
+                        </p>
+                      )}
+                    </div>
+                    <div className="hidden md:block col-span-2">
+                      <p className="text-[11px] text-muted-foreground">{u.date}</p>
+                    </div>
+                    <div className="hidden md:flex col-span-2 items-center gap-1">
+                      {u.renewals === 3 ? (
+                        <Badge className="text-[10px] bg-purple-100 text-purple-800 border-purple-200 no-default-active-elevate">
+                          3 ciclos
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[10px] no-default-active-elevate">1 ciclo</Badge>
+                      )}
+                    </div>
+                    <div className="col-span-3 md:col-span-1 text-right">
+                      <p className={`text-xs font-bold ${isPatricio ? "text-amber-700" : ""}`}>
+                        ${fmt(u.paid)}
+                      </p>
+                      {u.remaining > 0 && (
+                        <p className="text-[10px] text-amber-600 font-semibold">
+                          −${fmt(u.remaining)} pend.
+                        </p>
+                      )}
+                    </div>
+                    <div className="col-span-2 flex justify-end">
+                      {u.status === "complete" ? (
+                        <Badge className="text-[10px] bg-green-100 text-green-700 border-green-200 no-default-active-elevate gap-1">
+                          <CheckCircle className="w-2.5 h-2.5" />Pagado
+                        </Badge>
+                      ) : (
+                        <Badge className="text-[10px] bg-amber-100 text-amber-800 border-amber-200 no-default-active-elevate gap-1">
+                          <Clock className="w-2.5 h-2.5" />Parcial
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Barra de progreso solo para Patricio */}
+                  {isPatricio && (
+                    <div className="mt-2 space-y-1">
+                      <div className="flex justify-between text-[10px] font-medium">
+                        <span className="text-amber-700">Pagado: ${fmt(u.paid)} USDT</span>
+                        <span className="text-amber-600">Pendiente: ${fmt(u.remaining)} USDT · {pct}%</span>
+                      </div>
+                      <div className="w-full h-2 bg-amber-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-amber-400 transition-all duration-700"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <p className="text-[10px] text-amber-600">
+                        {pct}% del total · Faltan ${fmt(u.remaining)} para completar ${SUBSCRIPTION_PRICE} USD
+                      </p>
+                    </div>
                   )}
                 </div>
-                <div className="col-span-3 md:col-span-1 text-right">
-                  <p className="text-xs font-semibold">${fmt(u.paid)}</p>
-                  {u.remaining > 0 && (
-                    <p className="text-[10px] text-amber-600">+${fmt(u.remaining)}</p>
-                  )}
-                </div>
-                <div className="col-span-2 flex justify-end">
-                  {u.status === "complete" ? (
-                    <Badge className="text-[10px] bg-green-100 text-green-700 border-green-200 no-default-active-elevate gap-1">
-                      <CheckCircle className="w-2.5 h-2.5" />Pagado
-                    </Badge>
-                  ) : (
-                    <Badge className="text-[10px] bg-amber-100 text-amber-800 border-amber-200 no-default-active-elevate gap-1">
-                      <Clock className="w-2.5 h-2.5" />Parcial
-                    </Badge>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="mt-3 pt-3 border-t border-border">
