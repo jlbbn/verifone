@@ -31,9 +31,8 @@ const WALLET_TOKEN   = "USDT";
 const WALLET_BALANCE = 24221.00;
 const SUBSCRIPTION_PRICE = 750;
 
-/* ── Lista de 15 usuarios (emails censurados) ─────────────────────────── */
+/* ── Lista de 14 usuarios (emails censurados) ─────────────────────────── */
 const userList = [
-  { id: 1,  email: "jos***@banxicoplus.com", date: "03 Ene 2025", status: "complete", paid: 750, remaining: 0,   renewals: 3 },
   { id: 2,  email: "ang***@gmail.com",        date: "15 Ene 2025", status: "complete", paid: 750, remaining: 0,   renewals: 3 },
   { id: 3,  email: "soc***@gmail.com",        date: "01 Feb 2025", status: "complete", paid: 750, remaining: 0,   renewals: 3 },
   { id: 4,  email: "cor***@gmail.com",        date: "14 Feb 2025", status: "complete", paid: 750, remaining: 0,   renewals: 3 },
@@ -377,7 +376,7 @@ export default function AdminCajaUSDT() {
         </CardContent>
       </Card>
 
-      {/* ── Lista completa de 15 usuarios ── */}
+      {/* ── Lista completa de 14 usuarios ── */}
       <Card>
         <CardContent className="px-5 py-4">
           <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
@@ -394,7 +393,7 @@ export default function AdminCajaUSDT() {
           <div className="flex items-center gap-3 px-3 py-2.5 rounded-md bg-green-50 border border-green-200 mb-3">
             <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
             <p className="text-xs text-green-800 leading-relaxed">
-              <strong>14 de 15 suscriptores</strong> han liquidado la suscripción anual completa
+              <strong>13 de 14 suscriptores</strong> han liquidado la suscripción anual completa
               de <strong>${SUBSCRIPTION_PRICE} USD</strong>. Solo 1 usuario con saldo pendiente.
             </p>
           </div>
