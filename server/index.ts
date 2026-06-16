@@ -4,7 +4,6 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
 import { storage } from "./storage";
-import { WebhookHandlers } from "./webhookHandlers";
 
 const app = express();
 
@@ -16,28 +15,31 @@ app.use(
   }),
 );
 
-// ── Stripe webhook MUST be registered before express.json() ──────────────────
-app.post(
-  "/api/stripe/webhook",
-  express.raw({ type: "application/json" }),
-  async (req: Request, res: Response) => {
-    const signature = req.headers["stripe-signature"];
-    if (!signature) {
-      res.status(400).json({ error: "Missing stripe-signature header" });
-      return;
-    }
-    const sig = Array.isArray(signature) ? signature[0] : signature;
+// ── Mercado Pago IPN — registrado ANTES de cualquier middleware de auth ───────
+// MP envía GET ?topic=payment&id=XXX sin sesión (server-to-server).
+app.get("/api/mp/ipn", async (req: Request, res: Response) => {
+  const { topic, id } = req.query as { topic?: string; id?: string };
+  log(`[MP-IPN] GET topic=${topic} id=${id}`);
+  if (topic === "payment" && id && process.env.MP_ACCESS_TOKEN) {
     try {
-      await WebhookHandlers.processWebhook(req.body as Buffer, sig);
-      res.status(200).json({ received: true });
+      const r = await fetch(`https://api.mercadopago.com/v1/payments/${id}`, {
+        headers: { Authorization: `Bearer ${process.env.MP_ACCESS_TOKEN}` },
+      });
+      const data = await r.json() as { status?: string; status_detail?: string };
+      log(`[MP-IPN] Pago ${id} → status=${data.status} detail=${data.status_detail}`);
     } catch (err: any) {
-      console.error("Stripe webhook error:", err.message);
-      res.status(400).json({ error: err.message });
+      console.error("[MP-IPN] Error consultando pago:", err.message);
     }
   }
-);
+  res.sendStatus(200);
+});
 
-// ── Body parsers (after webhook route) ───────────────────────────────────────
+app.post("/api/mp/ipn", (req: Request, res: Response) => {
+  log(`[MP-IPN] POST recibido`);
+  res.sendStatus(200);
+});
+
+// ── Body parsers ──────────────────────────────────────────────────────────────
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: false, limit: "1mb" }));
 
@@ -79,23 +81,6 @@ app.use((req, res, next) => {
   await storage.initialize();
   await setupAuth(app);
   registerAuthRoutes(app);
-
-  // ── Initialize Stripe (non-blocking — don't crash server if Stripe is down) ──
-  try {
-    const { runMigrations } = await import("stripe-replit-sync");
-    const { getStripeSync } = await import("./stripeClient");
-    const databaseUrl = process.env.DATABASE_URL;
-    if (databaseUrl) {
-      await runMigrations({ databaseUrl });
-      const stripeSync = await getStripeSync();
-      const webhookBaseUrl = `https://${(process.env.REPLIT_DOMAINS ?? "").split(",")[0]}`;
-      await stripeSync.findOrCreateManagedWebhook(`${webhookBaseUrl}/api/stripe/webhook`);
-      await stripeSync.syncBackfill();
-      log("Stripe initialized successfully");
-    }
-  } catch (err: any) {
-    console.error("Stripe init warning (non-fatal):", err.message);
-  }
 
   const server = await registerRoutes(app);
 
