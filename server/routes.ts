@@ -1268,6 +1268,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ success: true });
   });
 
+  // ====================================================================
+  // SUPPORT TICKETS — Payment Discrepancies
+  // ====================================================================
+
+  app.get("/api/support/tickets", requireSession, async (req, res) => {
+    const user = req.currentUser!;
+    const tickets = await storage.getSupportTickets(user.username, user.role === "ADMIN");
+    res.json(tickets);
+  });
+
+  app.post("/api/support/tickets", requireSession, async (req, res) => {
+    const user = req.currentUser!;
+    const schema = z.object({
+      subject:             z.string().min(3).max(200),
+      category:            z.enum(["billing", "payment", "refund", "charge", "other"]),
+      description:         z.string().min(10).max(2000),
+      priority:            z.enum(["low", "medium", "high"]).default("medium"),
+      attachmentName:      z.string().max(255).optional(),
+      attachmentMimeType:  z.string().max(100).optional(),
+      attachmentContent:   z.string().optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Datos inválidos", details: parsed.error.flatten() });
+    const ticket = await storage.createSupportTicket({ ...parsed.data, submittedBy: user.username, status: "open", adminNote: null });
+    res.status(201).json(ticket);
+  });
+
+  app.patch("/api/support/tickets/:id", requireSession, async (req, res) => {
+    const user = req.currentUser!;
+    if (user.role !== "ADMIN") return res.status(403).json({ error: "Acceso denegado" });
+    const schema = z.object({
+      status:    z.enum(["open", "in_progress", "resolved", "closed"]).optional(),
+      priority:  z.enum(["low", "medium", "high"]).optional(),
+      adminNote: z.string().max(1000).nullable().optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Datos inválidos" });
+    const updated = await storage.updateSupportTicket(req.params.id, parsed.data);
+    if (!updated) return res.status(404).json({ error: "Ticket no encontrado" });
+    res.json(updated);
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

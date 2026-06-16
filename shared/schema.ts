@@ -135,6 +135,28 @@ export const cryptoKeys = pgTable("crypto_keys", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Tickets de soporte — Payment Discrepancies
+export const supportTickets = pgTable("support_tickets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ticketId: text("ticket_id").notNull().unique(),
+  subject: text("subject").notNull(),
+  category: text("category").notNull().default("billing"),
+  description: text("description").notNull(),
+  attachmentName: text("attachment_name"),
+  attachmentMimeType: text("attachment_mime_type"),
+  attachmentContent: text("attachment_content"),
+  status: text("status").notNull().default("open"),
+  priority: text("priority").notNull().default("medium"),
+  submittedBy: text("submitted_by").notNull(),
+  adminNote: text("admin_note"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at"),
+});
+
+export const insertSupportTicketSchema = createInsertSchema(supportTickets).omit({ id: true, ticketId: true, createdAt: true, updatedAt: true });
+export type SupportTicket = typeof supportTickets.$inferSelect;
+export type InsertSupportTicket = z.infer<typeof insertSupportTicketSchema>;
+
 // Documentos seguros
 export const documents = pgTable("documents", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
