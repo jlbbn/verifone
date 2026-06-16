@@ -49,12 +49,11 @@ const userList = [
   { id: 15, email: "ric***@gmail.com",        date: "17 Nov 2025", status: "complete", paid: 750, remaining: 0,   renewals: 1 },
 ];
 
-/* ── Los 8 con 3 renovaciones consecutivas ────────────────────────────── */
+/* ── Los 7 con 3 renovaciones consecutivas ────────────────────────────── */
 const topRenewers = userList.filter(u => u.renewals === 3);
 
 /* ── Historial de renovaciones por año ───────────────────────────────── */
 const renewalHistory: Record<number, { year: number; amount: number; date: string }[]> = {
-  1:  [{ year: 2023, amount: 750, date: "05 Ene 2023" }, { year: 2024, amount: 750, date: "05 Ene 2024" }, { year: 2025, amount: 750, date: "03 Ene 2025" }],
   2:  [{ year: 2023, amount: 750, date: "18 Ene 2023" }, { year: 2024, amount: 750, date: "17 Ene 2024" }, { year: 2025, amount: 750, date: "15 Ene 2025" }],
   3:  [{ year: 2023, amount: 750, date: "03 Feb 2023" }, { year: 2024, amount: 750, date: "02 Feb 2024" }, { year: 2025, amount: 750, date: "01 Feb 2025" }],
   4:  [{ year: 2023, amount: 750, date: "16 Feb 2023" }, { year: 2024, amount: 750, date: "15 Feb 2024" }, { year: 2025, amount: 750, date: "14 Feb 2025" }],
@@ -66,9 +65,9 @@ const renewalHistory: Record<number, { year: number; amount: number; date: strin
 
 /* ── Datos para la gráfica de pastel ─────────────────────────────────── */
 const pieData = [
-  { name: "3 Renovaciones (8)",  value: 8 * 750 * 3, users: 8,  color: "#c8322b" },
-  { name: "Año activo · 1 ciclo (6)", value: 6 * 750,  users: 6,  color: "#2563eb" },
-  { name: "Pago parcial (1)",    value: 499,          users: 1,  color: "#f59e0b" },
+  { name: "3 Renovaciones (7)",       value: 7 * 750 * 3, users: 7,  color: "#c8322b" },
+  { name: "Año activo · 1 ciclo (6)", value: 6 * 750,     users: 6,  color: "#2563eb" },
+  { name: "Pago parcial (1)",         value: 499,         users: 1,  color: "#f59e0b" },
 ];
 
 /* ── Utilidades ───────────────────────────────────────────────────────── */
