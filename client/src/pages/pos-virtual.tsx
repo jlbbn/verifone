@@ -855,7 +855,10 @@ export default function POSVirtualPage() {
         amount, protocol, holderName: holderName || "TITULAR",
         expiryDate: expiryDate || "12/27", ventaForzada,
       });
-      if (!res.ok) throw new Error("Error al procesar");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Error al procesar");
+      }
       return res.json() as Promise<ProcessResult>;
     },
     onSuccess: (data) => {
@@ -1115,6 +1118,7 @@ export default function POSVirtualPage() {
                     <CheckCircle className="w-8 h-8 text-green-400" />
                     <p className="text-green-400 text-sm font-bold">APROBADO</p>
                     <p className="text-gray-400 text-xs font-mono">{result?.authCode}</p>
+
                     {isVF && <p className="text-amber-400 text-[10px] font-semibold">VENTA FORZADA</p>}
                     {is101 && <p className="text-blue-300 text-[10px] font-semibold">VISA NETWORK</p>}
                   </div>
