@@ -771,8 +771,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const mpResult = await processMPPaymentWithToken({
             cardToken: mpCardToken,
             cardType,
-            holderEmail: "pagos@banxicoplus.mx",
-            amount: parseFloat(amount),
+            holderEmail: "josbar93@gmail.com",
+            amount: Math.max(parseFloat(amount), 5),
             description: `Banxico Plus POS · ${cardType} · ${protocol ?? "201.1"}`,
           });
           mpPaymentId = mpResult.id;
