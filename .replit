@@ -40,3 +40,8 @@ waitForPort = 5000
 
 [agent]
 integrations = ["javascript_log_in_with_replit:2.0.0", "javascript_database:1.0.0", "stripe:1.0.0"]
+
+[userenv]
+
+[userenv.shared]
+MP_PUBLIC_KEY = "APP_USR-e41115ec-e443-4ad4-94eb-6b652af15e4c"
