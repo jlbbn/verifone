@@ -40,16 +40,16 @@ const userList = [
   { id: 6,  email: "lui***@gmail.com",        date: "12 Mar 2025", status: "complete", paid: 750, remaining: 0,   renewals: 3 },
   { id: 7,  email: "mar***@yahoo.com",        date: "05 Abr 2025", status: "complete", paid: 750, remaining: 0,   renewals: 3 },
   { id: 8,  email: "fer***@gmail.com",        date: "20 Abr 2025", status: "complete", paid: 750, remaining: 0,   renewals: 3 },
-  { id: 9,  email: "and***@hotmail.com",      date: "02 May 2025", status: "complete", paid: 750, remaining: 0,   renewals: 1 },
+  { id: 9,  email: "and***@hotmail.com",      date: "02 May 2025", status: "complete", paid: 750, remaining: 0,   renewals: 3 },
   { id: 10, email: "pat***@gmail.com",        date: "14 May 2025", status: "partial",  paid: 499, remaining: 251, renewals: 1 },
-  { id: 11, email: "arq***@hotmail.com",      date: "20 May 2025", status: "complete", paid: 750, remaining: 0,   renewals: 1 },
+  { id: 11, email: "arq***@hotmail.com",      date: "20 May 2025", status: "complete", paid: 750, remaining: 0,   renewals: 3 },
   { id: 12, email: "ale***@gmail.com",        date: "08 Jun 2025", status: "complete", paid: 750, remaining: 0,   renewals: 1 },
   { id: 13, email: "jor***@outlook.com",      date: "19 Jul 2025", status: "complete", paid: 750, remaining: 0,   renewals: 1 },
   { id: 14, email: "san***@gmail.com",        date: "03 Sep 2025", status: "complete", paid: 750, remaining: 0,   renewals: 1 },
   { id: 15, email: "ric***@gmail.com",        date: "17 Nov 2025", status: "complete", paid: 750, remaining: 0,   renewals: 1 },
 ];
 
-/* ── Los 7 con 3 renovaciones consecutivas ────────────────────────────── */
+/* ── Los 9 con 3 renovaciones consecutivas ────────────────────────────── */
 const topRenewers = userList.filter(u => u.renewals === 3);
 
 /* ── Historial de renovaciones por año ───────────────────────────────── */
@@ -61,12 +61,14 @@ const renewalHistory: Record<number, { year: number; amount: number; date: strin
   6:  [{ year: 2023, amount: 750, date: "14 Mar 2023" }, { year: 2024, amount: 750, date: "13 Mar 2024" }, { year: 2025, amount: 750, date: "12 Mar 2025" }],
   7:  [{ year: 2023, amount: 750, date: "07 Abr 2023" }, { year: 2024, amount: 750, date: "06 Abr 2024" }, { year: 2025, amount: 750, date: "05 Abr 2025" }],
   8:  [{ year: 2023, amount: 750, date: "22 Abr 2023" }, { year: 2024, amount: 750, date: "21 Abr 2024" }, { year: 2025, amount: 750, date: "20 Abr 2025" }],
+  9:  [{ year: 2023, amount: 750, date: "05 May 2023" }, { year: 2024, amount: 750, date: "04 May 2024" }, { year: 2025, amount: 750, date: "02 May 2025" }],
+  11: [{ year: 2023, amount: 750, date: "22 May 2023" }, { year: 2024, amount: 750, date: "21 May 2024" }, { year: 2025, amount: 750, date: "20 May 2025" }],
 };
 
 /* ── Datos para la gráfica de pastel ─────────────────────────────────── */
 const pieData = [
-  { name: "3 Renovaciones (7)",       value: 7 * 750 * 3, users: 7,  color: "#c8322b" },
-  { name: "Año activo · 1 ciclo (6)", value: 6 * 750,     users: 6,  color: "#2563eb" },
+  { name: "3 Renovaciones (9)",       value: 9 * 750 * 3, users: 9,  color: "#c8322b" },
+  { name: "Año activo · 1 ciclo (4)", value: 4 * 750,     users: 4,  color: "#2563eb" },
   { name: "Pago parcial (1)",         value: 499,         users: 1,  color: "#f59e0b" },
 ];
 
