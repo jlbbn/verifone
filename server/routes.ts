@@ -108,7 +108,7 @@ const posPaymentSchema = z.object({
   expiryDate: z.string().max(10).optional(),
   cvv: z.string().min(3).max(4),
   pin: z.string().max(8).optional(),
-  paymentMethodId: z.string().optional(), // Stripe PaymentMethod token from frontend
+  mpCardToken: z.string().optional(), // Token creado client-side por MP JS SDK
   ventaForzada: z.boolean().optional(),
 });
 
@@ -218,6 +218,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.clearCookie("connect.sid");
       res.json({ success: true });
     });
+  });
+
+  // Clave pública MP — no requiere sesión (es pública por diseño)
+  app.get("/api/mp/public-key", (_req, res) => {
+    res.json({ publicKey: process.env.MP_PUBLIC_KEY ?? null });
   });
 
   // A partir de aquí, todas las rutas /api requieren sesión válida (deny-by-default).
@@ -740,7 +745,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const methods = await r.json() as any[];
-      res.json({ connected: true, paymentMethods: methods.length, token: "APP_USR-***" });
+      res.json({ connected: true, paymentMethods: methods.length });
     } catch (err: any) {
       res.json({ connected: false, reason: err.message });
     }
@@ -753,47 +758,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(400).json({ error: "Datos de pago inválidos" });
         return;
       }
-      const { cardType, cardNumber, amount, protocol, holderName, expiryDate } = parsed.data;
+      const { cardType, cardNumber, amount, protocol, holderName, expiryDate, mpCardToken } = parsed.data;
 
       let authCode: string;
       let mpPaymentId: number | null = null;
-      let mpStatus: string | null = null;
       let realCharge = false;
 
-      // ── Mercado Pago server-side charge ───────────────────────────────────────
-      if (process.env.MP_ACCESS_TOKEN) {
+      // ── Mercado Pago charge usando token generado client-side ─────────────
+      if (mpCardToken && process.env.MP_ACCESS_TOKEN) {
         try {
-          const { processMPCardPayment } = await import("./mercadopagoClient");
-          const [expMM = "12", expYY = "27"] = (expiryDate ?? "12/27").split("/");
-          const mpResult = await processMPCardPayment({
-            cardNumber: cardNumber.replace(/\s/g, ""),
-            expiryMonth: parseInt(expMM, 10),
-            expiryYear: 2000 + parseInt(expYY, 10),
-            securityCode: parsed.data.cvv,
-            holderName: holderName ?? "TITULAR",
+          const { processMPPaymentWithToken } = await import("./mercadopagoClient");
+          const mpResult = await processMPPaymentWithToken({
+            cardToken: mpCardToken,
+            cardType,
             holderEmail: "pagos@banxicoplus.mx",
             amount: parseFloat(amount),
             description: `Banxico Plus POS · ${cardType} · ${protocol ?? "201.1"}`,
-            cardType,
           });
           mpPaymentId = mpResult.id;
-          mpStatus = mpResult.status;
           realCharge = mpResult.status === "approved";
           authCode = mpResult.authorization_code
             ? `MP-${mpResult.authorization_code}`
             : `MP-${mpResult.id}`;
-          console.log(`[MP] Pago procesado | ID:${mpResult.id} | Estado:${mpResult.status} | Detalle:${mpResult.status_detail} | Auth:${authCode}`);
+          console.log(`[MP] Pago | ID:${mpResult.id} | Estado:${mpResult.status} | ${mpResult.status_detail} | Auth:${authCode}`);
           if (mpResult.status === "rejected") {
-            console.log(`[MP] RECHAZADO — ${mpResult.status_detail}`);
             res.status(402).json({ error: `Tarjeta rechazada: ${mpResult.status_detail}` });
             return;
           }
         } catch (_mpErr: any) {
-          console.error(`[MP] ERROR — ${(_mpErr as any)?.message ?? JSON.stringify(_mpErr)}`);
+          console.error(`[MP] ERROR — ${(_mpErr as any)?.message}`);
           authCode = `AUTH-${Date.now()}-${randomBytes(4).toString("hex").toUpperCase()}`;
         }
       } else {
-        console.log("[MP] Token no configurado — flujo simulado");
+        if (!mpCardToken) console.log("[MP] Sin token de tarjeta — flujo simulado");
         authCode = `AUTH-${Date.now()}-${randomBytes(4).toString("hex").toUpperCase()}`;
       }
 
