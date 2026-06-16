@@ -225,6 +225,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ publicKey: process.env.MP_PUBLIC_KEY ?? null });
   });
 
+  // ── IPN / Webhook de Mercado Pago ──────────────────────────────────────
+  // MP envía GET ?topic=payment&id=XXX o POST con JSON.
+  // Debe responder 200 inmediatamente; sin sesión (llamada server-to-server).
+  app.get("/api/mp/ipn", async (req, res) => {
+    const { topic, id } = req.query as { topic?: string; id?: string };
+    console.log(`[MP-IPN] GET topic=${topic} id=${id}`);
+    if (topic === "payment" && id && process.env.MP_ACCESS_TOKEN) {
+      try {
+        const r = await fetch(`https://api.mercadopago.com/v1/payments/${id}`, {
+          headers: { Authorization: `Bearer ${process.env.MP_ACCESS_TOKEN}` },
+        });
+        const data = await r.json();
+        console.log(`[MP-IPN] Pago ${id} → status=${data.status} detail=${data.status_detail}`);
+      } catch (err) {
+        console.error("[MP-IPN] Error consultando pago:", err);
+      }
+    }
+    res.sendStatus(200);
+  });
+
+  app.post("/api/mp/ipn", async (req, res) => {
+    const body = req.body ?? {};
+    console.log(`[MP-IPN] POST topic=${body.topic ?? body.type} id=${body.id ?? body.data?.id}`);
+    res.sendStatus(200);
+  });
+
   // A partir de aquí, todas las rutas /api requieren sesión válida (deny-by-default).
   app.use("/api", requireSession);
 
