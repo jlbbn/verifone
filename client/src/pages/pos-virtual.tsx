@@ -851,9 +851,9 @@ export default function POSVirtualPage() {
       const amount = parseInt(amountDigits, 10) / 100;
       if (amount <= 0) throw new Error("Monto inválido");
       const res = await apiRequest("POST", "/api/pos/process-payment", {
-        cardType, cardNumber: cardNumber.replace(/\s/g, "") || "4111111111111111",
-        amount, protocol, holderName: holderName || "TITULAR",
-        expiryDate: expiryDate || "12/27", ventaForzada,
+        cardType, cardNumber: cardNumber.replace(/\s/g, ""),
+        amount, protocol, holderName: holderName.trim(),
+        expiryDate: expiryDate.trim(), ventaForzada,
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -896,6 +896,19 @@ export default function POSVirtualPage() {
   }
 
   function handleProcessPayment() {
+    const rawCard = cardNumber.replace(/\s/g, "");
+    if (rawCard.length < 13) {
+      toast({ title: "Número de tarjeta requerido", description: "Ingresa un número de tarjeta válido.", variant: "destructive" });
+      return;
+    }
+    if (!holderName.trim()) {
+      toast({ title: "Nombre del titular requerido", description: "Ingresa el nombre del titular de la tarjeta.", variant: "destructive" });
+      return;
+    }
+    if (!/^\d{2}\/\d{2}$/.test(expiryDate.trim())) {
+      toast({ title: "Fecha de vencimiento requerida", description: "Ingresa la fecha en formato MM/AA.", variant: "destructive" });
+      return;
+    }
     setStep("processing");
     processMutation.mutate();
   }
