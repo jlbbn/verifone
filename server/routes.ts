@@ -727,17 +727,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POS VIRTUAL - PROCESAMIENTO DE PAGOS
   // ====================================================================
   
-  // ── Stripe: expose publishable key to frontend ───────────────────────────────
-  app.get("/api/stripe/publishable-key", async (_req, res) => {
-    try {
-      const { getStripePublishableKey } = await import("./stripeClient");
-      const key = await getStripePublishableKey();
-      res.json({ publishableKey: key });
-    } catch (err: any) {
-      res.status(503).json({ error: "Stripe no disponible: " + err.message });
-    }
-  });
-
   app.post("/api/pos/process-payment", paymentLimiter, async (req, res) => {
     try {
       const parsed = posPaymentSchema.safeParse(req.body);
@@ -748,67 +737,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { cardType, cardNumber, amount, protocol, holderName, expiryDate } = parsed.data;
 
       let authCode: string;
-      let stripeChargeId: string | null = null;
+      let mpPaymentId: number | null = null;
+      let mpStatus: string | null = null;
+      let realCharge = false;
 
-      // ── Server-side Stripe charge (Node.js SDK — no Stripe.js needed) ────────
-      try {
-        const { getUncachableStripeClient } = await import("./stripeClient");
-        const stripe = await getUncachableStripeClient();
-        const amountCents = Math.round(parseFloat(amount) * 100);
-
-        // Parse expiry "MM/YY" → month / year numbers
-        const [expMM = "12", expYY = "27"] = (expiryDate ?? "12/27").split("/");
-        const rawNumber = cardNumber.replace(/\s/g, "");
-
-        // Create PaymentMethod from raw card data (supported by Node.js SDK)
-        const pm = await stripe.paymentMethods.create({
-          type: "card",
-          card: {
-            number: rawNumber,
-            exp_month: parseInt(expMM, 10),
-            exp_year: 2000 + parseInt(expYY, 10),
-            cvc: (parsed.data as any).cvv || "000",
-          },
-        });
-
-        // Create + confirm PaymentIntent in one call
-        const intent = await stripe.paymentIntents.create({
-          amount: amountCents,
-          currency: "usd",
-          payment_method: pm.id,
-          confirm: true,
-          automatic_payment_methods: { enabled: true, allow_redirects: "never" },
-          description: `Banxico Plus POS · ${cardType} · ${protocol ?? "201.1"}`,
-          metadata: {
-            cardType,
-            protocol: protocol ?? "201.1",
+      // ── Mercado Pago server-side charge ───────────────────────────────────────
+      if (process.env.MP_ACCESS_TOKEN) {
+        try {
+          const { processMPCardPayment } = await import("./mercadopagoClient");
+          const [expMM = "12", expYY = "27"] = (expiryDate ?? "12/27").split("/");
+          const mpResult = await processMPCardPayment({
+            cardNumber: cardNumber.replace(/\s/g, ""),
+            expiryMonth: parseInt(expMM, 10),
+            expiryYear: 2000 + parseInt(expYY, 10),
+            securityCode: (parsed.data as any).cvv || "000",
             holderName: holderName ?? "TITULAR",
-            maskedCard: maskCardNumber(rawNumber),
-          },
-        });
-        stripeChargeId = intent.id;
-        authCode = `STRIPE-${intent.id.slice(-12).toUpperCase()}`;
-      } catch (_stripeErr: any) {
-        // Fall back to simulation when Stripe is unavailable or card is invalid
+            holderEmail: "pagos@banxicoplus.mx",
+            amount: parseFloat(amount),
+            description: `Banxico Plus POS · ${cardType} · ${protocol ?? "201.1"}`,
+            cardType,
+          });
+          mpPaymentId = mpResult.id;
+          mpStatus = mpResult.status;
+          realCharge = mpResult.status === "approved";
+          authCode = mpResult.authorization_code
+            ? `MP-${mpResult.authorization_code}`
+            : `MP-${mpResult.id}`;
+          if (mpResult.status === "rejected") {
+            res.status(402).json({ error: `Tarjeta rechazada: ${mpResult.status_detail}` });
+            return;
+          }
+        } catch (_mpErr: any) {
+          // MP no disponible — flujo simulado
+          authCode = `AUTH-${Date.now()}-${randomBytes(4).toString("hex").toUpperCase()}`;
+        }
+      } else {
+        // Sin token MP configurado — flujo simulado
         authCode = `AUTH-${Date.now()}-${randomBytes(4).toString("hex").toUpperCase()}`;
       }
 
       const transactionId = `TXN-${Date.now()}-${randomBytes(4).toString('hex').toUpperCase()}`;
-      
+
       const op = req.currentUser!;
-      // Crear transacción (tarjeta siempre enmascarada en la descripción)
       const transaction = await storage.createTransaction({
         transactionId,
         protocol: protocol || "201.1",
         type: "payment",
         amount: amount.toString(),
-        currency: "USD",
+        currency: "MXN",
         status: "processing",
         authCode,
         fromAccount: `${(holderName || "TITULAR").toUpperCase()} · ${cardType.toUpperCase()} · ${maskCardNumber(cardNumber)}`,
         toAccount:   `${op.fullName.toUpperCase()} · ${op.username} · TERMINAL POS`,
-        description: stripeChargeId
-          ? `Cobro real Stripe · ${cardType} · ${maskCardNumber(cardNumber)} · PI:${stripeChargeId.slice(-8)}`
+        description: realCharge
+          ? `Cobro MP · ${cardType} · ${maskCardNumber(cardNumber)} · ID:${mpPaymentId}`
           : `Pago con ${cardType} - ${maskCardNumber(cardNumber)}`,
         createdBy: op.username,
       });
