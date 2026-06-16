@@ -1222,20 +1222,20 @@ export default function POSVirtualPage() {
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Número de Tarjeta</Label>
+                  <Label>Número de Tarjeta <span className="text-red-500">*</span></Label>
                   <Input placeholder="•••• •••• •••• ••••" value={cardNumber}
                     onChange={e => setCardNumber(formatCard(e.target.value))} maxLength={19}
                     disabled={step === "processing"} className="font-mono tracking-widest" data-testid="input-card-number" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label>Titular</Label>
+                    <Label>Titular <span className="text-red-500">*</span></Label>
                     <Input placeholder="NOMBRE APELLIDO" value={holderName}
                       onChange={e => setHolderName(e.target.value.toUpperCase())}
                       disabled={step === "processing"} data-testid="input-holder-name" />
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Vencimiento</Label>
+                    <Label>Vencimiento <span className="text-red-500">*</span></Label>
                     <Input placeholder="MM/YY" value={expiryDate}
                       onChange={e => {
                         let v = e.target.value.replace(/\D/g, "");
@@ -1278,7 +1278,13 @@ export default function POSVirtualPage() {
                   <Button
                     className={`w-full text-white ${is101 ? "bg-[#1565C0]" : isVF ? "bg-amber-500" : "bg-[#c8322b]"}`}
                     onClick={handleProcessPayment}
-                    disabled={step === "processing" || processMutation.isPending}
+                    disabled={
+                      step === "processing" ||
+                      processMutation.isPending ||
+                      cardNumber.replace(/\s/g, "").length < 13 ||
+                      !holderName.trim() ||
+                      !/^\d{2}\/\d{2}$/.test(expiryDate.trim())
+                    }
                     data-testid="button-process-payment">
                     {processMutation.isPending
                       ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Procesando...</>
