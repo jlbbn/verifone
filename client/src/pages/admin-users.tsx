@@ -12,16 +12,17 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   Users, UserPlus, Search, Calendar, Terminal, Shield,
-  User, Loader2, CheckCircle, RefreshCw, Mail
+  User, Loader2, CheckCircle, RefreshCw, Mail, Ban, Unlock
 } from "lucide-react";
 
 interface UserRecord {
-  id: number;
+  id: string;
   username: string;
   fullName: string;
   email: string;
   role: "ADMIN" | "USER";
   subscriptionStart: string | null;
+  suspended: boolean;
 }
 
 interface TerminalRecord {
@@ -66,6 +67,22 @@ export default function AdminUsuariosPage() {
 
   const { data: terminals = [] } = useQuery<TerminalRecord[]>({
     queryKey: ["/api/terminals"],
+  });
+
+  const suspendMutation = useMutation({
+    mutationFn: async ({ id, suspended }: { id: string; suspended: boolean }) => {
+      const res = await apiRequest("PATCH", `/api/users/${id}/suspend`, { suspended });
+      if (!res.ok) {
+        const body = await res.json();
+        throw new Error(body.error ?? "Error");
+      }
+      return res.json();
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({ title: vars.suspended ? "Usuario suspendido" : "Acceso restaurado" });
+    },
+    onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
 
   const createUserMutation = useMutation({
@@ -234,7 +251,7 @@ export default function AdminUsuariosPage() {
                   <div key={u.id} className="flex flex-wrap lg:flex-nowrap items-start gap-4 p-4 hover:bg-muted/30 transition-colors" data-testid={`row-user-${u.id}`}>
                     {/* Avatar */}
                     <Avatar className="w-11 h-11 flex-shrink-0">
-                      <AvatarFallback className={`font-bold text-sm ${u.role === "ADMIN" ? "bg-[#c8322b] text-white" : "bg-muted text-foreground"}`}>
+                      <AvatarFallback className={`font-bold text-sm ${u.suspended ? "bg-gray-400 text-white" : u.role === "ADMIN" ? "bg-[#c8322b] text-white" : "bg-muted text-foreground"}`}>
                         {initials(u.fullName)}
                       </AvatarFallback>
                     </Avatar>
@@ -242,13 +259,18 @@ export default function AdminUsuariosPage() {
                     {/* Info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-2 mb-0.5">
-                        <span className="font-bold text-base">{u.fullName}</span>
+                        <span className={`font-bold text-base ${u.suspended ? "text-muted-foreground line-through" : ""}`}>{u.fullName}</span>
                         <Badge className={u.role === "ADMIN"
                           ? "bg-[#c8322b]/10 text-[#c8322b] border-[#c8322b]/20 no-default-active-elevate"
                           : "bg-blue-100 text-blue-700 border-blue-200 no-default-active-elevate"
                         }>
                           {u.role === "ADMIN" ? <><Shield className="w-3 h-3 mr-1" />ADMIN</> : <><User className="w-3 h-3 mr-1" />USER</>}
                         </Badge>
+                        {u.suspended && (
+                          <Badge className="bg-red-100 text-red-700 border-red-200 no-default-active-elevate gap-1">
+                            <Ban className="w-3 h-3" /> Suspendido
+                          </Badge>
+                        )}
                       </div>
                       <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1"><Mail className="w-3 h-3" />{u.username}</span>
@@ -275,8 +297,8 @@ export default function AdminUsuariosPage() {
                       )}
                     </div>
 
-                    {/* Subscription badge */}
-                    <div className="flex flex-col items-end gap-1.5 min-w-[140px]">
+                    {/* Subscription badge + suspend button */}
+                    <div className="flex flex-col items-end gap-1.5 min-w-[155px]">
                       {sub ? (
                         <Badge className={`${sub.color} no-default-active-elevate text-xs`}>
                           <Calendar className="w-3 h-3 mr-1" />{sub.label}
@@ -289,6 +311,21 @@ export default function AdminUsuariosPage() {
                           ? "Sin terminal"
                           : `${userTerminals.length} terminal${userTerminals.length > 1 ? "es" : ""}`}
                       </span>
+                      {u.role !== "ADMIN" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className={`text-xs h-7 gap-1 mt-0.5 ${u.suspended ? "border-green-300 text-green-700" : "border-red-300 text-red-700"}`}
+                          disabled={suspendMutation.isPending}
+                          onClick={() => suspendMutation.mutate({ id: u.id, suspended: !u.suspended })}
+                          data-testid={`button-suspend-${u.id}`}
+                        >
+                          {u.suspended
+                            ? <><Unlock className="w-3 h-3" /> Reactivar</>
+                            : <><Ban className="w-3 h-3" /> Suspender</>
+                          }
+                        </Button>
+                      )}
                     </div>
                   </div>
                 );

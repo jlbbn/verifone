@@ -16,6 +16,7 @@ export const users = pgTable("users", {
   position: text("position"),
   avatar: text("avatar"),
   subscriptionStart: timestamp("subscription_start"),
+  suspended: boolean("suspended").notNull().default(false),
 });
 
 // Transacciones bancarias
