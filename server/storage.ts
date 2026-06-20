@@ -78,6 +78,7 @@ export interface IStorage {
 
   // Users (admin)
   getAllUsers(): Promise<User[]>;
+  suspendUser(id: string, suspended: boolean): Promise<User | undefined>;
 
   // Crypto Keys
   getCryptoKeys(username: string, isAdmin: boolean): Promise<CryptoKey[]>;
@@ -106,6 +107,11 @@ export interface IStorage {
 export class DatabaseStorage implements IStorage {
 
   async initialize() {
+    // --- Migrate: add suspended column to users if missing ---
+    await db.execute(sql`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended BOOLEAN NOT NULL DEFAULT FALSE
+    `);
+
     // --- Ensure support_tickets table exists ---
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS support_tickets (
@@ -840,6 +846,11 @@ export class DatabaseStorage implements IStorage {
   // --- Users (admin) ---
   async getAllUsers(): Promise<User[]> {
     return db.select().from(users);
+  }
+
+  async suspendUser(id: string, suspended: boolean): Promise<User | undefined> {
+    const [updated] = await db.update(users).set({ suspended }).where(eq(users.id, id)).returning();
+    return updated;
   }
 
   // --- System Settings ---

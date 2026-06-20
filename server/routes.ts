@@ -160,6 +160,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isValid = verifyPassword(password, user ? user.password : DUMMY_HASH)
                    || verifyPassword(passwordAlt, user ? user.password : DUMMY_HASH);
 
+      if (user && isValid && user.suspended) {
+        res.status(403).json({ error: "Cuenta suspendida. Contacta al administrador." });
+        return;
+      }
+
       if (user && isValid) {
         // Regenerar la sesión evita fijación de sesión tras autenticarse.
         req.session.regenerate((err) => {
@@ -430,6 +435,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch {
       res.status(500).json({ error: "Error al obtener usuarios" });
     }
+  });
+
+  // Suspender / reactivar usuario (solo ADMIN)
+  app.patch("/api/users/:id/suspend", requireRole("ADMIN"), async (req, res) => {
+    const admin = req.currentUser!;
+    const schema = z.object({ suspended: z.boolean() });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Datos inválidos" });
+    const target = await storage.getUser(req.params.id);
+    if (!target) return res.status(404).json({ error: "Usuario no encontrado" });
+    if (target.id === admin.id) return res.status(400).json({ error: "No puedes suspenderte a ti mismo" });
+    const updated = await storage.suspendUser(req.params.id, parsed.data.suspended);
+    res.json(publicUser(updated!));
   });
 
   // Crear usuario nuevo (solo ADMIN)
