@@ -31,22 +31,26 @@ const CARD_TYPES = [
   "Maestro",
 ];
 
-const PROTOCOLS = [
-  // Transferencias (101.x)
-  { code: "101.1", label: "101.1 — Transferencia básica" },
-  { code: "101.2", label: "101.2 — Transferencia con validación" },
-  { code: "101.3", label: "101.3 — Transferencia segura (recomendado)" },
-  // Pagos (201.x)
-  { code: "201.1", label: "201.1 — Pago nacional" },
-  { code: "201.2", label: "201.2 — Pago internacional" },
-  { code: "201.3", label: "201.3 — Pago express" },
-  // Depósitos (301.x)
-  { code: "301.1", label: "301.1 — Depósito cuenta" },
-  { code: "301.2", label: "301.2 — Depósito efectivo" },
-  // Retiros (401.x)
-  { code: "401.1", label: "401.1 — Retiro ATM" },
-  // Especial
-  { code: "1643",  label: "1643 — Venta forzada terminal manual" },
+const PROTOCOLS: { code: string; label: string; authDigits: number | null; desc: string }[] = [
+  // Transfers / Transferencias (101.x)
+  { code: "101.1", label: "101.1 — Basic Transfer / Transferencia básica",           authDigits: 4,    desc: "4-digit approval code / Código de aprobación 4 dígitos" },
+  { code: "101.2", label: "101.2 — Validated Transfer / Transferencia con validación", authDigits: 6,  desc: "6-digit approval code / Código de aprobación 6 dígitos" },
+  { code: "101.3", label: "101.3 — Secure Transfer / Transferencia segura",           authDigits: 6,    desc: "6-digit approval code / Código de aprobación 6 dígitos" },
+  { code: "101.4", label: "101.4 — Priority Transfer / Transferencia prioritaria",    authDigits: 6,    desc: "6-digit approval code / Código de aprobación 6 dígitos" },
+  { code: "101.6", label: "101.6 — Pre-Authorization / Pre-Autorización",             authDigits: null, desc: "Pre-authorization hold / Retención pre-autorización" },
+  { code: "101.7", label: "101.7 — Fast Transfer / Transferencia rápida",             authDigits: 4,    desc: "4-digit approval code / Código de aprobación 4 dígitos" },
+  { code: "101.8", label: "101.8 — PIN-less Transaction / Transacción sin PIN",       authDigits: 6,    desc: "No PIN required / No requiere PIN" },
+  // Payments / Pagos (201.x)
+  { code: "201.1", label: "201.1 — Domestic Payment / Pago nacional",                 authDigits: 6,    desc: "6-digit approval code / Código de aprobación 6 dígitos" },
+  { code: "201.2", label: "201.2 — International Payment / Pago internacional",       authDigits: 6,    desc: "6-digit approval code / Código de aprobación 6 dígitos" },
+  { code: "201.3", label: "201.3 — Express Payment / Pago express",                   authDigits: 6,    desc: "6-digit approval code / Código de aprobación 6 dígitos" },
+  // Deposits / Depósitos (301.x)
+  { code: "301.1", label: "301.1 — Account Deposit / Depósito cuenta",                authDigits: 6,    desc: "6-digit approval code / Código de aprobación 6 dígitos" },
+  { code: "301.2", label: "301.2 — Cash Deposit / Depósito efectivo",                 authDigits: 6,    desc: "6-digit approval code / Código de aprobación 6 dígitos" },
+  // Withdrawals / Retiros (401.x)
+  { code: "401.1", label: "401.1 — ATM Withdrawal / Retiro ATM",                      authDigits: 6,    desc: "6-digit approval code / Código de aprobación 6 dígitos" },
+  // Special / Especial
+  { code: "1643",  label: "1643 — Forced Sale / Venta forzada terminal manual",       authDigits: 4,    desc: "Manual terminal offline / Terminal manual sin conexión EMV" },
 ];
 
 const FUNCIONES_MENU = [
@@ -983,6 +987,7 @@ export default function POSVirtualPage() {
   const is101 = protocol === "101.1";
   const is1643 = protocol === "1643";
   const isVF = ventaForzada || is1643;
+  const currentProtocol = PROTOCOLS.find(p => p.code === protocol);
 
   const numpadKeys = [["1","2","3"],["4","5","6"],["7","8","9"],["C","0","DEL"]];
 
@@ -1088,31 +1093,52 @@ export default function POSVirtualPage() {
         </div>
       )}
 
-      {/* Protocol info badge */}
-      {is101 && (
-        <Card className="border-blue-300 bg-blue-50/60">
+      {/* Protocol info badge — shown for all protocols */}
+      {currentProtocol && (
+        <Card className={
+          is101    ? "border-blue-300 bg-blue-50/60"
+          : is1643 ? "border-amber-300 bg-amber-50/60"
+          : protocol === "101.6" ? "border-purple-300 bg-purple-50/60"
+          : "border-[#c8322b]/20 bg-red-50/40"
+        }>
           <CardContent className="pt-3 pb-3">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-md bg-blue-100 flex items-center justify-center flex-shrink-0">
-                <span className="text-lg font-extrabold italic text-[#1A1F71]"
-                  style={{ fontFamily: "'Arial Black', Arial, sans-serif" }}>V</span>
+              <div className={`w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0 ${
+                is101    ? "bg-blue-100"
+                : is1643 ? "bg-amber-100"
+                : protocol === "101.6" ? "bg-purple-100"
+                : "bg-[#c8322b]/10"
+              }`}>
+                {is101 ? (
+                  <span className="text-lg font-extrabold italic text-[#1A1F71]"
+                    style={{ fontFamily: "'Arial Black', Arial, sans-serif" }}>V</span>
+                ) : is1643 ? (
+                  <AlertTriangle className="w-4 h-4 text-amber-600" />
+                ) : protocol === "101.6" ? (
+                  <Clock className="w-4 h-4 text-purple-600" />
+                ) : (
+                  <ShieldCheck className="w-4 h-4 text-[#c8322b]" />
+                )}
               </div>
               <div>
-                <p className="font-semibold text-blue-900 text-sm">Protocolo 101.1 — Visa Network Transfer</p>
-                <p className="text-xs text-blue-700 mt-0.5">Operación de red en bloques USD. Genera reporte Visa Net al aprobar.</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-      {is1643 && (
-        <Card className="border-amber-300 bg-amber-50/60">
-          <CardContent className="pt-3 pb-3">
-            <div className="flex items-center gap-2.5">
-              <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
-              <div>
-                <p className="font-semibold text-amber-900 text-sm">Protocolo 1643 — Venta forzada terminal manual</p>
-                <p className="text-xs text-amber-700 mt-0.5">Operación de tarjeta sin conexión EMV online. Solo para montos operativos.</p>
+                <p className={`font-semibold text-sm ${
+                  is101    ? "text-blue-900"
+                  : is1643 ? "text-amber-900"
+                  : protocol === "101.6" ? "text-purple-900"
+                  : "text-gray-800"
+                }`}>
+                  Protocol {currentProtocol.code} — {currentProtocol.label.split("—")[1]?.trim()}
+                </p>
+                <p className={`text-xs mt-0.5 ${
+                  is101    ? "text-blue-700"
+                  : is1643 ? "text-amber-700"
+                  : protocol === "101.6" ? "text-purple-700"
+                  : "text-muted-foreground"
+                }`}>
+                  {currentProtocol.desc}
+                  {is101 && " · Generates Visa Net report / Genera reporte Visa Net"}
+                  {is1643 && " · EMV offline only / Solo EMV sin conexión"}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -1144,7 +1170,7 @@ export default function POSVirtualPage() {
 
                 {step === "amount" && (
                   <div className="text-center flex-1 flex flex-col justify-center">
-                    <p className="text-gray-500 text-xs mb-1 uppercase tracking-widest">Monto a cobrar</p>
+                    <p className="text-gray-500 text-xs mb-1 uppercase tracking-widest">Amount / Monto a cobrar</p>
                     <p className="text-4xl font-bold text-white font-mono" data-testid="display-amount">
                       ${formatAmountDigits(amountDigits)}
                     </p>
@@ -1161,7 +1187,7 @@ export default function POSVirtualPage() {
                     <p className="text-gray-400 text-xs uppercase tracking-widest">Monto</p>
                     <p className="text-2xl font-bold text-white font-mono">${formatAmountDigits(amountDigits)} USD</p>
                     <p className="text-gray-400 text-xs font-mono">≈ ${amountMXNDisplay} MXN</p>
-                    <p className={`text-xs mt-1 animate-pulse ${isVF ? "text-amber-400" : "text-[#c8322b]"}`}>Ingresa datos de tarjeta</p>
+                    <p className={`text-xs mt-1 animate-pulse ${isVF ? "text-amber-400" : "text-[#c8322b]"}`}>Enter card data / Ingresa datos de tarjeta</p>
                     <div className="flex items-center justify-center gap-3 mt-1 text-[10px] text-gray-500 font-mono">
                       <span>OPER: {oper}</span><span>LOTE: {lote}</span>
                     </div>
@@ -1171,15 +1197,15 @@ export default function POSVirtualPage() {
                 {step === "processing" && (
                   <div className="text-center flex-1 flex flex-col items-center justify-center gap-2">
                     <Loader2 className={`w-8 h-8 animate-spin ${isVF ? "text-amber-400" : is101 ? "text-blue-400" : "text-[#c8322b]"}`} />
-                    <p className="text-white text-sm font-bold">{is1643 ? "Procesando terminal manual..." : is101 ? "Conectando Visa Network..." : "Procesando..."}</p>
-                    <p className="text-gray-500 text-xs">{is1643 ? "EMV offline" : is101 ? "Red USD — HSBC" : "Banco emisor"}</p>
+                    <p className="text-white text-sm font-bold">{is1643 ? "Processing manual terminal... / Procesando terminal manual..." : is101 ? "Connecting Visa Network... / Conectando Visa Network..." : "Processing... / Procesando..."}</p>
+                    <p className="text-gray-500 text-xs">{is1643 ? "EMV offline" : is101 ? "USD Network — HSBC / Red USD — HSBC" : "Issuer Bank / Banco emisor"}</p>
                   </div>
                 )}
 
                 {step === "approved" && !posLocked && (
                   <div className="text-center flex-1 flex flex-col items-center justify-center gap-1">
                     <CheckCircle className="w-8 h-8 text-green-400" />
-                    <p className="text-green-400 text-sm font-bold">APROBADO</p>
+                    <p className="text-green-400 text-sm font-bold">APPROVED / APROBADO</p>
                     <p className="text-gray-400 text-xs font-mono">{result?.authCode}</p>
 
                     {isVF && <p className="text-amber-400 text-[10px] font-semibold">VENTA FORZADA</p>}
@@ -1227,7 +1253,7 @@ export default function POSVirtualPage() {
                   <Button
                     className={`w-full h-12 text-white rounded-lg text-base font-bold mt-1 ${isVF ? "bg-amber-500" : is101 ? "bg-[#1565C0]" : "bg-[#c8322b]"}`}
                     onClick={handleConfirmAmount} data-testid="button-confirm-amount">
-                    <CheckCircle className="w-5 h-5 mr-2" /> Confirmar
+                    <CheckCircle className="w-5 h-5 mr-2" /> Confirm / Confirmar
                   </Button>
                 </div>
               )}
@@ -1235,7 +1261,7 @@ export default function POSVirtualPage() {
               {step === "approved" && (
                 <Button className="w-full h-12 bg-gray-700 text-white rounded-lg font-bold"
                   onClick={handleNewTransaction} data-testid="button-new-transaction-keypad">
-                  <RefreshCw className="w-4 h-4 mr-2" /> Nueva Transacción
+                  <RefreshCw className="w-4 h-4 mr-2" /> New Transaction / Nueva Transacción
                 </Button>
               )}
 
@@ -1255,7 +1281,7 @@ export default function POSVirtualPage() {
             <Card className={is101 ? "border-blue-300" : isVF ? "border-amber-300" : ""}>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <CreditCard className="w-4 h-4 text-[#c8322b]" /> Datos de Tarjeta
+                  <CreditCard className="w-4 h-4 text-[#c8322b]" /> Card Data / Datos de Tarjeta
                   {is101 && <Badge className="bg-blue-100 text-blue-700 border-blue-200 no-default-active-elevate text-xs">Visa Net</Badge>}
                   {is1643 && <Badge className="bg-amber-100 text-amber-700 border-amber-200 no-default-active-elevate text-xs"><Zap className="w-3 h-3 mr-1" /> Manual</Badge>}
                 </CardTitle>
@@ -1265,27 +1291,27 @@ export default function POSVirtualPage() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="space-y-1.5">
-                  <Label>Tipo de Tarjeta</Label>
+                  <Label>Card Type / Tipo de Tarjeta</Label>
                   <Select value={cardType} onValueChange={setCardType} disabled={step === "processing"}>
                     <SelectTrigger data-testid="select-card-type"><SelectValue /></SelectTrigger>
                     <SelectContent>{CARD_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Número de Tarjeta <span className="text-red-500">*</span></Label>
+                  <Label>Card Number / Número de Tarjeta <span className="text-red-500">*</span></Label>
                   <Input placeholder="•••• •••• •••• ••••" value={cardNumber}
                     onChange={e => setCardNumber(formatCard(e.target.value))} maxLength={19}
                     disabled={step === "processing"} className="font-mono tracking-widest" data-testid="input-card-number" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label>Titular <span className="text-red-500">*</span></Label>
+                    <Label>Cardholder / Titular <span className="text-red-500">*</span></Label>
                     <Input placeholder="NOMBRE APELLIDO" value={holderName}
                       onChange={e => setHolderName(e.target.value.toUpperCase())}
                       disabled={step === "processing"} data-testid="input-holder-name" />
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Vencimiento <span className="text-red-500">*</span></Label>
+                    <Label>Expiry / Vencimiento <span className="text-red-500">*</span></Label>
                     <Input placeholder="MM/YY" value={expiryDate}
                       onChange={e => {
                         let v = e.target.value.replace(/\D/g, "");
@@ -1309,11 +1335,14 @@ export default function POSVirtualPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Protocolo de operación</Label>
+                  <Label>Operation Protocol / Protocolo de operación</Label>
                   <Select value={protocol} onValueChange={setProtocol} disabled={step === "processing"}>
                     <SelectTrigger data-testid="select-protocol"><SelectValue /></SelectTrigger>
                     <SelectContent>{PROTOCOLS.map(p => <SelectItem key={p.code} value={p.code}>{p.label}</SelectItem>)}</SelectContent>
                   </Select>
+                  {currentProtocol && (
+                    <p className="text-[10px] text-muted-foreground pl-0.5">{currentProtocol.desc}</p>
+                  )}
                 </div>
 
                 {/* Venta Forzada / 1643 extra fields */}
@@ -1351,11 +1380,11 @@ export default function POSVirtualPage() {
                     }
                     data-testid="button-process-payment">
                     {processMutation.isPending
-                      ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Procesando...</>
-                      : <><Zap className="w-4 h-4 mr-2" /> Procesar ${formatAmountDigits(amountDigits)} USD</>}
+                      ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processing... / Procesando...</>
+                      : <><Zap className="w-4 h-4 mr-2" /> Process / Procesar ${formatAmountDigits(amountDigits)} USD</>}
                   </Button>
                   <Button variant="outline" onClick={() => setStep("amount")} disabled={step === "processing"}>
-                    <X className="w-4 h-4 mr-2" /> Cancelar
+                    <X className="w-4 h-4 mr-2" /> Cancel / Cancelar
                   </Button>
                 </div>
               </CardContent>
@@ -1373,7 +1402,7 @@ export default function POSVirtualPage() {
                     </div>
                     <div>
                       <CardTitle className={`text-base ${is101 ? "text-blue-700" : isVF ? "text-amber-700" : "text-green-700"}`}>
-                        {is101 ? "Visa Network Aprobado" : is1643 ? "Venta Forzada Manual Aprobada" : isVF ? "Venta Forzada Aprobada" : "Pago Aprobado"}
+                        {is101 ? "Visa Network Approved / Aprobado" : is1643 ? "Forced Sale Approved / Venta Forzada Aprobada" : isVF ? "Forced Sale Approved / Venta Forzada Aprobada" : "Payment Approved / Pago Aprobado"}
                       </CardTitle>
                       <CardDescription>{new Date().toLocaleString("es-MX")}</CardDescription>
                     </div>
@@ -1407,14 +1436,14 @@ export default function POSVirtualPage() {
                       <span className="text-muted-foreground">****{(cardNumber.replace(/\s/g,"") || "7209").slice(-4)}</span>
                     </div>
                     {[
-                      { l: "TARJETA",      v: cardType },
-                      { l: "TITULAR",      v: holderName || "TITULAR" },
-                      { l: "PROTOCOLO",    v: protocol },
-                      { l: "OPER / LOTE",  v: `${oper-1} / ${lote-1}` },
-                      { l: "IMPORTE USD",  v: `$${formatAmountDigits(amountDigits)}` },
-                      { l: `EQUIV MXN`,    v: `$${amountMXNDisplay}` },
-                      { l: "TC",           v: `${TC_MXN} MXN/USD` },
-                      { l: "APROBACIÓN",   v: result.authCode },
+                      { l: "CARD / TARJETA",         v: cardType },
+                      { l: "HOLDER / TITULAR",        v: holderName || "TITULAR" },
+                      { l: "PROTOCOL / PROTOCOLO",    v: protocol },
+                      { l: "OPER / LOTE",             v: `${oper-1} / ${lote-1}` },
+                      { l: "AMOUNT USD / IMPORTE USD",v: `$${formatAmountDigits(amountDigits)}` },
+                      { l: "EQUIV MXN",               v: `$${amountMXNDisplay}` },
+                      { l: "RATE / TC",               v: `${TC_MXN} MXN/USD` },
+                      { l: "APPROVAL / APROBACIÓN",   v: result.authCode },
                     ].map((r,i) => (
                       <div key={i} className="flex justify-between">
                         <span className="text-muted-foreground">{r.l}</span>
@@ -1441,7 +1470,7 @@ export default function POSVirtualPage() {
                 <Button
                   className={`w-full mt-4 text-white ${is101 ? "bg-[#1565C0]" : isVF ? "bg-amber-500" : "bg-[#c8322b]"}`}
                   onClick={handleNewTransaction} data-testid="button-new-transaction">
-                  <RefreshCw className="w-4 h-4 mr-2" /> Nueva Transacción
+                  <RefreshCw className="w-4 h-4 mr-2" /> New Transaction / Nueva Transacción
                 </Button>
               </CardContent>
             </Card>
@@ -1452,17 +1481,18 @@ export default function POSVirtualPage() {
             <Card className="hover-elevate">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <Receipt className="w-4 h-4 text-[#c8322b]" /> Instrucciones
+                  <Receipt className="w-4 h-4 text-[#c8322b]" /> Instructions / Instrucciones
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <ol className="space-y-2">
                   {[
-                    "Ingresa el importe en centavos (ej. 200000000 = $2,000,000.00 USD)",
-                    "Protocolo 201.2 / 101.2 para operaciones internacionales",
-                    "Protocolo 101.1 = Transferencia Visa Network (bloques USD)",
-                    "Protocolo 1643 = Venta forzada terminal manual (~$30K USD)",
-                    "FUNCIONES → Reporte Parámetros para ver config del terminal",
+                    "Enter amount in cents / Ingresa el importe en centavos (e.g. 200000000 = $2,000,000.00 USD)",
+                    "Protocol 201.2 / 101.2 for international operations / Protocolo 201.2 / 101.2 para operaciones internacionales",
+                    "Protocol 101.1 = Visa Network Transfer (USD blocks) / Transferencia Visa Network (bloques USD)",
+                    "Protocol 101.6 = Pre-Authorization hold / Pre-Autorización sin cargo definitivo",
+                    "Protocol 1643 = Forced Sale / Venta forzada terminal manual (~$30K USD)",
+                    "FUNCTIONS / FUNCIONES → Parameter Report / Reporte Parámetros — terminal config",
                   ].map((txt, i) => (
                     <li key={i} className="flex gap-3 text-sm">
                       <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[#c8322b]/10 text-[#c8322b] flex items-center justify-center text-xs font-bold">{i+1}</span>
