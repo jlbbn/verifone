@@ -14,6 +14,7 @@ import {
   cryptoKeys,
   documents,
   supportTickets,
+  paymentCharges,
   type User, type InsertUser,
   type Transaction, type InsertTransaction,
   type PaymentMethod, type InsertPaymentMethod,
@@ -25,6 +26,7 @@ import {
   type CryptoKey,
   type Document,
   type SupportTicket,
+  type PaymentCharge,
   type SystemSettings, DEFAULT_SYSTEM_SETTINGS,
 } from "@shared/schema";
 
@@ -102,6 +104,10 @@ export interface IStorage {
   getSupportTickets(username: string, isAdmin: boolean): Promise<SupportTicket[]>;
   getSupportTicket(id: string): Promise<SupportTicket | undefined>;
   updateSupportTicket(id: string, patch: Partial<Pick<SupportTicket, "status" | "priority" | "adminNote">>): Promise<SupportTicket | undefined>;
+
+  // Payment Charges (motor real)
+  createPaymentCharge(data: Omit<PaymentCharge, "id" | "createdAt">): Promise<PaymentCharge>;
+  getPaymentCharges(username: string, isAdmin: boolean): Promise<PaymentCharge[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -110,6 +116,26 @@ export class DatabaseStorage implements IStorage {
     // --- Migrate: add suspended column to users if missing ---
     await db.execute(sql`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended BOOLEAN NOT NULL DEFAULT FALSE
+    `);
+
+    // --- Ensure payment_charges table exists ---
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS payment_charges (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        charge_id TEXT NOT NULL UNIQUE,
+        processor TEXT NOT NULL,
+        amount DOUBLE PRECISION NOT NULL,
+        currency TEXT NOT NULL DEFAULT 'USD',
+        status TEXT NOT NULL DEFAULT 'pending',
+        description TEXT NOT NULL DEFAULT '',
+        email TEXT NOT NULL DEFAULT '',
+        card_last4 TEXT,
+        card_brand TEXT,
+        receipt_url TEXT,
+        error_message TEXT,
+        created_by TEXT NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
     `);
 
     // --- Ensure support_tickets table exists ---
@@ -920,6 +946,18 @@ export class DatabaseStorage implements IStorage {
       .where(eq(supportTickets.id, id))
       .returning();
     return updated;
+  }
+
+  // --- Payment Charges ---
+  async createPaymentCharge(data: Omit<PaymentCharge, "id" | "createdAt">): Promise<PaymentCharge> {
+    const [charge] = await db.insert(paymentCharges).values(data).returning();
+    return charge;
+  }
+
+  async getPaymentCharges(username: string, isAdmin: boolean): Promise<PaymentCharge[]> {
+    const rows = await db.select().from(paymentCharges).orderBy(desc(paymentCharges.createdAt));
+    if (isAdmin) return rows;
+    return rows.filter(r => r.createdBy === username);
   }
 }
 

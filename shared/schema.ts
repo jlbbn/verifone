@@ -136,6 +136,25 @@ export const cryptoKeys = pgTable("crypto_keys", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Motor de pagos — cobros reales Stripe / Mercado Pago
+export const paymentCharges = pgTable("payment_charges", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  chargeId: text("charge_id").notNull().unique(),
+  processor: text("processor").notNull(), // "stripe" | "mercadopago"
+  amount: doublePrecision("amount").notNull(),
+  currency: text("currency").notNull().default("USD"),
+  status: text("status").notNull().default("pending"),
+  description: text("description").notNull().default(""),
+  email: text("email").notNull().default(""),
+  cardLast4: text("card_last4"),
+  cardBrand: text("card_brand"),
+  receiptUrl: text("receipt_url"),
+  errorMessage: text("error_message"),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type PaymentCharge = typeof paymentCharges.$inferSelect;
+
 // Tickets de soporte — Payment Discrepancies
 export const supportTickets = pgTable("support_tickets", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
