@@ -11,7 +11,7 @@ import { queryClient } from "@/lib/queryClient";
 import { Lock, User, ShieldCheck, Eye, EyeOff, Loader2 } from "lucide-react";
 
 const loginSchema = z.object({
-  username: z.string().min(1, "Usuario requerido"),
+  username: z.string().min(1, "Usuario o correo requerido"),
   password: z.string().min(1, "Contraseña requerida"),
 });
 

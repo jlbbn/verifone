@@ -152,7 +152,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const { username, password } = parsed.data;
 
-      const user = await storage.getUserByUsername(username);
+      // Accept username or email (case-insensitive for email)
+      let user = await storage.getUserByUsername(username);
+      if (!user) {
+        user = await storage.getUserByEmail(username.toLowerCase());
+      }
+      if (!user) {
+        user = await storage.getUserByEmail(username);
+      }
 
       // Siempre se ejecuta una verificación para igualar tiempos de respuesta.
       // También acepta la contraseña con la primera letra en minúscula (ej. Banxico100$ = banxico100$).
