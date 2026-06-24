@@ -1287,6 +1287,199 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ====================================================================
+  // PAYMENT ENGINE — Motor de cobros real (Stripe + Mercado Pago)
+  // ====================================================================
+
+  app.get("/api/payment-engine/charges", requireSession, async (req, res) => {
+    const user = req.currentUser!;
+    const charges = await storage.getPaymentCharges(user.username, user.role === "ADMIN");
+    res.json(charges);
+  });
+
+  app.post("/api/payment-engine/charge", requireSession, async (req, res) => {
+    const user = req.currentUser!;
+    const schema = z.object({
+      processor:   z.enum(["stripe", "mercadopago"]),
+      amount:      z.number().positive(),
+      currency:    z.string().length(3),
+      description: z.string().default("Banxico Plus charge"),
+      email:       z.string().email(),
+      card: z.object({
+        number:   z.string().min(13).max(19),
+        expMonth: z.number().int().min(1).max(12),
+        expYear:  z.number().int().min(2024),
+        cvv:      z.string().min(3).max(4),
+        holder:   z.string().min(2),
+      }),
+      docType: z.string().optional(),
+      docNum:  z.string().optional(),
+    });
+
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Datos inválidos", details: parsed.error.flatten() });
+
+    const { processor, amount, currency, description, email, card } = parsed.data;
+
+    try {
+      if (processor === "stripe") {
+        // ── Stripe ──────────────────────────────────────────────
+        const { getStripeClient } = await import("./stripeClient");
+        const stripe = getStripeClient();
+
+        // 1. Create payment method token from raw card data
+        const pm = await stripe.paymentMethods.create({
+          type: "card",
+          card: {
+            number:    card.number,
+            exp_month: card.expMonth,
+            exp_year:  card.expYear,
+            cvc:       card.cvv,
+          },
+          billing_details: {
+            name:  card.holder,
+            email: email,
+          },
+        });
+
+        // 2. Create and confirm payment intent
+        const amountCents = Math.round(amount * 100);
+        const intent = await stripe.paymentIntents.create({
+          amount:               amountCents,
+          currency:             currency.toLowerCase(),
+          payment_method:       pm.id,
+          confirm:              true,
+          description:          description,
+          receipt_email:        email,
+          automatic_payment_methods: { enabled: true, allow_redirects: "never" },
+        });
+
+        const cardDetails = intent.payment_method
+          ? (await stripe.paymentMethods.retrieve(pm.id)).card
+          : pm.card;
+
+        const charge = await storage.createPaymentCharge({
+          chargeId:     intent.id,
+          processor:    "stripe",
+          amount,
+          currency:     currency.toUpperCase(),
+          status:       intent.status === "succeeded" ? "succeeded" : intent.status,
+          description,
+          email,
+          cardLast4:    cardDetails?.last4 ?? card.number.slice(-4),
+          cardBrand:    cardDetails?.brand ?? "unknown",
+          receiptUrl:   null,
+          errorMessage: null,
+          createdBy:    user.username,
+        });
+
+        return res.json(charge);
+
+      } else {
+        // ── Mercado Pago ────────────────────────────────────────
+        const mpToken = process.env.MP_ACCESS_TOKEN;
+        if (!mpToken) return res.status(503).json({ error: "Mercado Pago no configurado" });
+
+        // 1. Create MP card token
+        const tokenRes = await fetch("https://api.mercadopago.com/v1/card_tokens", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization:  `Bearer ${mpToken}`,
+          },
+          body: JSON.stringify({
+            card_number:      card.number,
+            security_code:    card.cvv,
+            expiration_month: card.expMonth,
+            expiration_year:  card.expYear,
+            cardholder: {
+              name: card.holder,
+              identification: {
+                type:   parsed.data.docType ?? "OTHER",
+                number: parsed.data.docNum  ?? "00000000",
+              },
+            },
+          }),
+        });
+
+        const tokenData: any = await tokenRes.json();
+        if (!tokenData.id) {
+          const errMsg = tokenData.cause?.[0]?.description ?? tokenData.message ?? "Card token failed";
+          const charge = await storage.createPaymentCharge({
+            chargeId:     `mp-err-${Date.now()}`,
+            processor:    "mercadopago",
+            amount, currency: currency.toUpperCase(), status: "failed",
+            description, email,
+            cardLast4: card.number.slice(-4), cardBrand: null,
+            receiptUrl: null, errorMessage: errMsg, createdBy: user.username,
+          });
+          return res.status(402).json({ ...charge, error: errMsg });
+        }
+
+        // 2. Create MP payment
+        const payRes = await fetch("https://api.mercadopago.com/v1/payments", {
+          method: "POST",
+          headers: {
+            "Content-Type":  "application/json",
+            Authorization:   `Bearer ${mpToken}`,
+            "X-Idempotency-Key": `banxico-${Date.now()}-${user.username}`,
+          },
+          body: JSON.stringify({
+            token:             tokenData.id,
+            transaction_amount: amount,
+            currency_id:       currency.toUpperCase(),
+            description,
+            installments:      1,
+            payment_method_id: tokenData.payment_method_id ?? "visa",
+            payer: {
+              email,
+              identification: {
+                type:   parsed.data.docType ?? "OTHER",
+                number: parsed.data.docNum  ?? "00000000",
+              },
+            },
+          }),
+        });
+
+        const payData: any = await payRes.json();
+
+        const charge = await storage.createPaymentCharge({
+          chargeId:     String(payData.id ?? `mp-${Date.now()}`),
+          processor:    "mercadopago",
+          amount, currency: currency.toUpperCase(),
+          status:       payData.status ?? "failed",
+          description, email,
+          cardLast4:    String(payData.card?.last_four_digits ?? card.number.slice(-4)),
+          cardBrand:    payData.payment_method_id ?? null,
+          receiptUrl:   null,
+          errorMessage: payData.status === "approved" ? null : (payData.status_detail ?? null),
+          createdBy:    user.username,
+        });
+
+        const httpStatus = payData.status === "approved" ? 200 : 402;
+        return res.status(httpStatus).json(charge);
+      }
+
+    } catch (err: any) {
+      console.error("[payment-engine] Error:", err.message);
+      // Store failed charge for audit trail
+      const charge = await storage.createPaymentCharge({
+        chargeId:     `err-${Date.now()}`,
+        processor,
+        amount, currency: currency.toUpperCase(), status: "failed",
+        description, email,
+        cardLast4: card.number.slice(-4), cardBrand: null,
+        receiptUrl: null, errorMessage: err.message ?? "Unknown error",
+        createdBy: user.username,
+      }).catch(() => null);
+
+      return res.status(402).json({
+        ...(charge ?? {}),
+        error: err.message ?? "Payment processing failed",
+      });
+    }
+  });
+
+  // ====================================================================
   // SUPPORT TICKETS — Payment Discrepancies
   // ====================================================================
 

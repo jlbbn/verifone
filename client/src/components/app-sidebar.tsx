@@ -64,6 +64,7 @@ const menuItems = [
   { title: "Claves Encriptadas",  url: "/claves",           icon: Lock },
   { title: "Documentos",          url: "/documentos",       icon: FolderOpen },
   { title: "Payment Discrepancies", url: "/support",         icon: AlertTriangle },
+  { title: "Visa Quantum 9.0",      url: "/payment-engine",  icon: Zap },
 ];
 
 const adminItems = [
