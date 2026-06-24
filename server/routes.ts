@@ -783,14 +783,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(400).json({ error: "Datos de pago inválidos" });
         return;
       }
-      const { cardType, cardNumber, amount, protocol, holderName, expiryDate, mpCardToken } = parsed.data;
+      const { cardType, cardNumber, amount, protocol, holderName, expiryDate, mpCardToken, ventaForzada } = parsed.data;
 
       let authCode: string;
       let mpPaymentId: number | null = null;
       let realCharge = false;
 
-      // ── Mercado Pago charge usando token generado client-side ─────────────
-      if (mpCardToken && process.env.MP_ACCESS_TOKEN) {
+      // ── Parse expiry MM/YY ────────────────────────────────────────────────
+      const [expMMStr = "12", expYYStr = "27"] = (expiryDate ?? "12/27").trim().split("/");
+      const expMonth = parseInt(expMMStr, 10);
+      const expYear  = 2000 + parseInt(expYYStr, 10);
+
+      // ── Stripe — always first (real card validation) ──────────────────────
+      const stripeConfigured = !!process.env.STRIPE_SECRET_KEY;
+      if (stripeConfigured) {
+        try {
+          const { getStripeClient } = await import("./stripeClient");
+          const stripe = getStripeClient();
+
+          // 1. Create payment method from raw card data
+          const pm = await stripe.paymentMethods.create({
+            type: "card",
+            card: {
+              number:    cardNumber,
+              exp_month: expMonth,
+              exp_year:  expYear,
+              cvc:       parsed.data.cvv,
+            },
+            billing_details: { name: holderName ?? "TITULAR" },
+          });
+
+          // 2. Create + confirm payment intent
+          const amountCents = Math.max(Math.round(parseFloat(amount) * 100), 50);
+          const description = ventaForzada
+            ? `Banxico Plus POS VENTA-FORZADA · ${cardType} · Protocolo ${protocol ?? "1643"}`
+            : `Banxico Plus POS · ${cardType} · Protocolo ${protocol ?? "201.1"}`;
+
+          const intent = await stripe.paymentIntents.create({
+            amount:       amountCents,
+            currency:     "usd",
+            payment_method: pm.id,
+            confirm:      true,
+            description,
+            automatic_payment_methods: { enabled: true, allow_redirects: "never" },
+          });
+
+          if (intent.status === "succeeded") {
+            realCharge = true;
+            authCode = `STR-${intent.id.slice(-12).toUpperCase()}`;
+            console.log(`[Stripe] OK | id:${intent.id} | $${parseFloat(amount)} USD`);
+          } else {
+            console.log(`[Stripe] Estado no exitoso: ${intent.status}`);
+            res.status(402).json({
+              error: `Tarjeta no aprobada / Card not approved`,
+              declineCode: intent.status,
+              stripeStatus: intent.status,
+            });
+            return;
+          }
+        } catch (stripeErr: any) {
+          const code    = stripeErr?.code ?? "card_error";
+          const decline = stripeErr?.decline_code ?? stripeErr?.code ?? "unknown";
+          const msg     = stripeErr?.message ?? "Error al procesar tarjeta";
+          console.error(`[Stripe] ERROR — code:${code} decline:${decline} — ${msg}`);
+
+          // Hard declines → reject immediately
+          const hardDeclines = ["card_declined","incorrect_cvc","expired_card","incorrect_number",
+                                "insufficient_funds","lost_card","stolen_card","do_not_honor",
+                                "transaction_not_allowed","invalid_expiry_year","invalid_expiry_month"];
+          if (hardDeclines.includes(code) || hardDeclines.includes(decline)) {
+            res.status(402).json({
+              error: msg,
+              declineCode: decline,
+              stripeStatus: "declined",
+            });
+            return;
+          }
+
+          // Soft error (network/config) → fall through to MP or simulate
+          console.warn(`[Stripe] Soft error, falling back — ${msg}`);
+          authCode = `AUTH-${Date.now()}-${randomBytes(4).toString("hex").toUpperCase()}`;
+        }
+      } else if (mpCardToken && process.env.MP_ACCESS_TOKEN) {
+        // ── Mercado Pago fallback ───────────────────────────────────────────
         try {
           const { processMPPaymentWithToken } = await import("./mercadopagoClient");
           const mpResult = await processMPPaymentWithToken({
@@ -805,9 +880,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           authCode = mpResult.authorization_code
             ? `MP-${mpResult.authorization_code}`
             : `MP-${mpResult.id}`;
-          console.log(`[MP] Pago | ID:${mpResult.id} | Estado:${mpResult.status} | ${mpResult.status_detail} | Auth:${authCode}`);
+          console.log(`[MP] Pago | ID:${mpResult.id} | Estado:${mpResult.status} | ${mpResult.status_detail}`);
           if (mpResult.status === "rejected") {
-            res.status(402).json({ error: `Tarjeta rechazada: ${mpResult.status_detail}` });
+            res.status(402).json({
+              error: `Tarjeta rechazada: ${mpResult.status_detail}`,
+              declineCode: mpResult.status_detail,
+              stripeStatus: "declined",
+            });
             return;
           }
         } catch (_mpErr: any) {
@@ -815,7 +894,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           authCode = `AUTH-${Date.now()}-${randomBytes(4).toString("hex").toUpperCase()}`;
         }
       } else {
-        if (!mpCardToken) console.log("[MP] Sin token de tarjeta — flujo simulado");
         authCode = `AUTH-${Date.now()}-${randomBytes(4).toString("hex").toUpperCase()}`;
       }
 

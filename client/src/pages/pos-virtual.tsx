@@ -789,7 +789,7 @@ function SRLinkModal({ onClose }: { onClose: () => void }) {
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-type Step = "amount" | "card" | "processing" | "approved";
+type Step = "amount" | "card" | "processing" | "approved" | "declined";
 
 interface ProcessResult {
   success: boolean; authCode: string; tokenId: string;
@@ -820,6 +820,8 @@ export default function POSVirtualPage() {
   const [lote, setLote] = useState(2);
   const [oper, setOper] = useState(28);
 
+  const [declineReason, setDeclineReason] = useState("");
+  const [declineCode, setDeclineCode] = useState("");
   const [ventaForzada, setVentaForzada] = useState(false);
   const [trackData, setTrackData] = useState("");
   const [bankRef, setBankRef] = useState("");
@@ -907,7 +909,10 @@ export default function POSVirtualPage() {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "Error al procesar");
+        // Attach declineCode as a property on the Error so onError can read it
+        const err = new Error(body.error || "Error al procesar") as Error & { declineCode?: string };
+        err.declineCode = body.declineCode ?? body.stripeStatus ?? "";
+        throw err;
       }
       return res.json() as Promise<ProcessResult>;
     },
@@ -923,9 +928,10 @@ export default function POSVirtualPage() {
       }
       queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
     },
-    onError: (err: Error) => {
-      toast({ title: "Error de procesamiento", description: err.message, variant: "destructive" });
-      setStep("amount");
+    onError: (err: Error & { declineCode?: string }) => {
+      setDeclineReason(err.message);
+      setDeclineCode(err.declineCode ?? "");
+      setStep("declined");
     },
   });
 
@@ -971,6 +977,8 @@ export default function POSVirtualPage() {
     setStep("amount"); setAmountDigits(""); setCardType("Mastercard Internacional");
     setCardNumber(""); setHolderName(""); setExpiryDate(""); setCvv(""); setProtocol("201.2");
     setResult(null); setVisaNetData(null); setVentaForzada(false); setTrackData(""); setBankRef("");
+    setDeclineReason("");
+    setDeclineCode("");
   }
 
   function handleFuncionSelect(n: number) {
@@ -1202,6 +1210,24 @@ export default function POSVirtualPage() {
                   </div>
                 )}
 
+                {step === "declined" && (
+                  <div className="text-center flex-1 flex flex-col items-center justify-center gap-1.5 px-2">
+                    <XCircle className="w-9 h-9 text-red-500" />
+                    <p className="text-red-400 text-sm font-bold tracking-widest">DECLINED / DECLINADA</p>
+                    {declineCode && (
+                      <p className="text-[10px] font-mono font-bold tracking-wider px-2 py-0.5 rounded bg-red-900/60 text-red-300 uppercase">
+                        {declineCode.replace(/_/g, " ")}
+                      </p>
+                    )}
+                    <p className="text-gray-300 text-[10px] font-mono text-center leading-relaxed mt-0.5 break-words px-1">
+                      {declineReason || "Card not authorized / Tarjeta no autorizada"}
+                    </p>
+                    <p className="text-gray-600 text-[9px] mt-1 font-mono">
+                      ****{(cardNumber.replace(/\s/g,"") || "0000").slice(-4)} · {cardType}
+                    </p>
+                  </div>
+                )}
+
                 {step === "approved" && !posLocked && (
                   <div className="text-center flex-1 flex flex-col items-center justify-center gap-1">
                     <CheckCircle className="w-8 h-8 text-green-400" />
@@ -1263,6 +1289,19 @@ export default function POSVirtualPage() {
                   onClick={handleNewTransaction} data-testid="button-new-transaction-keypad">
                   <RefreshCw className="w-4 h-4 mr-2" /> New Transaction / Nueva Transacción
                 </Button>
+              )}
+
+              {step === "declined" && (
+                <div className="flex flex-col gap-2">
+                  <Button className="w-full h-12 bg-red-800 text-white rounded-lg font-bold"
+                    onClick={() => setStep("card")} data-testid="button-retry-card">
+                    <CreditCard className="w-4 h-4 mr-2" /> Retry / Reintentar
+                  </Button>
+                  <Button className="w-full h-10 bg-gray-700 text-white rounded-lg font-bold"
+                    onClick={handleNewTransaction} data-testid="button-new-transaction-declined">
+                    <RefreshCw className="w-4 h-4 mr-2" /> New Transaction / Nueva Transacción
+                  </Button>
+                </div>
               )}
 
               <div className="mt-4 border-t border-gray-700 pt-3 flex items-center justify-center gap-4 text-gray-600">
@@ -1472,6 +1511,89 @@ export default function POSVirtualPage() {
                   onClick={handleNewTransaction} data-testid="button-new-transaction">
                   <RefreshCw className="w-4 h-4 mr-2" /> New Transaction / Nueva Transacción
                 </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Declined detail panel */}
+          {step === "declined" && (
+            <Card className="border-red-300">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                    <XCircle className="w-5 h-5 text-red-600" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base text-red-700">Transaction Declined / Transacción Declinada</CardTitle>
+                    <CardDescription>{new Date().toLocaleString("es-MX")}</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="rounded-lg overflow-hidden border border-red-200">
+                  <div className="bg-red-900 text-white p-3 text-center space-y-0.5">
+                    <p className="font-bold text-base tracking-widest font-mono">BANXICO PLUS</p>
+                    <p className="text-red-200 text-xs">TRANSACCIÓN DECLINADA / TRANSACTION DECLINED</p>
+                    <p className="text-red-200 text-xs">GRUPO ASGE · VENADO 69 · CANCUN Q.ROO</p>
+                  </div>
+
+                  <div className="bg-muted/40 p-4 space-y-1.5 font-mono text-xs">
+                    <div className="flex justify-between border-b border-dashed border-border pb-2 mb-2">
+                      <span className="text-muted-foreground">{new Date().toLocaleString("es-MX")}</span>
+                      <span className="text-muted-foreground">****{(cardNumber.replace(/\s/g,"") || "0000").slice(-4)}</span>
+                    </div>
+                    {[
+                      { l: "CARD / TARJETA",          v: cardType },
+                      { l: "HOLDER / TITULAR",         v: holderName || "TITULAR" },
+                      { l: "PROTOCOL / PROTOCOLO",     v: protocol },
+                      { l: "AMOUNT USD / IMPORTE USD", v: `$${formatAmountDigits(amountDigits)}` },
+                    ].map((r, i) => (
+                      <div key={i} className="flex justify-between">
+                        <span className="text-muted-foreground">{r.l}</span>
+                        <span className="font-bold text-right">{r.v}</span>
+                      </div>
+                    ))}
+
+                    <div className="pt-2 mt-1 border-t border-dashed border-border space-y-1.5">
+                      <div className="flex justify-between items-start">
+                        <span className="text-muted-foreground">STATUS</span>
+                        <span className="font-bold text-red-600 text-right">DECLINED</span>
+                      </div>
+                      {declineCode && (
+                        <div className="flex justify-between items-start">
+                          <span className="text-muted-foreground">CODE</span>
+                          <span className="font-bold text-red-500 text-right uppercase">
+                            {declineCode.replace(/_/g, " ")}
+                          </span>
+                        </div>
+                      )}
+                      <div className="mt-2 p-2 rounded bg-red-50 border border-red-200">
+                        <p className="text-red-700 text-[10px] leading-relaxed font-sans font-medium">
+                          {declineReason || "Card not authorized by issuing bank."}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-red-900 px-3 py-2 flex items-center justify-between">
+                    <span className="text-red-200 text-[10px] font-mono">PROCESSOR: STRIPE</span>
+                    <div className="flex items-center gap-2 text-[10px] text-red-200 font-mono">
+                      <ShieldCheck className="w-3 h-3" /> EMV
+                      <Lock className="w-3 h-3" /> PCI DSS
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2 mt-4">
+                  <Button className="w-full bg-red-700 text-white"
+                    onClick={() => setStep("card")} data-testid="button-retry-panel">
+                    <CreditCard className="w-4 h-4 mr-2" /> Retry / Reintentar
+                  </Button>
+                  <Button className="w-full" variant="outline"
+                    onClick={handleNewTransaction} data-testid="button-new-transaction-declined-panel">
+                    <RefreshCw className="w-4 h-4 mr-2" /> New Transaction / Nueva Transacción
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           )}
