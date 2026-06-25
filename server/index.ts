@@ -114,10 +114,12 @@ app.use((req, res, next) => {
     reusePort: true,
   }, () => {
     log(`serving on port ${port}`);
-    const sk = process.env.STRIPE_SECRET_KEY || process.env.Secretkey1 || "";
-    const stripeMode = sk.startsWith("sk_live_") || sk.startsWith("rk_live_") ? "LIVE 🟢" :
-                       sk.startsWith("sk_test_") || sk.startsWith("rk_test_") ? "TEST 🟡" : "NO KEY ❌";
-    const prefix = sk.length > 0 ? `(prefijo detectado: "${sk.substring(0, 10)}...")` : "(vacía)";
-    log(`Stripe mode: ${stripeMode} ${prefix}`);
+    import("./stripeClient").then(({ getStripeClient }) =>
+      getStripeClient().then(client =>
+        client.balance.retrieve().then(() =>
+          log("Stripe: conexión verificada ✅ — listo para procesar pagos")
+        ).catch(err => log(`Stripe key inválida: ${err.message}`))
+      ).catch(err => log(`Stripe init error: ${err.message}`))
+    ).catch(() => {});
   });
 })();
