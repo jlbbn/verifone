@@ -22,7 +22,8 @@ interface SubscriptionData {
   currency: string;
   contractDate: string;
   contractTerm: string;
-  status: "partial" | "complete";
+  status: "partial" | "complete" | "pending";
+  restricted?: boolean;
   posUnlocked: boolean;
   walletAddress: string | null;
   walletNetwork: string | null;
@@ -36,6 +37,12 @@ interface SubscriptionData {
 
 function generateContractPDF(sub: SubscriptionData) {
   const pct = Math.round((sub.paidAmount / sub.totalAmount) * 100);
+  const isPending = sub.status === "pending";
+  const mxnEquiv = isPending ? "6,500.00 MXN" : "13,000,000 MXN";
+  const contractTime = isPending ? "06/24/2026  |  18:59 CST" : sub.contractDate;
+  const statusBadgeClass = isPending ? "badge-partial" : sub.status === "complete" ? "badge-complete" : "badge-partial";
+  const statusLabel = isPending ? "PAYMENT PENDING" : sub.status === "complete" ? "PAID IN FULL" : "PARTIAL PAYMENT";
+
   const win = window.open("", "_blank");
   if (!win) return;
   win.document.write(`<!DOCTYPE html>
@@ -49,123 +56,184 @@ function generateContractPDF(sub: SubscriptionData) {
   .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:32px; padding-bottom:20px; border-bottom:3px solid #c8322b; }
   .brand { font-size:22px; font-weight:900; color:#c8322b; letter-spacing:-0.5px; }
   .brand span { color:#111; }
-  .address { font-size:10px; color:#555; text-align:right; margin-top:4px; }
-  h1 { font-size:16px; font-weight:700; margin:24px 0 8px; color:#111; }
-  h2 { font-size:12px; font-weight:700; margin:18px 0 6px; text-transform:uppercase; letter-spacing:.5px; color:#c8322b; border-bottom:1px solid #eee; padding-bottom:4px; }
-  table { width:100%; border-collapse:collapse; margin:12px 0; }
-  th { background:#c8322b; color:#fff; padding:7px 10px; text-align:left; font-size:11px; }
-  td { padding:7px 10px; border-bottom:1px solid #f0f0f0; font-size:11px; }
+  .address { font-size:10px; color:#555; margin-top:4px; }
+  .address-right { font-size:10px; color:#555; text-align:right; margin-top:4px; }
+  h1 { font-size:15px; font-weight:700; margin:20px 0 6px; color:#111; text-align:center; text-transform:uppercase; letter-spacing:.5px; }
+  h2 { font-size:11px; font-weight:700; margin:16px 0 5px; text-transform:uppercase; letter-spacing:.5px; color:#c8322b; border-bottom:1px solid #eee; padding-bottom:4px; }
+  table { width:100%; border-collapse:collapse; margin:10px 0; }
+  th { background:#c8322b; color:#fff; padding:6px 10px; text-align:left; font-size:10px; }
+  td { padding:6px 10px; border-bottom:1px solid #f0f0f0; font-size:10.5px; }
   tr:last-child td { border:none; }
   .total-row td { font-weight:700; background:#fff8f8; }
-  .progress-bar { background:#f0f0f0; height:10px; border-radius:5px; overflow:hidden; margin:6px 0; }
-  .progress-fill { background:#c8322b; height:100%; border-radius:5px; width:${pct}%; }
-  .label { font-weight:600; color:#555; }
-  .two-col { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin:20px 0; }
+  .label { font-weight:600; color:#555; width:180px; }
+  .two-col { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin:24px 0; }
   .sig-box { border:1px solid #ddd; padding:14px; border-radius:6px; background:#fafafa; }
   .sig-box .title { font-size:10px; color:#888; margin-bottom:6px; text-transform:uppercase; letter-spacing:.5px; }
   .sig-box .name { font-size:13px; font-weight:700; }
   .sig-box .detail { font-size:10px; color:#555; margin-top:2px; }
-  .legal { font-size:9.5px; color:#666; margin-top:24px; padding-top:14px; border-top:1px solid #eee; line-height:1.7; }
+  .legal-section { margin-top:20px; padding-top:14px; border-top:2px solid #eee; }
+  .legal-section h2 { color:#111; }
+  .clause { margin-bottom:12px; }
+  .clause-title { font-size:11px; font-weight:700; color:#c8322b; margin-bottom:3px; }
+  .clause-body { font-size:9.5px; color:#444; line-height:1.65; }
+  .footer { margin-top:24px; padding-top:10px; border-top:1px solid #ddd; font-size:9px; color:#888; text-align:center; }
   .badge { display:inline-block; padding:2px 8px; border-radius:3px; font-size:10px; font-weight:700; }
   .badge-partial { background:#FEF3C7; color:#92400E; }
   .badge-complete { background:#D1FAE5; color:#065F46; }
-  .warning { background:#FFF8E1; border:1px solid #F59E0B; border-radius:5px; padding:10px 14px; margin:14px 0; font-size:11px; color:#78350F; }
-  @media print { body { padding:30px; } @page { margin:20mm; } }
+  @media print { body { padding:30px; } @page { margin:15mm; } }
 </style>
 </head>
 <body>
 <div class="header">
   <div>
     <div class="brand">BANXICO<span>+</span> LLC</div>
-    <div class="address">7652 Sawmill Road, Suite 341<br>Dublin, Ohio 43016<br>United States</div>
+    <div class="address">7652 Sawmill Road, Suite 341 | Dublin, Ohio 43016 | United States<br>The Landmark GDL | Guadalajara, Jalisco, Mexico</div>
   </div>
   <div style="text-align:right">
-    <div style="font-size:18px;font-weight:700;color:#111;">ORDER FORM</div>
-    <div style="font-size:11px;color:#555;margin-top:4px;">Contract for: ${sub.userName}</div>
-    <div style="font-size:10px;color:#888;">Date: ${sub.contractDate}</div>
+    <div style="font-size:14px;font-weight:700;color:#111;">SERVICES AGREEMENT &amp; ORDER FORM</div>
+    <div style="font-size:10px;color:#555;margin-top:3px;">Financial Technology Services — Usuario Banxico+</div>
+    <div style="font-size:10px;color:#888;margin-top:2px;">ORDER FORM FOR: ${sub.userName.toUpperCase()}</div>
+    <div style="font-size:10px;color:#888;">Effective Date: ${contractTime}</div>
   </div>
 </div>
 
-<h2>Contract Term</h2>
-<table>
-  <tr><td class="label">Term</td><td>${sub.contractTerm} (1 year, auto-renew)</td></tr>
-  <tr><td class="label">Customer</td><td>${sub.userName}</td></tr>
-  <tr><td class="label">Company</td><td>${sub.company}</td></tr>
-  <tr><td class="label">Email</td><td>${sub.userEmail}</td></tr>
-  <tr><td class="label">Phone</td><td>${sub.phone}</td></tr>
-</table>
-
-<h2>Services & Billing</h2>
+<h2>Services — Products</h2>
 <table>
   <tr>
-    <th>Product / Service</th>
+    <th>Services</th>
     <th>Billing Frequency</th>
-    <th>Unit Price</th>
-    <th>Qty</th>
-    <th>Total</th>
+    <th>Price</th>
+    <th>Quantity</th>
+    <th>Total Price</th>
   </tr>
   <tr>
     <td>Usuario Banxico+</td>
-    <td>Annual</td>
-    <td>$750.00</td>
+    <td>Anual</td>
+    <td>$${sub.totalAmount}.00</td>
     <td>1</td>
-    <td>$750.00</td>
+    <td>$${sub.totalAmount}.00</td>
   </tr>
   <tr class="total-row">
-    <td colspan="4">Total (USD)</td><td>$750.00 USD</td>
+    <td colspan="4">TOTAL USD</td><td>$${sub.totalAmount}.00 USD</td>
   </tr>
   <tr class="total-row">
-    <td colspan="4">Total (MXN approx.)</td><td>$13,000,000 MXN</td>
+    <td colspan="4">TOTAL MXN (referencial)</td><td>${mxnEquiv}</td>
   </tr>
+</table>
+
+<h2>Administrator Information</h2>
+<table>
+  <tr><td class="label">Admin Full Name</td><td>${sub.userName.toUpperCase()}</td></tr>
+  <tr><td class="label">Admin Email</td><td>${sub.userEmail}</td></tr>
+  <tr><td class="label">Admin Job Title</td><td>Admin</td></tr>
+  <tr><td class="label">Admin Phone</td><td>${sub.phone}</td></tr>
+  <tr><td class="label">Company</td><td>${sub.company}</td></tr>
+  <tr><td class="label">Effective Date</td><td>${contractTime}</td></tr>
 </table>
 
 <h2>Payment Status</h2>
 <table>
+  <tr><td class="label">Contract Term</td><td>${sub.contractTerm} (1 year)</td></tr>
   <tr><td class="label">Total Amount</td><td>$${sub.totalAmount}.00 ${sub.currency}</td></tr>
   <tr><td class="label">Amount Paid</td><td>$${sub.paidAmount}.00 ${sub.currency}</td></tr>
   <tr><td class="label">Remaining Balance</td><td>$${sub.remainingAmount}.00 ${sub.currency}</td></tr>
-  <tr><td class="label">Status</td><td><span class="badge badge-${sub.status}">${sub.status === "complete" ? "PAID IN FULL" : "PARTIAL PAYMENT"}</span></td></tr>
-</table>
-<div class="progress-bar"><div class="progress-fill"></div></div>
-<div style="font-size:10px;color:#666;margin-top:4px;">${pct}% paid ($${sub.paidAmount} of $${sub.totalAmount} ${sub.currency})</div>
-
-${sub.remainingAmount > 0 ? `<div class="warning">⚠ Outstanding balance: $${sub.remainingAmount} ${sub.currency}. Payment must be completed within 48 hours to maintain POS access. Send to wallet: ${sub.walletAddress} (${sub.walletNetwork} — ${sub.walletToken})</div>` : ""}
-
-<h2>Non Deployment POS Tracking System</h2>
-<table>
-  <tr><td class="label">POS Deployment Status</td><td>${sub.posUnlocked ? "✅ ACTIVE — Full POS access granted" : "⏳ ACTIVE (0–48h window) — Full access now; deployment confirmed upon full payment"}</td></tr>
-  <tr><td class="label">Protocol Access</td><td>101.x / 201.x / 301.x / 401.x — All active</td></tr>
-  <tr><td class="label">Terminal Assignment</td><td>Assigned & operational</td></tr>
+  <tr><td class="label">Status</td><td><span class="badge ${statusBadgeClass}">${statusLabel}</span></td></tr>
 </table>
 
-<h2>Authorized Admins</h2>
-<table>
-  <tr><td class="label">Admin Full Name</td><td>${sub.userName}</td></tr>
-  <tr><td class="label">Admin Email</td><td>${sub.userEmail}</td></tr>
-  <tr><td class="label">Admin Phone</td><td>${sub.phone}</td></tr>
-</table>
+<div class="legal-section">
+<h2>Legal Terms &amp; Conditions</h2>
 
-<div class="two-col" style="margin-top:32px;">
+<div class="clause">
+  <div class="clause-title">1. Scope and Amendment</div>
+  <div class="clause-body">This Services Agreement and Order Form (the "Agreement") amends and is incorporated into the original Order Form and Terms of Use, and/or Software as a Service Agreement, between Customer and Banxico Plus LLC ("Supplier"). This Agreement formalizes the provision of financial technology services, additional license seats, and/or additional services described herein, and governs the entire commercial and operational relationship between the parties with respect thereto.</div>
+</div>
+
+<div class="clause">
+  <div class="clause-title">2. Acceptance and Payment Terms</div>
+  <div class="clause-body">By accepting this Banxico+ Services License and/or Services Add-On, Customer agrees to purchase the services described in this Order Form. Payment is due in full upfront prior to the activation or delivery of any services, licenses, or additional seats. Failure to remit payment within the agreed billing cycle shall result in immediate suspension of access to the platform and services, without prejudice to the Supplier's right to pursue payment recovery.</div>
+</div>
+
+<div class="clause">
+  <div class="clause-title">3. Continuity of Existing Subscriptions</div>
+  <div class="clause-body">Customer's subscription for any previously existing license seats under the Original Agreement shall continue unaffected by this Order Form. Any fees relating to those seats shall continue to be billed unchanged under the Original Agreement, unless otherwise expressly modified by a subsequent written amendment signed by authorized representatives of both parties.</div>
+</div>
+
+<div class="clause">
+  <div class="clause-title">4. Term, Proration, and Annual Price Adjustment</div>
+  <div class="clause-body">This Agreement is effective as of the date agreed upon by both parties. Additional fees will be prorated from the effective date until the end of the current 12-month term. Fees for any subsequent 12-month term shall not be prorated and shall be billed at full 12-month rates. Access to purchased services shall be enabled once the invoice is received and paid in full. Pricing is subject to an annual adjustment of up to ten percent (10%), effective on each anniversary of the Effective Date.</div>
+</div>
+
+<div class="clause">
+  <div class="clause-title">5. Responsibility for Resources and Platform Use</div>
+  <div class="clause-body">Customer acknowledges that all actions performed within the Banxico Plus platform under Customer's credentials or authorized users are the sole responsibility of the Customer. Customer shall ensure all authorized users comply with the platform's Terms of Use, applicable laws, and financial regulations of the United States and the Republic of Mexico. Banxico Plus LLC shall not be liable for misuse, unauthorized access resulting from Customer's negligence, or operational errors attributable to Customer or its authorized users.</div>
+</div>
+
+<div class="clause">
+  <div class="clause-title">6. Sender and Receiver Responsibility in Financial Operations</div>
+  <div class="clause-body">In the context of any financial transaction, remittance, or fund transfer facilitated through the Banxico Plus platform: <strong>Sender Responsibility:</strong> The Sender is solely responsible for the accuracy of all recipient information. <strong>Receiver Responsibility:</strong> The Receiver acknowledges that funds are subject to applicable clearing times, regulatory holds, and compliance reviews. <strong>Mutual Indemnification:</strong> Both Sender and Receiver agree to indemnify and hold harmless Banxico Plus LLC from any claims, penalties, fines, or damages. <strong>Dispute Window:</strong> Any disputed transaction must be reported in writing within five (5) business days of the transaction date.</div>
+</div>
+
+<div class="clause">
+  <div class="clause-title">7. Regulatory Compliance and AML/KYC Obligations</div>
+  <div class="clause-body">Both parties agree to comply with all applicable anti-money laundering (AML) and know-your-customer (KYC) regulations, including those of the Financial Crimes Enforcement Network (FinCEN), the Bank Secrecy Act (BSA), and Mexico's LFPIORPI. Customer agrees to provide truthful, complete, and current identity and business documentation upon request. Non-compliance constitutes grounds for immediate termination.</div>
+</div>
+
+<div class="clause">
+  <div class="clause-title">8. Data Privacy and Information Security</div>
+  <div class="clause-body">Banxico Plus LLC maintains appropriate technical and organizational measures to protect Customer's personal and financial data in accordance with the CCPA, GDPR (as applicable), and Mexico's LFPDPPP. Customer data shall not be sold, rented, or disclosed to third parties except as required by law or to fulfill the services described herein.</div>
+</div>
+
+<div class="clause">
+  <div class="clause-title">9. Service Level and Liability Limitation</div>
+  <div class="clause-body">Banxico Plus LLC shall use commercially reasonable efforts to maintain platform availability of no less than 99% uptime on a monthly basis, excluding scheduled maintenance windows communicated at least 48 hours in advance. In no event shall Banxico Plus LLC be liable for indirect, incidental, special, consequential, or punitive damages. The aggregate liability shall not exceed the total fees paid by Customer in the three (3) months immediately preceding the event giving rise to the claim.</div>
+</div>
+
+<div class="clause">
+  <div class="clause-title">10. Termination</div>
+  <div class="clause-body">Either party may terminate this Agreement upon thirty (30) days' written notice if the other party materially breaches any term and fails to cure such breach within fifteen (15) days of written notice. Banxico Plus LLC reserves the right to immediately suspend or terminate services without notice if Customer engages in fraudulent activity, violates applicable law, or uses the platform for money laundering, terrorist financing, or any other prohibited purpose.</div>
+</div>
+
+<div class="clause">
+  <div class="clause-title">11. Dispute Resolution and Governing Law</div>
+  <div class="clause-body">This Agreement shall be governed by the laws of the State of Ohio, United States of America. Any dispute shall first be submitted to good-faith mediation between the parties. If mediation fails, the dispute shall be resolved through binding arbitration under the rules of the American Arbitration Association (AAA), conducted in English in Dublin, Ohio.</div>
+</div>
+
+<div class="clause">
+  <div class="clause-title">12. Entire Agreement and Modifications</div>
+  <div class="clause-body">This Agreement, together with the Order Form and any incorporated documents, constitutes the entire agreement between the parties and supersedes all prior negotiations or representations. This Agreement may not be modified except by written instrument signed by authorized representatives of both parties. Electronic signatures, including DocuSign, carry the same legal force as original wet signatures.</div>
+</div>
+
+<div class="clause">
+  <div class="clause-title">13. Auto-Renewal and Final Sales</div>
+  <div class="clause-body">All subscriptions under this Agreement auto-renew annually unless written cancellation notice is provided at least thirty (30) days before the end of the current term. All sales are final. Refunds, if any, are subject to Banxico Plus LLC's refund policy as communicated separately and in writing. Customer initials their understanding of these terms: ____________.</div>
+</div>
+</div>
+
+<h2 style="margin-top:24px;">Agreed and Executed</h2>
+<div class="two-col">
   <div class="sig-box">
-    <div class="title">Customer — Agreed To</div>
-    <div class="name">${sub.userName}</div>
-    <div class="detail">Company: ${sub.company}</div>
+    <div class="title">Agreed To: CUSTOMER</div>
+    <div class="name">${sub.userName.toUpperCase()}</div>
+    <div class="detail">Title: Admin / Authorized Representative</div>
     <div class="detail">Email: ${sub.userEmail}</div>
-    <div class="detail">Date: ${sub.contractDate}</div>
-    <div style="margin-top:20px;border-top:1px solid #bbb;padding-top:4px;font-size:9px;color:#aaa;">Signature</div>
+    <div class="detail">Phone: ${sub.phone}</div>
+    <div class="detail">Date: ${contractTime}</div>
+    <div style="margin-top:20px;border-top:1px solid #bbb;padding-top:4px;font-size:9px;color:#aaa;">By (Signature): _________________________</div>
   </div>
   <div class="sig-box">
-    <div class="title">Supplier — Banxico Plus LLC</div>
+    <div class="title">Agreed To: SUPPLIER</div>
     <div class="name">${sub.signerName}</div>
+    <div class="detail">Supplier: Banxico Plus LLC / Seamless Contacts Inc.</div>
     <div class="detail">Title: ${sub.signerTitle}</div>
     <div class="detail">Address: ${sub.supplierAddress}</div>
-    <div class="detail">Date: ${sub.contractDate} | 8:37 PM EDT</div>
-    <div style="margin-top:20px;border-top:1px solid #bbb;padding-top:4px;font-size:9px;color:#aaa;">Authorized Signature</div>
+    <div class="detail">The Landmark GDL, Guadalajara, Jalisco, Mexico</div>
+    <div class="detail">Date: ${contractTime}</div>
+    <div style="margin-top:20px;border-top:1px solid #bbb;padding-top:4px;font-size:9px;color:#aaa;">By (Authorized Signature): _______________</div>
   </div>
 </div>
 
-<div class="legal">
-  <strong>Legal Terms:</strong> This Services Add-On Order Form amends and is incorporated into the original Order Form and Terms of Use, and/or Software as a Service Agreement between Customer and Banxico Plus LLC ("Original Agreement"). All agreements are annual agreements, auto-renew, all sales are final, and payment terms shall be in accordance with the billing cycle indicated above. By accepting this Banxico+ Services License, you agree to purchase the license seats as described and payment is due upfront prior to implementation. Access will be enabled once the invoice is received and processed. A facsimile or electronic signature will have the same force and effect as an original signature. Governed under applicable international commercial law. V.20230915TermsAL
+<div class="footer">
+  V.20230915TermsAL  |  Banxico Plus LLC  |  Confidential &amp; Proprietary
 </div>
 
 <script>window.onload = function(){ window.print(); };</script>
@@ -209,6 +277,7 @@ export default function SubscriptionPage() {
 
   const pct = Math.round((sub.paidAmount / sub.totalAmount) * 100);
   const isPartial = sub.status === "partial";
+  const isPending = sub.status === "pending";
 
   return (
     <div className="max-w-2xl mx-auto p-4 md:p-6 pb-20 space-y-4">
@@ -233,6 +302,24 @@ export default function SubscriptionPage() {
           Download Contract PDF
         </Button>
       </div>
+
+      {/* Pending payment banner */}
+      {isPending && (
+        <Card className="border-red-300 bg-red-50">
+          <CardContent className="flex items-start gap-3 py-3 px-4">
+            <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-red-800">
+                Suscripción pendiente de pago — Acceso restringido
+              </p>
+              <p className="text-xs text-red-700 mt-0.5 leading-relaxed">
+                Tu cuenta está activa pero con acceso limitado hasta confirmar el pago de <strong>${sub.remainingAmount} {sub.currency}</strong>.
+                Una vez procesado el pago, se habilitarán todas las funciones del sistema incluyendo POS Virtual y herramientas de transacciones.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* 48-hour warning banner (only for partial payments) */}
       {isPartial && (
@@ -264,12 +351,14 @@ export default function SubscriptionPage() {
             </div>
             <Badge
               className={`text-xs no-default-active-elevate ${
-                isPartial
+                isPending
+                  ? "bg-red-100 text-red-800 border-red-200"
+                  : isPartial
                   ? "bg-amber-100 text-amber-800 border-amber-200"
                   : "bg-green-100 text-green-700 border-green-200"
               }`}
             >
-              {isPartial ? "Partial Payment" : "Paid in Full"}
+              {isPending ? "Pago Pendiente" : isPartial ? "Partial Payment" : "Paid in Full"}
             </Badge>
           </div>
 
@@ -305,15 +394,15 @@ export default function SubscriptionPage() {
             </div>
           </div>
 
-          {isPartial && (
-            <Link href="/subscription/payment">
-              <Button className="w-full bg-[#c8322b] hover:bg-[#a62822] gap-2" data-testid="button-make-payment">
-                <ExternalLink className="w-4 h-4" />
-                Complete Payment — ${sub.remainingAmount} {sub.currency}
-              </Button>
-            </Link>
+          {(isPartial || isPending) && (
+            <div className="flex items-center gap-2 p-3 rounded-md bg-red-50 border border-red-200">
+              <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0" />
+              <p className="text-xs text-red-700">
+                Pendiente: <strong>${sub.remainingAmount} {sub.currency}</strong> — Contacta a tu administrador para completar el pago y activar tu cuenta.
+              </p>
+            </div>
           )}
-          {!isPartial && (
+          {!isPartial && !isPending && (
             <div className="flex items-center gap-2 text-green-600 text-sm font-medium justify-center py-1">
               <CheckCircle className="w-4 h-4" /> Payment complete — POS permanently confirmed
             </div>
