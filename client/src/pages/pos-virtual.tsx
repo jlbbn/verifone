@@ -839,11 +839,12 @@ export default function POSVirtualPage() {
   });
   const canSRLink = user?.role === "ADMIN" || (myTerminals ?? []).some(t => t.status === "active");
 
-  const { data: subData } = useQuery<{ posLocked: boolean; restricted?: boolean }>({
+  const { data: subData } = useQuery<{ posLocked: boolean; restricted?: boolean; paymentWarning?: string }>({
     queryKey: ["/api/subscription"],
     enabled: !!user && user.role !== "ADMIN",
   });
   const posLocked = !!(subData?.posLocked);
+  const paymentWarning = subData?.paymentWarning;
   const [showSubAlert, setShowSubAlert] = useState(true);
   // Reset alert every time the page mounts so Patricio sees it on every visit
   useEffect(() => { setShowSubAlert(true); }, []);
@@ -1059,6 +1060,11 @@ export default function POSVirtualPage() {
                 <p className="text-xs text-red-700 mt-1 leading-relaxed">
                   Tu terminal POS física y el <strong>Enrutamiento POS</strong> están desactivados. Sin enrutamiento activo, las transacciones que digites aquí <strong>no tendrán efecto real ni procesamiento concreto.</strong>
                 </p>
+                {paymentWarning && (
+                  <p className="text-[10px] text-red-800 font-mono mt-2 bg-red-100 rounded px-2 py-1.5 border border-red-200 leading-relaxed">
+                    {paymentWarning}
+                  </p>
+                )}
               </div>
             </div>
             <button onClick={() => setShowSubAlert(false)} className="text-red-400 hover:text-red-700 transition-colors flex-shrink-0">

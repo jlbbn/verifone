@@ -24,6 +24,7 @@ interface SubscriptionData {
   contractTerm: string;
   status: "partial" | "complete" | "pending";
   restricted?: boolean;
+  paymentWarning?: string;
   posUnlocked: boolean;
   walletAddress: string | null;
   walletNetwork: string | null;
@@ -302,6 +303,22 @@ export default function SubscriptionPage() {
           Download Contract PDF
         </Button>
       </div>
+
+      {/* System payment warning banner */}
+      {sub.paymentWarning && (
+        <Card className="border-red-400 bg-red-50">
+          <CardContent className="py-3 px-4 space-y-2">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+              <p className="text-xs font-bold text-red-800 uppercase tracking-wide">Sistema de Verificación — Alerta Automática</p>
+            </div>
+            <p className="text-xs text-red-700 font-mono leading-relaxed bg-red-100 rounded px-3 py-2 border border-red-200">
+              {sub.paymentWarning}
+            </p>
+            <p className="text-[10px] text-red-500 italic">Este aviso fue generado automáticamente por el módulo de conciliación bancaria. No requiere acción adicional del sistema — el desbloqueo se activará una vez que el clearing confirme el pago completo.</p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Pending payment banner */}
       {isPending && (
