@@ -186,6 +186,13 @@ export default function POSPage() {
   const [editSystemMessage, setEditSystemMessage] = useState("");
   const [editAmount, setEditAmount] = useState("");
 
+  // Suscripción — bloqueo de enrutamiento si no ha pagado
+  const { data: subData } = useQuery<{ routingLocked?: boolean; paymentWarning?: string }>({
+    queryKey: ["/api/subscription"],
+    enabled: !!user && !isAdmin,
+  });
+  const routingLocked = !!(subData?.routingLocked);
+
   // Terminales propias del usuario (no-admin)
   const { data: myApiTerminals = [] } = useQuery<ApiTerminal[]>({ queryKey: ["/api/terminals/mine"] });
   const myTerminals = useMemo(() => myApiTerminals.map(t => augmentTerminal(t)), [myApiTerminals]);
@@ -371,6 +378,40 @@ export default function POSPage() {
   }
 
   // ─── NON-ADMIN VIEW ───────────────────────────────────────────────────────
+  if (!isAdmin && routingLocked) {
+    return (
+      <div className="p-4 md:p-6 space-y-5">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
+            <Terminal className="w-7 h-7 text-[#c8322b]" /> Enrutamiento POS
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{user?.fullName ?? "Usuario"}</p>
+        </div>
+        <Card className="border-red-300 bg-red-50">
+          <CardContent className="py-8 flex flex-col items-center text-center gap-4">
+            <div className="w-14 h-14 rounded-full bg-red-100 border-2 border-red-300 flex items-center justify-center">
+              <AlertTriangle className="w-7 h-7 text-red-600" />
+            </div>
+            <div className="space-y-1">
+              <p className="font-bold text-red-800 text-base">NON PAYMENT — Acceso suspendido</p>
+              <p className="text-sm text-red-700 max-w-md">
+                El módulo de Enrutamiento POS está bloqueado. No se ha registrado ningún pago para activar este servicio.
+              </p>
+            </div>
+            {subData?.paymentWarning && (
+              <p className="text-[11px] text-red-700 font-mono bg-red-100 border border-red-200 rounded px-3 py-2 max-w-lg leading-relaxed">
+                {subData.paymentWarning}
+              </p>
+            )}
+            <Badge className="bg-red-600 text-white border-red-700 no-default-active-elevate">
+              Código: 0x4E43-BLOCK
+            </Badge>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (!isAdmin) {
     const sub = getSubscriptionInfo(user?.subscriptionStart);
 
