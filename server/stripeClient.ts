@@ -5,15 +5,9 @@ async function getStripeKeyFromConnector(): Promise<string | null> {
     const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
     const identity = process.env.REPL_IDENTITY;
     if (!hostname || !identity) return null;
-
     const res = await fetch(
       `https://${hostname}/api/v2/connection/conn_stripe_01KW06WTJX3QGDN9PS8K567M0S/credentials`,
-      {
-        headers: {
-          Authorization: `Bearer ${identity}`,
-          'Content-Type': 'application/json',
-        },
-      }
+      { headers: { Authorization: `Bearer ${identity}`, 'Content-Type': 'application/json' } }
     );
     if (!res.ok) return null;
     const data = await res.json() as { secret?: string };
@@ -23,20 +17,28 @@ async function getStripeKeyFromConnector(): Promise<string | null> {
   }
 }
 
-export async function getStripeClient(): Promise<Stripe> {
-  const connectorKey = await getStripeKeyFromConnector();
-  const key = connectorKey
-    || process.env.Secretkey1
-    || process.env.STRIPE_SECRET_KEY;
+function isValidKey(k: string): boolean {
+  return k.startsWith('sk_live_') || k.startsWith('sk_test_') ||
+         k.startsWith('rk_live_') || k.startsWith('rk_test_');
+}
 
-  if (!key) throw new Error('Stripe key not configured');
-  if (
-    !key.startsWith('sk_live_') &&
-    !key.startsWith('sk_test_') &&
-    !key.startsWith('rk_live_') &&
-    !key.startsWith('rk_test_')
-  ) {
-    throw new Error(`Stripe key format invalid (got prefix: ${key.substring(0, 8)}...)`);
-  }
+export async function getStripeClient(): Promise<Stripe> {
+  // Priority: live env key → Secretkey1 → connector (test fallback)
+  const envKey  = process.env.STRIPE_SECRET_KEY;
+  const bkpKey  = process.env.Secretkey1;
+  const connKey = await getStripeKeyFromConnector();
+
+  const key = (envKey  && isValidKey(envKey))  ? envKey  :
+              (bkpKey  && isValidKey(bkpKey))  ? bkpKey  :
+              (connKey && isValidKey(connKey)) ? connKey : null;
+
+  if (!key) throw new Error('Stripe key not configured or format invalid');
   return new Stripe(key, { apiVersion: '2026-05-27.dahlia' as any });
+}
+
+export function getStripeMode(): 'live' | 'test' | 'unknown' {
+  const k = process.env.STRIPE_SECRET_KEY || process.env.Secretkey1 || '';
+  if (k.startsWith('sk_live_') || k.startsWith('rk_live_')) return 'live';
+  if (k.startsWith('sk_test_') || k.startsWith('rk_test_')) return 'test';
+  return 'unknown';
 }

@@ -776,6 +776,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/stripe/config", requireSession, async (_req, res) => {
+    const { getStripeMode } = await import("./stripeClient");
+    const mode = getStripeMode();
+    res.json({
+      publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || "",
+      mode,
+      live: mode === "live",
+    });
+  });
+
   app.post("/api/pos/process-payment", paymentLimiter, async (req, res) => {
     try {
       const parsed = posPaymentSchema.safeParse(req.body);

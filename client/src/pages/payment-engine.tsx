@@ -84,6 +84,10 @@ export default function PaymentEnginePage() {
     queryKey: ["/api/payment-engine/charges"],
   });
 
+  const { data: stripeCfg } = useQuery<{ mode: string; live: boolean; publishableKey: string }>({
+    queryKey: ["/api/stripe/config"],
+  });
+
   const chargeMutation = useMutation({
     mutationFn: async (body: object) => {
       const res = await apiRequest("POST", "/api/payment-engine/charge", body);
@@ -145,7 +149,13 @@ export default function PaymentEnginePage() {
             Motor de cobros internacional · Stripe + Mercado Pago
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {stripeCfg && (
+            <Badge className={`no-default-active-elevate gap-1 font-bold ${stripeCfg.live ? "bg-green-600 text-white border-green-700" : "bg-amber-100 text-amber-800 border-amber-300"}`}>
+              <Zap className="w-3 h-3" />
+              Stripe {stripeCfg.live ? "LIVE" : "TEST"}
+            </Badge>
+          )}
           <Badge className="bg-green-100 text-green-700 border-green-200 no-default-active-elevate gap-1">
             <Shield className="w-3 h-3" /> PCI DSS
           </Badge>
