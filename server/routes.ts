@@ -1272,6 +1272,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const isPatricio = user.email === "patricioarroyo510@gmail.com";
     const isPaid = completedPayments.has(user.id);
 
+    const isOvidio = user.email === "ovidiohdez@gmail.com";
+
+    if (isOvidio) {
+      return res.json({
+        userId:          user.id,
+        userName:        user.fullName,
+        userEmail:       user.email,
+        plan:            "Suscripción Pendiente",
+        totalAmount:     375,
+        paidAmount:      0,
+        remainingAmount: 375,
+        currency:        "USD",
+        contractDate:    "2026-06-24",
+        contractTerm:    "12 months",
+        status:          "pending",
+        posUnlocked:     false,
+        posLocked:       true,
+        restricted:      true,
+        walletAddress:   null,
+        walletNetwork:   null,
+        walletToken:     null,
+        company:         "Banxico Plus LLC",
+        phone:           "+1 614-000-0000",
+        signerName:      "José Luis Barrientos Terreros",
+        signerTitle:     "Founder",
+        supplierAddress: "7652 Sawmill Road, Suite 341, Dublin, Ohio 43016",
+      });
+    }
+
     if (isPatricio) {
       const cutoff = new Date("2026-06-15T14:30:00Z"); // 9:30 AM CDT
       const posLocked = !isPaid && new Date() >= cutoff;
