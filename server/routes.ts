@@ -1282,7 +1282,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const isPatricio = user.email === "patricioarroyo510@gmail.com";
     const isPaid = completedPayments.has(user.id);
 
-    const isOvidio = user.email === "ovidiohdez@gmail.com";
+    const isOvidio   = user.email === "ovidiohdez@gmail.com";
+    const isAvoExport = user.email === "avoexport03@gmail.com";
 
     if (isOvidio) {
       return res.json({
@@ -1306,6 +1307,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         walletToken:     null,
         company:         "—",
         phone:           "+52 81 1240 3497",
+        signerName:      "José Luis Barrientos Terreros",
+        signerTitle:     "Founder",
+        supplierAddress: "7652 Sawmill Road, Suite 341, Dublin, Ohio 43016",
+      });
+    }
+
+    if (isAvoExport) {
+      return res.json({
+        userId:          user.id,
+        userName:        user.fullName,
+        userEmail:       user.email,
+        plan:            "Usuario Banxico+ Annual",
+        totalAmount:     750,
+        paidAmount:      0,
+        remainingAmount: 750,
+        currency:        "USD",
+        contractDate:    "2026-06-25",
+        contractTerm:    "12 months",
+        status:          "pending",
+        posUnlocked:     false,
+        posLocked:       true,
+        restricted:      true,
+        paymentWarning:  "ALERTA DEL SISTEMA — Sin pago registrado. El módulo de conciliación ACH/SPEI no detectó ningún abono asociado a la referencia de contrato BNXP-2026-062501. El acceso al sistema está restringido hasta que se confirme el primer pago. Todas las funciones de POS Virtual, Enrutamiento, Transacciones y Exchange quedan suspendidas. Referencia de auditoría: PYMT-AE-2026-062501-NOPMT · Código de estado: 0x4E43-BLOCK",
+        walletAddress:   null,
+        walletNetwork:   null,
+        walletToken:     null,
+        company:         "—",
+        phone:           "—",
         signerName:      "José Luis Barrientos Terreros",
         signerTitle:     "Founder",
         supplierAddress: "7652 Sawmill Road, Suite 341, Dublin, Ohio 43016",
