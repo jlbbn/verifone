@@ -117,6 +117,7 @@ app.use((req, res, next) => {
     const sk = process.env.STRIPE_SECRET_KEY || process.env.Secretkey1 || "";
     const stripeMode = sk.startsWith("sk_live_") || sk.startsWith("rk_live_") ? "LIVE 🟢" :
                        sk.startsWith("sk_test_") || sk.startsWith("rk_test_") ? "TEST 🟡" : "NO KEY ❌";
-    log(`Stripe mode: ${stripeMode}`);
+    const prefix = sk.length > 0 ? `(prefijo detectado: "${sk.substring(0, 10)}...")` : "(vacía)";
+    log(`Stripe mode: ${stripeMode} ${prefix}`);
   });
 })();
