@@ -41,6 +41,7 @@ import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { useQuery } from "@tanstack/react-query";
 
 function initials(name: string) {
   return name
@@ -78,10 +79,22 @@ const PLAN_STATUS  = "Activa";
 const PLAN_RENEW   = "03 Jun 2027";
 const PLAN_SINCE   = "03 Jun 2025";
 
+const ALLOWED_RESTRICTED = ["/dashboard", "/documentos", "/subscription"];
+
 export function AppSidebar() {
   const [location] = useLocation();
   const { user, logout, isLoggingOut } = useAuth();
   const isAdmin = user?.role === "ADMIN";
+
+  const { data: subData } = useQuery<{ restricted?: boolean }>({
+    queryKey: ["/api/subscription"],
+    enabled: !!user && !isAdmin,
+  });
+  const isRestricted = !isAdmin && !!(subData?.restricted);
+
+  const visibleMenuItems = isRestricted
+    ? menuItems.filter(item => ALLOWED_RESTRICTED.includes(item.url))
+    : menuItems;
 
   return (
     <Sidebar className="border-r border-sidebar-border">
@@ -231,7 +244,7 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {menuItems.map((item) => (
+              {visibleMenuItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild

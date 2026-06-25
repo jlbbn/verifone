@@ -839,7 +839,7 @@ export default function POSVirtualPage() {
   });
   const canSRLink = user?.role === "ADMIN" || (myTerminals ?? []).some(t => t.status === "active");
 
-  const { data: subData } = useQuery<{ posLocked: boolean }>({
+  const { data: subData } = useQuery<{ posLocked: boolean; restricted?: boolean }>({
     queryKey: ["/api/subscription"],
     enabled: !!user && user.role !== "ADMIN",
   });
@@ -1054,7 +1054,7 @@ export default function POSVirtualPage() {
               </div>
               <div>
                 <p className="font-bold text-red-800 text-sm">
-                  Patricio Arroyo — Suscripción con pago pendiente
+                  {user?.fullName} — Suscripción con pago pendiente
                 </p>
                 <p className="text-xs text-red-700 mt-1 leading-relaxed">
                   Tu terminal POS física y el <strong>Enrutamiento POS</strong> están desactivados. Sin enrutamiento activo, las transacciones que digites aquí <strong>no tendrán efecto real ni procesamiento concreto.</strong>
