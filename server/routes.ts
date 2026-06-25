@@ -795,11 +795,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const expYear  = 2000 + parseInt(expYYStr, 10);
 
       // ── Stripe — always first (real card validation) ──────────────────────
-      const stripeConfigured = !!process.env.STRIPE_SECRET_KEY;
+      const stripeConfigured = true;
       if (stripeConfigured) {
         try {
           const { getStripeClient } = await import("./stripeClient");
-          const stripe = getStripeClient();
+          const stripe = await getStripeClient();
 
           // 1. Create payment method from raw card data
           const pm = await stripe.paymentMethods.create({
@@ -1439,7 +1439,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (processor === "stripe") {
         // ── Stripe ──────────────────────────────────────────────
         const { getStripeClient } = await import("./stripeClient");
-        const stripe = getStripeClient();
+        const stripe = await getStripeClient();
 
         // 1. Create payment method token from raw card data
         const pm = await stripe.paymentMethods.create({
