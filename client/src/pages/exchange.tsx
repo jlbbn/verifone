@@ -1,17 +1,20 @@
 import { useState, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
   ArrowRightLeft, Lock, RefreshCw, TrendingUp, BarChart2,
   Activity, Coins, DollarSign, TrendingDown, Clock,
+  Wallet, Send, ShieldCheck, Copy, CheckCircle2,
 } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
 import {
   SiBitcoin, SiEthereum, SiLitecoin, SiDogecoin,
   SiSolana, SiCardano, SiPolkadot, SiTether,
@@ -254,8 +257,74 @@ function CryptoPicker({
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+interface SubData {
+  walletAddress?: string | null;
+  walletNetwork?: string | null;
+  walletToken?: string | null;
+}
+
 export default function ExchangePage() {
   const { toast } = useToast();
+  const { user } = useAuth();
+
+  // ── Wallet / dispersión ─────────────────────────────────────────────────
+  const { data: subData } = useQuery<SubData>({
+    queryKey: ["/api/subscription"],
+    enabled: !!user,
+  });
+  const coldWallet   = subData?.walletAddress ?? null;
+  const coldNetwork  = subData?.walletNetwork ?? "ETHEREUM (ERC-20)";
+  const coldToken    = subData?.walletToken   ?? "ETH";
+
+  const [dispAmount, setDispAmount] = useState("");
+  const [dispToken,  setDispToken]  = useState("eth");
+  const [copied,     setCopied]     = useState(false);
+
+  function handleCopy() {
+    if (!coldWallet) return;
+    navigator.clipboard.writeText(coldWallet).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  const dispersionMutation = useMutation({
+    mutationFn: async () => {
+      const coin   = CRYPTOS.find(c => c.id === dispToken)!;
+      const price  = prices[dispToken] ?? coin.basePrice;
+      const usdVal = (parseFloat(dispAmount) * price).toFixed(2);
+      const txId   = `DSP-${Date.now().toString(36).toUpperCase()}`;
+      const res = await apiRequest("POST", "/api/transactions", {
+        transactionId: txId,
+        protocol:      "101.3",
+        type:          "transfer",
+        amount:        usdVal,
+        currency:      "USD",
+        status:        "completed",
+        fromAccount:   `EXCHANGE · WALLET · ${coin.symbol}`,
+        toAccount:     coldWallet ?? "—",
+        description:   `Dispersión ${dispAmount} ${coin.symbol} → Wallet fría ${coldWallet?.slice(0, 10)}…`,
+      });
+      if (!res.ok) throw new Error("Error");
+      return { amount: dispAmount, symbol: coin.symbol };
+    },
+    onSuccess: ({ amount, symbol }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
+      toast({ title: "Dispersión enviada", description: `${amount} ${symbol} → wallet fría registrada` });
+      setDispAmount("");
+    },
+    onError: () => {
+      toast({ title: "Error al dispersar", variant: "destructive" });
+    },
+  });
+
+  function handleDispersar() {
+    if (!dispAmount || parseFloat(dispAmount) <= 0) {
+      toast({ title: "Monto inválido", description: "Ingresa un monto mayor a 0", variant: "destructive" });
+      return;
+    }
+    dispersionMutation.mutate();
+  }
 
   const [fromId, setFromId] = useState("eth");
   const [toId, setToId]     = useState("btc");
@@ -545,6 +614,115 @@ export default function ExchangePage() {
           </div>
         </CardContent>
       </Card>
+
+
+      {/* ── Panel Dispersión (solo si tiene wallet registrada) ────────────── */}
+      {coldWallet && (
+        <Card className="border shadow-sm">
+          <CardContent className="p-0">
+
+            {/* Header */}
+            <div className="flex items-center gap-3 px-5 py-4 border-b">
+              <div className="w-9 h-9 rounded-md bg-[#c8322b]/10 flex items-center justify-center flex-shrink-0">
+                <Wallet className="w-5 h-5 text-[#c8322b]" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm">Wallet Fría Registrada</p>
+                <p className="text-xs text-muted-foreground">Método de dispersión activo</p>
+              </div>
+              <Badge className="bg-green-100 text-green-700 border-green-200 no-default-active-elevate text-[10px]">
+                <ShieldCheck className="w-3 h-3 mr-1" />
+                Verificada
+              </Badge>
+            </div>
+
+            {/* Wallet info */}
+            <div className="px-5 py-4 border-b space-y-3">
+              <div>
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Dirección</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-xs font-mono text-foreground break-all flex-1" data-testid="text-wallet-address">
+                    {coldWallet}
+                  </p>
+                  <button
+                    onClick={handleCopy}
+                    className="flex-shrink-0 w-7 h-7 rounded-md border flex items-center justify-center hover-elevate"
+                    title="Copiar dirección"
+                    data-testid="button-copy-wallet"
+                  >
+                    {copied
+                      ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
+                      : <Copy className="w-3.5 h-3.5 text-muted-foreground" />
+                    }
+                  </button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Red</p>
+                  <p className="text-xs font-semibold text-foreground" data-testid="text-wallet-network">{coldNetwork}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Token</p>
+                  <p className="text-xs font-semibold text-foreground" data-testid="text-wallet-token">{coldToken}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Dispersión form */}
+            <div className="px-5 py-4 space-y-3">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Nueva Dispersión</p>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  step="0.0001"
+                  placeholder="0.0000"
+                  value={dispAmount}
+                  onChange={e => setDispAmount(e.target.value)}
+                  className="flex-1 font-mono text-sm"
+                  data-testid="input-dispersion-amount"
+                />
+                <div className="w-32 flex-shrink-0">
+                  <Select value={dispToken} onValueChange={setDispToken}>
+                    <SelectTrigger className="text-xs" data-testid="select-dispersion-token">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CRYPTOS.map(c => (
+                        <SelectItem key={c.id} value={c.id}>
+                          <div className="flex items-center gap-1.5">
+                            <CryptoIcon symbol={c.symbol} size={13} color={c.color} />
+                            <span className="text-xs font-semibold">{c.symbol}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono bg-muted/40 rounded-md px-3 py-2">
+                <Send className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="truncate">
+                  → {coldWallet.slice(0, 14)}…{coldWallet.slice(-6)}
+                </span>
+              </div>
+              <Button
+                onClick={handleDispersar}
+                disabled={dispersionMutation.isPending || !dispAmount || parseFloat(dispAmount) <= 0}
+                className="w-full"
+                style={{ backgroundColor: "#c8322b" }}
+                data-testid="button-dispersar"
+              >
+                {dispersionMutation.isPending
+                  ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Procesando…</>
+                  : <><Send className="w-4 h-4 mr-2" /> Dispersar a Wallet Fría</>
+                }
+              </Button>
+            </div>
+
+          </CardContent>
+        </Card>
+      )}
 
     </div>
   );
