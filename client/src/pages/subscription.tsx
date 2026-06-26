@@ -9,7 +9,15 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   FileText, CheckCircle, AlertTriangle, Clock, CreditCard,
   Download, MonitorSmartphone, ExternalLink, Shield, Copy, Check,
+  Lock, BarChart2, TrendingUp, Ban, Info,
 } from "lucide-react";
+
+interface PaymentHistoryEntry {
+  ref: string; date: string; amountMXN: number; amountUSD: number; tc: number; status: string;
+}
+interface NextThreshold {
+  amountMXN: number; amountUSD: number; totalAfterUSD: number; description: string;
+}
 
 interface SubscriptionData {
   userId: string;
@@ -34,6 +42,9 @@ interface SubscriptionData {
   signerName: string;
   signerTitle: string;
   supplierAddress: string;
+  adminCanInterfere?: boolean;
+  paymentHistory?: PaymentHistoryEntry[];
+  nextThreshold?: NextThreshold;
 }
 
 function generateContractPDF(sub: SubscriptionData) {
@@ -316,6 +327,125 @@ export default function SubscriptionPage() {
               {sub.paymentWarning}
             </p>
             <p className="text-[10px] text-red-500 italic">Este aviso fue generado automáticamente por el módulo de conciliación bancaria. No requiere acción adicional del sistema — el desbloqueo se activará una vez que el clearing confirme el pago completo.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Panel de Análisis Automatizado del Sistema (solo si tiene historial) ── */}
+      {sub.paymentHistory && sub.paymentHistory.length > 0 && (
+        <Card className="border shadow-sm">
+          <CardContent className="p-0">
+
+            {/* Header */}
+            <div className="flex items-center gap-3 px-5 py-4 border-b">
+              <div className="w-9 h-9 rounded-md bg-[#c8322b]/10 flex items-center justify-center flex-shrink-0">
+                <BarChart2 className="w-5 h-5 text-[#c8322b]" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm">Análisis Automatizado del Sistema</p>
+                <p className="text-xs text-muted-foreground">Módulo de conciliación bancaria · Solo lectura</p>
+              </div>
+              <Badge className="bg-slate-100 text-slate-700 border-slate-200 no-default-active-elevate text-[10px]">
+                <Lock className="w-3 h-3 mr-1" /> Sistema automático
+              </Badge>
+            </div>
+
+            {/* Admin cannot interfere block */}
+            {sub.adminCanInterfere === false && (
+              <div className="mx-5 mt-4 rounded-md border border-slate-200 bg-slate-50 px-4 py-3 flex items-start gap-2.5">
+                <Ban className="w-4 h-4 text-slate-500 flex-shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-[11px] font-semibold text-slate-700 uppercase tracking-wide">Restricción de interfaz administrativa</p>
+                  <p className="text-[11px] text-slate-600 leading-relaxed">
+                    El administrador del sistema <span className="font-semibold text-slate-800">no tiene capacidad de interferir</span> en el módulo de conciliación bancaria. El desbloqueo de funciones (POS Virtual, Enrutamiento POS) es gestionado de forma <span className="font-semibold">exclusivamente automática</span> por el motor de clearing. Ninguna acción manual puede modificar el estado de acceso mientras el saldo esté pendiente.
+                  </p>
+                  <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-mono pt-0.5">
+                    <Shield className="w-3 h-3" />
+                    <span>Protocolo de auditoría activo · Art. 12.4 Contrato · Mod. Clearing Engine v3.1</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Progress bar */}
+            <div className="px-5 pt-4 pb-2">
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Progreso de suscripción</p>
+                <p className="text-[10px] font-mono text-muted-foreground">
+                  ${sub.paidAmount.toFixed(2)} / ${sub.totalAmount.toFixed(2)} USD
+                  <span className="ml-1 font-bold text-[#c8322b]">({((sub.paidAmount / sub.totalAmount) * 100).toFixed(1)}%)</span>
+                </p>
+              </div>
+              <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                <div
+                  className="h-2 rounded-full bg-[#c8322b] transition-all"
+                  style={{ width: `${Math.min(100, (sub.paidAmount / sub.totalAmount) * 100)}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-[9px] text-muted-foreground mt-1 font-mono">
+                <span>$0</span>
+                <span className="text-amber-600 font-semibold">Umbral proporcional ${sub.nextThreshold?.totalAfterUSD.toFixed(2)}</span>
+                <span>${sub.totalAmount} USD (acceso total)</span>
+              </div>
+            </div>
+
+            {/* Payment history */}
+            <div className="px-5 pb-2">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                Historial de abonos detectados automáticamente
+              </p>
+              <div className="space-y-1.5">
+                {sub.paymentHistory.map((p, i) => (
+                  <div key={i} className="rounded-md border border-border bg-muted/20 px-3 py-2 font-mono">
+                    <div className="flex items-center justify-between flex-wrap gap-1">
+                      <div className="flex items-center gap-1.5">
+                        <CheckCircle className="w-3 h-3 text-green-600 flex-shrink-0" />
+                        <span className="text-[10px] font-semibold text-green-700 uppercase">{p.status}</span>
+                        <span className="text-[9px] text-muted-foreground">{p.date}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold">${p.amountMXN.toFixed(2)} MXN</span>
+                        <span className="text-[9px] text-muted-foreground">= ${p.amountUSD.toFixed(2)} USD</span>
+                        <span className="text-[9px] bg-muted rounded px-1 py-0.5">TC {p.tc}</span>
+                      </div>
+                    </div>
+                    <p className="text-[9px] text-muted-foreground mt-0.5 truncate">REF: {p.ref}</p>
+                  </div>
+                ))}
+              </div>
+              {/* Total */}
+              <div className="mt-2 rounded-md border border-[#c8322b]/20 bg-[#c8322b]/5 px-3 py-2 flex items-center justify-between">
+                <span className="text-[10px] font-semibold text-[#c8322b] uppercase tracking-wide">Total conciliado</span>
+                <span className="text-sm font-bold font-mono text-[#c8322b]">${sub.paidAmount.toFixed(2)} USD</span>
+              </div>
+            </div>
+
+            {/* Next threshold */}
+            {sub.nextThreshold && (
+              <div className="mx-5 mb-4 mt-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3">
+                <div className="flex items-start gap-2">
+                  <TrendingUp className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-semibold text-amber-800">
+                      Próximo umbral — Acceso proporcional ajustable
+                    </p>
+                    <p className="text-[11px] text-amber-700 leading-relaxed">
+                      Con un abono mínimo adicional de{" "}
+                      <span className="font-bold font-mono">${sub.nextThreshold.amountMXN.toLocaleString("es-MX")} MXN</span>
+                      {" "}(equivalente a <span className="font-bold font-mono">${sub.nextThreshold.amountUSD} USD</span> al TC 17.50),
+                      el total acumulado sería <span className="font-bold font-mono">${sub.nextThreshold.totalAfterUSD.toFixed(2)} USD</span>.
+                      En ese punto el sistema canalizará automáticamente funciones en <strong>modo proporcional ajustable</strong>.
+                    </p>
+                    <p className="text-[10px] text-amber-600 font-mono">{sub.nextThreshold.description}</p>
+                    <div className="flex items-center gap-1.5 text-[10px] text-amber-600 pt-0.5">
+                      <Info className="w-3 h-3" />
+                      <span>Esta activación es exclusivamente automática. El administrador no puede adelantarla ni modificarla.</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
           </CardContent>
         </Card>
       )}

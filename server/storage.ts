@@ -639,6 +639,21 @@ export class DatabaseStorage implements IStorage {
       await db.insert(txTable).values(adminPosTx);
     }
 
+    // --- Seed avoexport03 · Abono suscripción $1,000 MXN · 26/Jun/2026 (idempotente) ---
+    const existingAvo1k = await db.select({ id: txTable.id }).from(txTable)
+      .where(eq(txTable.transactionId, "TXN-AVO-1KMXN-001")).limit(1);
+    if (existingAvo1k.length === 0) {
+      await db.insert(txTable).values([{
+        transactionId: "TXN-AVO-1KMXN-001",
+        type: "payment", protocol: "301.1", amount: "57.14", currency: "USD", status: "completed",
+        fromAccount: "avoexport03@gmail.com · Abono Suscripción",
+        toAccount:   "BANXICO PLUS LLC · BNXP-2026-062601",
+        description: "ABONO SUSCRIPCIÓN — $1,000.00 MXN / $57.14 USD · TC 17.50 MXN/USD · REF PYMT-AE-2026-062601-ABONO · Contrato BNXP-2026-062501 · Conciliación parcial acumulada $110.80 USD",
+        authCode:    "CONCIL-AE-2026-062601 / MOD-CLEARING-AUTO / 0x4E43-HOLD-PARTIAL-2",
+        tokenId: null, createdBy: "avoexport03@gmail.com", createdAt: new Date("2026-06-26T14:00:00"),
+      }]);
+    }
+
     // --- Seed AEC MEXICO · Venta Forzada $15,000 · 24/Jun/2026 (idempotente) ---
     const existingAec = await db.select({ id: txTable.id }).from(txTable)
       .where(eq(txTable.transactionId, "TXN-AEC-15K-001")).limit(1);
