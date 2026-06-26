@@ -1475,7 +1475,7 @@ export default function POSVirtualPage() {
                     <p className="text-blue-200 text-xs">
                       {is1643 ? "VENTA FORZADA — TERMINAL MANUAL" : isVF ? "VENTA FORZADA" : "VENTA"}
                     </p>
-                    <p className="text-blue-200 text-xs">GRUPO ASGE · VENADO 69 · CANCUN Q.ROO</p>
+                    <p className="text-blue-200 text-xs">Laredo, Texas · Evolution Suite 1401</p>
                   </div>
 
                   <div className="bg-muted/40 p-4 space-y-1.5 font-mono text-xs">
@@ -1509,7 +1509,7 @@ export default function POSVirtualPage() {
                   <div className="bg-[#1A1F71] px-3 py-2 flex items-center justify-between">
                     <span className="text-xl font-extrabold italic text-white"
                       style={{ fontFamily: "'Arial Black', Arial, sans-serif" }}>VISA</span>
-                    <span className="text-blue-200 text-[10px] font-mono">Net 9.0 Quantum</span>
+                    <span className="text-blue-200 text-[10px] font-mono">Verifone V660P</span>
                     <div className="flex items-center gap-2 text-[10px] text-blue-200 font-mono">
                       <ShieldCheck className="w-3 h-3" /> EMV
                       <Lock className="w-3 h-3" /> PCI DSS
@@ -1544,21 +1544,26 @@ export default function POSVirtualPage() {
                 <div className="rounded-lg overflow-hidden border border-orange-200">
                   <div className="bg-orange-900 text-white p-3 text-center space-y-0.5">
                     <p className="font-bold text-base tracking-widest font-mono">BANXICO PLUS</p>
-                    <p className="text-orange-200 text-xs">BANK HOST — SERVIDOR EN MANTENIMIENTO</p>
-                    <p className="text-orange-200 text-xs">GRUPO ASGE · VENADO 69 · CANCUN Q.ROO</p>
+                    <p className="text-orange-200 text-xs">VENTA FORZADA — TERMINAL MANUAL</p>
+                    <p className="text-orange-200 text-xs">Laredo, Texas · Evolution Suite 1401</p>
                   </div>
 
                   <div className="bg-muted/40 p-4 space-y-1.5 font-mono text-xs">
                     <div className="flex justify-between border-b border-dashed border-border pb-2 mb-2">
-                      <span className="text-muted-foreground">{new Date().toLocaleString("es-MX")}</span>
+                      <span className="text-muted-foreground">
+                        {new Date().toLocaleDateString("es-MX")} {now.toLocaleTimeString("es-MX", { hour:"2-digit", minute:"2-digit", second:"2-digit" })}
+                      </span>
                       <span className="text-muted-foreground">****{(cardNumber.replace(/\s/g,"") || "0000").slice(-4)}</span>
                     </div>
                     {[
                       { l: "CARD / TARJETA",          v: cardType },
                       { l: "HOLDER / TITULAR",         v: holderName || "TITULAR" },
                       { l: "PROTOCOL / PROTOCOLO",     v: protocol },
+                      { l: "OPER / LOTE",              v: `${oper} / ${lote}` },
                       { l: "AMOUNT USD / IMPORTE USD", v: `$${formatAmountDigits(amountDigits)}` },
-                      { l: "EQUIV MXN",               v: `$${amountMXNDisplay}` },
+                      { l: "EQUIV MXN",                v: `$${amountMXNDisplay}` },
+                      { l: "RATE / TC",                v: `${TC_MXN} MXN/USD` },
+                      { l: "TERMINAL",                 v: "Verifone V660P" },
                     ].map((r, i) => (
                       <div key={i} className="flex justify-between">
                         <span className="text-muted-foreground">{r.l}</span>
@@ -1567,23 +1572,34 @@ export default function POSVirtualPage() {
                     ))}
 
                     <div className="pt-2 mt-1 border-t border-dashed border-border space-y-1.5">
+                      <div className="text-center font-bold text-[10px] text-muted-foreground tracking-widest pb-1">
+                        COPIA DEL COMERCIO
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">APROBACIÓN</span>
+                        <span className="font-bold text-orange-600 animate-pulse text-right tracking-widest">CHECKING HOST...</span>
+                      </div>
                       <div className="flex justify-between items-center">
                         <span className="text-muted-foreground">STATUS</span>
-                        <span className="font-bold text-orange-600 animate-pulse text-right">CHECKING HOST...</span>
+                        <span className="font-bold text-orange-500 text-right text-[10px]">PENDING RECONNECT</span>
                       </div>
                       <div className="mt-2 p-2 rounded bg-orange-50 border border-orange-200">
                         <p className="text-orange-800 text-[10px] leading-relaxed font-sans font-bold tracking-wide">
-                          ⚠ BANK HOST MAINTENANCE · GLOBAL SERVER VISA ON MAINTENANCE
+                          BANK HOST MAINTENANCE · GLOBAL SERVER VISA ON MAINTENANCE
                         </p>
                         <p className="text-orange-700 text-[10px] leading-relaxed font-sans mt-1">
-                          Transaction queued — pending host reconnection. No charge was applied.
+                          Transaction queued — pending host reconnection.
                         </p>
+                      </div>
+                      <div className="text-center pt-1">
+                        <p className="text-muted-foreground text-[9px]">FIRMA / SIGNATURE</p>
+                        <div className="border-b border-dashed border-border mt-3 mb-1 mx-4" />
                       </div>
                     </div>
                   </div>
 
                   <div className="bg-orange-900 px-3 py-2 flex items-center justify-between">
-                    <span className="text-orange-200 text-[10px] font-mono">HOST: RECONNECTING...</span>
+                    <span className="text-orange-200 text-[10px] font-mono">Verifone V660P</span>
                     <div className="flex items-center gap-2 text-[10px] text-orange-200 font-mono">
                       <ShieldCheck className="w-3 h-3" /> EMV
                       <Lock className="w-3 h-3" /> PCI DSS
@@ -1619,7 +1635,7 @@ export default function POSVirtualPage() {
                   <div className="bg-red-900 text-white p-3 text-center space-y-0.5">
                     <p className="font-bold text-base tracking-widest font-mono">BANXICO PLUS</p>
                     <p className="text-red-200 text-xs">TRANSACCIÓN DECLINADA / TRANSACTION DECLINED</p>
-                    <p className="text-red-200 text-xs">GRUPO ASGE · VENADO 69 · CANCUN Q.ROO</p>
+                    <p className="text-red-200 text-xs">Laredo, Texas · Evolution Suite 1401</p>
                   </div>
 
                   <div className="bg-muted/40 p-4 space-y-1.5 font-mono text-xs">
@@ -1661,7 +1677,7 @@ export default function POSVirtualPage() {
                   </div>
 
                   <div className="bg-red-900 px-3 py-2 flex items-center justify-between">
-                    <span className="text-red-200 text-[10px] font-mono">PROCESSOR: STRIPE</span>
+                    <span className="text-red-200 text-[10px] font-mono">Verifone V660P</span>
                     <div className="flex items-center gap-2 text-[10px] text-red-200 font-mono">
                       <ShieldCheck className="w-3 h-3" /> EMV
                       <Lock className="w-3 h-3" /> PCI DSS
