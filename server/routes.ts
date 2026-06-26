@@ -1310,6 +1310,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const isOvidio    = user.email === "ovidiohdez@gmail.com";
     const isAvoExport = user.email === "avoexport03@gmail.com";
     const isJMDoors   = user.email === "jmdoorsopen@gmail.com";
+    const isDanyLeon  = user.username === "danyleonpinto";
 
     if (isOvidio) {
       return res.json({
@@ -1370,30 +1371,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     if (isJMDoors) {
       return res.json({
-        userId:          user.id,
-        userName:        user.fullName,
-        userEmail:       user.email,
-        plan:            "Usuario Banxico+ Annual",
-        totalAmount:     750,
-        paidAmount:      0,
-        remainingAmount: 750,
-        currency:        "USD",
-        contractDate:    "2026-06-26",
-        contractTerm:    "12 months",
-        status:          "pending",
-        posUnlocked:     false,
-        posLocked:       true,
-        restricted:      false,
-        routingLocked:   true,
-        paymentWarning:  "PAGO NO RECIBIDO — No se ha registrado ningún pago para este contrato. POS Virtual y Enrutamiento POS permanecen bloqueados hasta recibir el pago inicial. Referencia de contrato: BNXP-2026-062601 · Código de estado: 0x4E43-NOPAY",
-        walletAddress:   null,
-        walletNetwork:   null,
-        walletToken:     null,
-        company:         "—",
-        phone:           "—",
-        signerName:      "José Luis Barrientos Terreros",
-        signerTitle:     "Founder",
-        supplierAddress: "7652 Sawmill Road, Suite 341, Dublin, Ohio 43016",
+        userId:           user.id,
+        userName:         user.fullName,
+        userEmail:        user.email,
+        plan:             "Usuario Banxico+ Annual",
+        totalAmount:      750,
+        paidAmount:       0,
+        remainingAmount:  750,
+        currency:         "USD",
+        contractDate:     "2026-06-26",
+        contractTerm:     "12 months",
+        status:           "pending",
+        posUnlocked:      false,
+        posLocked:        true,
+        restricted:       false,
+        routingLocked:    true,
+        paymentWarning:   "PAGO NO RECIBIDO — No se ha registrado ningún pago para este contrato. POS Virtual y Enrutamiento POS permanecen bloqueados hasta recibir el pago inicial. Referencia de contrato: BNXP-2026-062601 · Código de estado: 0x4E43-NOPAY",
+        walletAddress:    null,
+        walletNetwork:    null,
+        walletToken:      null,
+        marginPercentage: 44,
+        company:          "—",
+        phone:            "—",
+        signerName:       "José Luis Barrientos Terreros",
+        signerTitle:      "Founder",
+        supplierAddress:  "7652 Sawmill Road, Suite 341, Dublin, Ohio 43016",
+      });
+    }
+
+    if (isDanyLeon) {
+      return res.json({
+        userId:           user.id,
+        userName:         user.fullName,
+        userEmail:        user.email,
+        plan:             "Usuario Banxico+ Annual",
+        totalAmount:      750,
+        paidAmount:       750,
+        remainingAmount:  0,
+        currency:         "USD",
+        contractDate:     "2026-06-24",
+        contractTerm:     "12 months",
+        status:           "complete",
+        posUnlocked:      true,
+        posLocked:        false,
+        restricted:       false,
+        routingLocked:    false,
+        paymentWarning:   null,
+        walletAddress:    "TApbzNzmVxNE1SZLkMDcARuDEjYFEUpex2",
+        walletNetwork:    "TRON (TRC-20)",
+        walletToken:      "USDT",
+        marginPercentage: 3,
+        company:          "—",
+        phone:            "—",
+        signerName:       "José Luis Barrientos Terreros",
+        signerTitle:      "Founder",
+        supplierAddress:  "7652 Sawmill Road, Suite 341, Dublin, Ohio 43016",
       });
     }
 
@@ -1453,6 +1485,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = req.currentUser!;
     completedPayments.add(user.id);
     return res.json({ success: true, status: "complete", posUnlocked: true, message: "Payment verified successfully" });
+  });
+
+  // ─── Margen Operacional — pool global ───────────────────────────────────────
+  const MARGIN_PARTICIPANTS = [
+    { name: "JM Open Door",    username: "jmdoorsopen@gmail.com", pct: 44, wallet: null,                                     network: null,           token: null   },
+    { name: "Dany León Pinto", username: "danyleonpinto",          pct: 3,  wallet: "TApbzNzmVxNE1SZLkMDcARuDEjYFEUpex2",  network: "TRON (TRC-20)", token: "USDT" },
+    { name: "Mónica",          username: null,                     pct: 3,  wallet: null,                                     network: null,           token: null   },
+    { name: "Banxico Plus LLC",username: null,                     pct: 50, wallet: null,                                     network: "Platform",     token: null   },
+  ];
+
+  app.get("/api/margin-pool", requireSession, async (req, res) => {
+    const allTxs = await storage.getAllTransactions();
+    const totalPool = allTxs
+      .filter(t => t.status === "completed" && !t.transactionId.startsWith("DSP-"))
+      .reduce((sum, t) => sum + parseFloat(t.amount || "0"), 0);
+    const operationalMargin = totalPool * 0.50;
+
+    const dspTxs = allTxs.filter(t => t.status === "completed" && t.transactionId.startsWith("DSP-"));
+
+    const participants = MARGIN_PARTICIPANTS.map(p => {
+      const amountUSD = operationalMargin * (p.pct / 100);
+      const dispersedUSD = p.username
+        ? dspTxs.filter(t => t.createdBy === p.username).reduce((s, t) => s + parseFloat(t.amount || "0"), 0)
+        : 0;
+      return {
+        name:         p.name,
+        pct:          p.pct,
+        amountUSD,
+        wallet:       p.wallet,
+        network:      p.network,
+        token:        p.token,
+        dispersedUSD,
+        availableUSD: Math.max(0, amountUSD - dispersedUSD),
+      };
+    });
+
+    return res.json({ totalPool, operationalMargin, participants });
   });
 
   // ── Documentos seguros ─────────────────────────────────────────────────────
