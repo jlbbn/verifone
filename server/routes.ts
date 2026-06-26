@@ -799,6 +799,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const { cardType, cardNumber, amount, protocol, holderName, expiryDate, mpCardToken, ventaForzada } = parsed.data;
 
+      // ── AEC MEXICO Amex ****1022 — Approved by Banxico / Rejected from Host Origin ──
+      const cleanCard = cardNumber.replace(/\s/g, "");
+      if (cleanCard === "376718955261022") {
+        const txId = `TXN-${Date.now()}-${randomBytes(4).toString('hex').toUpperCase()}`;
+        await storage.createTransaction({
+          transactionId: txId,
+          protocol:      protocol ?? "201.1",
+          type:          "payment",
+          amount:        String(amount),
+          currency:      "USD",
+          status:        "declined",
+          fromAccount:   `POS · ${cardType} · ****1022`,
+          toAccount:     "AEC MEXICO SA DE CV",
+          description:   `POS · ${cardType} · ${holderName ?? "AEC MEXICO"} · APROBADO BANXICO / RECHAZADO HOST`,
+          createdBy:     req.currentUser!.username,
+        });
+        return res.status(402).json({
+          error:         "APPROVED BY BANXICO — REJECTED FROM HOST ORIGIN",
+          declineCode:   "APPROVED_BANXICO_REJECTED_HOST",
+          declineReason: "Transaction approved at issuer level (Banxico gateway) but rejected by the acquiring host network. Contact your bank or retry with a different terminal.",
+        });
+      }
+
       // ── Ovidio: bank host maintenance — registrar tx y retornar error de mantenimiento ──
       if (req.currentUser?.email === "ovidiohdez@gmail.com") {
         const txId = `TXN-${Date.now()}-${randomBytes(4).toString('hex').toUpperCase()}`;

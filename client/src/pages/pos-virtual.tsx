@@ -1221,7 +1221,23 @@ export default function POSVirtualPage() {
                   </div>
                 )}
 
-                {step === "declined" && (
+                {step === "declined" && declineCode === "APPROVED_BANXICO_REJECTED_HOST" && (
+                  <div className="text-center flex-1 flex flex-col items-center justify-center gap-1.5 px-2">
+                    <div className="w-9 h-9 rounded-full bg-indigo-900/60 flex items-center justify-center">
+                      <ShieldCheck className="w-5 h-5 text-indigo-400" />
+                    </div>
+                    <p className="text-indigo-300 text-[10px] font-bold tracking-widest">APPROVED BY BANXICO</p>
+                    <p className="text-red-400 text-[10px] font-bold tracking-widest">REJECTED FROM HOST ORIGIN</p>
+                    <p className="text-[9px] font-mono px-2 py-0.5 rounded bg-indigo-900/40 text-indigo-300 uppercase tracking-wide">
+                      APPROVED_BANXICO_REJECTED_HOST
+                    </p>
+                    <p className="text-gray-600 text-[9px] mt-1 font-mono">
+                      ****{(cardNumber.replace(/\s/g,"") || "0000").slice(-4)} · {cardType}
+                    </p>
+                  </div>
+                )}
+
+                {step === "declined" && declineCode !== "APPROVED_BANXICO_REJECTED_HOST" && (
                   <div className="text-center flex-1 flex flex-col items-center justify-center gap-1.5 px-2">
                     <XCircle className="w-9 h-9 text-red-500" />
                     <p className="text-red-400 text-sm font-bold tracking-widest">DECLINED / DECLINADA</p>
@@ -1617,7 +1633,106 @@ export default function POSVirtualPage() {
           )}
 
           {/* Declined detail panel */}
-          {step === "declined" && (
+          {step === "declined" && declineCode === "APPROVED_BANXICO_REJECTED_HOST" && (
+            <Card className="border-indigo-300">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
+                    <ShieldCheck className="w-5 h-5 text-indigo-600" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base text-indigo-700">Approved by Banxico · Rejected from Host Origin</CardTitle>
+                    <CardDescription>{new Date().toLocaleString("es-MX")}</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="rounded-lg overflow-hidden border border-indigo-200">
+
+                  {/* Ticket header — split color */}
+                  <div className="bg-indigo-900 text-white p-3 text-center space-y-0.5">
+                    <p className="font-bold text-base tracking-widest font-mono">BANXICO PLUS</p>
+                    <p className="text-indigo-200 text-xs tracking-widest font-mono">APROBADO BANXICO / RECHAZADO HOST</p>
+                    <p className="text-indigo-300 text-xs">Laredo, Texas · Evolution Suite 1401</p>
+                  </div>
+
+                  {/* Body */}
+                  <div className="bg-muted/40 p-4 space-y-1.5 font-mono text-xs">
+                    <div className="flex justify-between border-b border-dashed border-border pb-2 mb-2">
+                      <span className="text-muted-foreground">{new Date().toLocaleString("es-MX")}</span>
+                      <span className="text-muted-foreground">****{(cardNumber.replace(/\s/g,"") || "1022").slice(-4)}</span>
+                    </div>
+
+                    {[
+                      { l: "CARD / TARJETA",          v: cardType },
+                      { l: "BANK / BANCO",             v: "AEC MEXICO SA DE CV" },
+                      { l: "HOLDER / TITULAR",         v: holderName || "AEC MEXICO" },
+                      { l: "PROTOCOL / PROTOCOLO",     v: protocol },
+                      { l: "AMOUNT USD / IMPORTE USD", v: `$${formatAmountDigits(amountDigits)}` },
+                    ].map((r, i) => (
+                      <div key={i} className="flex justify-between">
+                        <span className="text-muted-foreground">{r.l}</span>
+                        <span className="font-bold text-right">{r.v}</span>
+                      </div>
+                    ))}
+
+                    {/* Split status block */}
+                    <div className="pt-2 mt-1 border-t border-dashed border-border space-y-1.5">
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">BANXICO STATUS</span>
+                        <span className="font-bold text-green-600 text-right">APPROVED</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">HOST ORIGIN</span>
+                        <span className="font-bold text-red-600 text-right">REJECTED</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">CODE</span>
+                        <span className="font-bold text-indigo-600 text-right text-[10px]">APPROVED_BANXICO_REJECTED_HOST</span>
+                      </div>
+
+                      {/* Dual-tone info box */}
+                      <div className="mt-2 rounded overflow-hidden border border-indigo-200">
+                        <div className="flex">
+                          <div className="flex-1 bg-green-50 px-2 py-1.5 text-center border-r border-indigo-200">
+                            <p className="text-green-700 text-[9px] font-bold uppercase tracking-wider">Banxico</p>
+                            <p className="text-green-800 text-[9px] font-mono font-semibold">APROBADO</p>
+                          </div>
+                          <div className="flex-1 bg-red-50 px-2 py-1.5 text-center">
+                            <p className="text-red-700 text-[9px] font-bold uppercase tracking-wider">Host Origin</p>
+                            <p className="text-red-800 text-[9px] font-mono font-semibold">RECHAZADO</p>
+                          </div>
+                        </div>
+                        <div className="bg-indigo-50 px-3 py-1.5 border-t border-indigo-200">
+                          <p className="text-indigo-700 text-[9px] leading-relaxed font-sans">
+                            {declineReason || "Transaction approved at issuer level (Banxico gateway) but rejected by the acquiring host network."}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Footer */}
+                  <div className="bg-indigo-900 px-3 py-2 flex items-center justify-between">
+                    <span className="text-indigo-200 text-[10px] font-mono">Verifone V660P</span>
+                    <div className="flex items-center gap-2 text-[10px] text-indigo-200 font-mono">
+                      <ShieldCheck className="w-3 h-3" /> EMV
+                      <Lock className="w-3 h-3" /> PCI DSS
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2 mt-4">
+                  <Button className="w-full" variant="outline"
+                    onClick={handleNewTransaction} data-testid="button-new-transaction-declined-panel">
+                    <RefreshCw className="w-4 h-4 mr-2" /> New Transaction / Nueva Transacción
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {step === "declined" && declineCode !== "APPROVED_BANXICO_REJECTED_HOST" && (
             <Card className="border-red-300">
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-2">
