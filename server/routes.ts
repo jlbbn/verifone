@@ -1307,8 +1307,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const isPatricio = user.email === "patricioarroyo510@gmail.com";
     const isPaid = completedPayments.has(user.id);
 
-    const isOvidio   = user.email === "ovidiohdez@gmail.com";
+    const isOvidio    = user.email === "ovidiohdez@gmail.com";
     const isAvoExport = user.email === "avoexport03@gmail.com";
+    const isJMDoors   = user.email === "jmdoorsopen@gmail.com";
 
     if (isOvidio) {
       return res.json({
@@ -1356,6 +1357,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         restricted:      false,
         routingLocked:   true,
         paymentWarning:  "CONCILIACIÓN PARCIAL — Se registró un abono de $939.00 MXN (equivalente a $53.66 USD al tipo de cambio Banxico 17.50 MXN/USD) en la referencia de contrato BNXP-2026-062501. Saldo pendiente: $696.34 USD. POS Virtual y Enrutamiento permanecen bloqueados hasta la liquidación total del contrato. Referencia de auditoría: PYMT-AE-2026-062501-PARTIAL · Código de estado: 0x4E43-HOLD",
+        walletAddress:   null,
+        walletNetwork:   null,
+        walletToken:     null,
+        company:         "—",
+        phone:           "—",
+        signerName:      "José Luis Barrientos Terreros",
+        signerTitle:     "Founder",
+        supplierAddress: "7652 Sawmill Road, Suite 341, Dublin, Ohio 43016",
+      });
+    }
+
+    if (isJMDoors) {
+      return res.json({
+        userId:          user.id,
+        userName:        user.fullName,
+        userEmail:       user.email,
+        plan:            "Usuario Banxico+ Annual",
+        totalAmount:     750,
+        paidAmount:      0,
+        remainingAmount: 750,
+        currency:        "USD",
+        contractDate:    "2026-06-26",
+        contractTerm:    "12 months",
+        status:          "pending",
+        posUnlocked:     false,
+        posLocked:       true,
+        restricted:      false,
+        routingLocked:   true,
+        paymentWarning:  "PAGO NO RECIBIDO — No se ha registrado ningún pago para este contrato. POS Virtual y Enrutamiento POS permanecen bloqueados hasta recibir el pago inicial. Referencia de contrato: BNXP-2026-062601 · Código de estado: 0x4E43-NOPAY",
         walletAddress:   null,
         walletNetwork:   null,
         walletToken:     null,

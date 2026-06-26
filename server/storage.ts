@@ -282,6 +282,16 @@ export class DatabaseStorage implements IStorage {
         avatar: null,
         subscriptionStart: new Date("2026-06-25T00:00:00Z"),
       },
+      {
+        username: "jmdoorsopen@gmail.com",
+        email: "jmdoorsopen@gmail.com",
+        password: hashPassword("Keylog100$"),
+        fullName: "JM Doors Open",
+        role: "USER",
+        position: "Usuario",
+        avatar: null,
+        subscriptionStart: null,
+      },
     ];
 
     for (const u of seedUsers) {
