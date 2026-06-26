@@ -677,111 +677,154 @@ export default function ExchangePage() {
 
 
       {/* ── Panel Distribución del Margen Operacional ──────────────────────── */}
-      {isMarginUser && marginPool && (
-        <Card className="border shadow-sm">
-          <CardContent className="p-0">
-            {/* Header */}
-            <div className="flex items-center gap-3 px-5 py-4 border-b">
-              <div className="w-9 h-9 rounded-md bg-[#c8322b]/10 flex items-center justify-center flex-shrink-0">
-                <BarChart2 className="w-5 h-5 text-[#c8322b]" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm">Distribución del Margen Operacional</p>
-                <p className="text-xs text-muted-foreground">Art. 6.5 del contrato — 50% del total operacional</p>
-              </div>
-              <Badge className="bg-blue-100 text-blue-700 border-blue-200 no-default-active-elevate text-[10px]">
-                <Activity className="w-3 h-3 mr-1" />
-                En tiempo real
-              </Badge>
-            </div>
+      {isMarginUser && marginPool && (() => {
+        // Meta mensual de referencia: $40,000,000 USD
+        const MONTHLY_GOAL   = 40_000_000;
+        const GOAL_MARGIN    = MONTHLY_GOAL * 0.50;          // $20,000,000
+        const PARTICIPANTS_DEF = [
+          { name: "JM Open Door",    pct: 44, wallet: null,                                              network: null,              token: null,   dispersed: 0, available: 0 },
+          { name: "Dany León Pinto", pct:  3, wallet: "TApbzNzmVxNE1SZLkMDcARuDEjYFEUpex2",             network: "TRON (TRC-20)",   token: "USDT", dispersed: 0, available: 0 },
+          { name: "Mónica",          pct:  3, wallet: "0xc1ad2A381aE511427a2F83A422f4510c9Fc098a2",      network: "ETHEREUM (ERC-20)", token: "USDT", dispersed: 0, available: 0 },
+          { name: "Banxico Plus LLC",pct: 50, wallet: null,                                              network: "Plataforma",      token: null,   dispersed: 0, available: 0 },
+        ];
+        const colors = ["bg-blue-500", "bg-green-500", "bg-purple-500", "bg-[#c8322b]"];
 
-            {/* Pool totals */}
-            <div className="grid grid-cols-2 gap-0 border-b">
-              <div className="px-5 py-3 border-r">
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Pool total plataforma</p>
-                <p className="text-base font-bold font-mono mt-0.5">
-                  ${marginPool.totalPool.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+        return (
+          <Card className="border shadow-sm">
+            <CardContent className="p-0">
+
+              {/* Header */}
+              <div className="flex items-center gap-3 px-5 py-4 border-b">
+                <div className="w-9 h-9 rounded-md bg-[#c8322b]/10 flex items-center justify-center flex-shrink-0">
+                  <BarChart2 className="w-5 h-5 text-[#c8322b]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm">Distribución del Margen Operacional</p>
+                  <p className="text-xs text-muted-foreground">Art. 6.5 del contrato — 50% del total operacional</p>
+                </div>
+                <Badge className="bg-amber-100 text-amber-700 border-amber-200 no-default-active-elevate text-[10px]">
+                  <TrendingUp className="w-3 h-3 mr-1" />
+                  Proyección
+                </Badge>
+              </div>
+
+              {/* Aviso estimación */}
+              <div className="mx-5 mt-4 mb-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-2.5 flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div className="text-[11px] text-amber-800 leading-relaxed">
+                  <span className="font-semibold">Estimación proyectada — no refleja fondos reales.</span>{" "}
+                  Los montos mostrados corresponden a una meta operacional mensual de referencia de{" "}
+                  <span className="font-semibold font-mono">$40,000,000 USD</span>. Al día de hoy, ningún
+                  participante ha realizado dispersiones; los saldos reales se mantienen en{" "}
+                  <span className="font-semibold">$0.00 USD</span>.
+                </div>
+              </div>
+
+              {/* Meta totales */}
+              <div className="grid grid-cols-3 gap-0 border-y mx-5 my-3 rounded-md overflow-hidden border">
+                <div className="px-4 py-3 border-r">
+                  <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">Meta mensual</p>
+                  <p className="text-sm font-bold font-mono mt-0.5">$40,000,000</p>
+                  <p className="text-[9px] text-muted-foreground">USD / mes</p>
+                </div>
+                <div className="px-4 py-3 border-r">
+                  <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">Margen (50%)</p>
+                  <p className="text-sm font-bold font-mono mt-0.5 text-[#c8322b]">$20,000,000</p>
+                  <p className="text-[9px] text-muted-foreground">USD / mes</p>
+                </div>
+                <div className="px-4 py-3">
+                  <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">Real acumulado</p>
+                  <p className="text-sm font-bold font-mono mt-0.5 text-muted-foreground">
+                    ${marginPool.totalPool.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-[9px] text-muted-foreground">USD hoy</p>
+                </div>
+              </div>
+
+              {/* Participants */}
+              <div className="px-5 pb-4 space-y-2">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                  Ratio por participante — proyección $40M mensual
+                </p>
+                {PARTICIPANTS_DEF.map((p, i) => {
+                  const projectedMonthly = GOAL_MARGIN * (p.pct / 100);
+                  const isMe = (p.name === "Dany León Pinto" && user?.username === "danyleonpinto") ||
+                               (p.name === "JM Open Door" && user?.username === "jmdoorsopen@gmail.com") ||
+                               user?.role === "ADMIN";
+                  return (
+                    <div key={i} className={`rounded-md border px-4 py-3 space-y-2 ${isMe ? "border-[#c8322b]/40 bg-[#c8322b]/5" : "border-border bg-muted/20"}`}>
+
+                      {/* Name + % + projected */}
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${colors[i]}`} />
+                          <span className="font-semibold text-sm">{p.name}</span>
+                          {isMe && user?.role !== "ADMIN" && (
+                            <Badge className="bg-[#c8322b]/10 text-[#c8322b] border-[#c8322b]/30 no-default-active-elevate text-[9px]">
+                              Tu cuenta
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm font-mono">{p.pct}%</span>
+                          <span className="text-[10px] font-mono text-muted-foreground bg-muted rounded px-1.5 py-0.5">
+                            ~${projectedMonthly.toLocaleString("en-US", { maximumFractionDigits: 0 })} / mes
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Barra de ratio */}
+                      <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+                        <div className={`h-1.5 rounded-full ${colors[i]}`} style={{ width: `${p.pct}%` }} />
+                      </div>
+
+                      {/* Wallet */}
+                      {p.wallet && (
+                        <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground">
+                          <Wallet className="w-3 h-3 flex-shrink-0" />
+                          <span className="truncate">{p.wallet.slice(0, 16)}…{p.wallet.slice(-6)}</span>
+                          <span className="text-[9px] bg-muted rounded px-1 py-0.5 flex-shrink-0 whitespace-nowrap">{p.network} · {p.token}</span>
+                        </div>
+                      )}
+                      {!p.wallet && p.name !== "Banxico Plus LLC" && (
+                        <div className="flex items-center gap-1.5 text-[10px] text-amber-600">
+                          <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+                          <span>Wallet pendiente de registro</span>
+                        </div>
+                      )}
+                      {p.name === "Banxico Plus LLC" && (
+                        <div className="text-[10px] text-muted-foreground flex items-center gap-1">
+                          <ShieldCheck className="w-3 h-3" />
+                          <span>Red interna · Plataforma Banxico Plus LLC</span>
+                        </div>
+                      )}
+
+                      {/* Saldo real (siempre $0) */}
+                      {p.name !== "Banxico Plus LLC" && (
+                        <div className="flex items-center justify-between text-[10px] font-mono pt-1 border-t border-border/50">
+                          <span className="text-muted-foreground">
+                            Dispersado real: <span className="font-semibold text-foreground">$0.00 USD</span>
+                          </span>
+                          <span className="text-muted-foreground">
+                            Saldo disponible: <span className="font-semibold text-foreground">$0.00 USD</span>
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Nota de pie */}
+                <p className="text-[10px] text-muted-foreground pt-2 text-center leading-relaxed">
+                  Las proyecciones se calculan sobre una meta de capacidad mensual y no garantizan rendimiento.
+                  Los saldos reales se actualizan conforme se registren transacciones completadas en la plataforma.
                 </p>
               </div>
-              <div className="px-5 py-3">
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Margen disponible (50%)</p>
-                <p className="text-base font-bold font-mono mt-0.5 text-[#c8322b]">
-                  ${marginPool.operationalMargin.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
-                </p>
-              </div>
-            </div>
 
-            {/* Participants breakdown */}
-            <div className="px-5 py-3 space-y-2">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                Distribución entre participantes
-              </p>
-              {marginPool.participants.map((p, i) => {
-                const isMe = marginPct === p.pct && (
-                  (p.name === "Dany León Pinto" && user?.username === "danyleonpinto") ||
-                  (p.name === "JM Open Door" && user?.email === "jmdoorsopen@gmail.com") ||
-                  user?.role === "ADMIN"
-                );
-                const colors = ["bg-blue-500", "bg-green-500", "bg-purple-500", "bg-[#c8322b]"];
-                return (
-                  <div key={i} className={`rounded-md border px-4 py-3 space-y-2 ${isMe ? "border-[#c8322b]/40 bg-[#c8322b]/5" : "border-border bg-muted/20"}`}>
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${colors[i]}`} />
-                        <span className="font-semibold text-sm">{p.name}</span>
-                        {isMe && (
-                          <Badge className="bg-[#c8322b]/10 text-[#c8322b] border-[#c8322b]/30 no-default-active-elevate text-[9px]">
-                            Tu cuenta
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="font-bold text-sm font-mono">{p.pct}%</span>
-                        <span className="text-xs font-mono text-muted-foreground">
-                          ${p.amountUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
-                        </span>
-                      </div>
-                    </div>
-                    {/* Progress bar */}
-                    <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
-                      <div
-                        className={`h-1.5 rounded-full ${colors[i]}`}
-                        style={{ width: `${p.pct}%` }}
-                      />
-                    </div>
-                    {/* Wallet info */}
-                    {p.wallet && p.wallet !== "Platform" && (
-                      <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground">
-                        <Wallet className="w-3 h-3 flex-shrink-0" />
-                        <span className="truncate">{p.wallet.slice(0, 18)}…{p.wallet.slice(-6)}</span>
-                        <span className="text-[9px] bg-muted rounded px-1 py-0.5 flex-shrink-0">{p.network}</span>
-                      </div>
-                    )}
-                    {p.wallet === null && p.name !== "Banxico Plus LLC" && (
-                      <div className="flex items-center gap-1.5 text-[10px] text-amber-600">
-                        <AlertTriangle className="w-3 h-3 flex-shrink-0" />
-                        <span>Wallet pendiente de registro</span>
-                      </div>
-                    )}
-                    {p.name === "Banxico Plus LLC" && (
-                      <div className="text-[10px] text-muted-foreground">Red interna · Plataforma Banxico Plus</div>
-                    )}
-                    {/* Dispersión status (for non-Banxico) */}
-                    {p.name !== "Banxico Plus LLC" && (
-                      <div className="flex items-center justify-between text-[10px] font-mono pt-0.5">
-                        <span className="text-muted-foreground">Dispersado: <span className="text-foreground font-semibold">${p.dispersedUSD.toFixed(2)} USD</span></span>
-                        <span className={p.availableUSD > 0 ? "text-green-700 font-semibold" : "text-muted-foreground"}>
-                          Disponible: ${p.availableUSD.toFixed(2)} USD
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* ── Panel Dispersión (solo si tiene wallet registrada) ────────────── */}
       {coldWallet && (
