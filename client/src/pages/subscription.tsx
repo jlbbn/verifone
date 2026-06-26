@@ -9,7 +9,8 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   FileText, CheckCircle, AlertTriangle, Clock, CreditCard,
   Download, MonitorSmartphone, ExternalLink, Shield, Copy, Check,
-  Lock, BarChart2, TrendingUp, Ban, Info,
+  Lock, BarChart2, TrendingUp, Ban, Info, Wrench, RefreshCw,
+  CircleDot, Circle, Loader,
 } from "lucide-react";
 
 interface PaymentHistoryEntry {
@@ -17,6 +18,10 @@ interface PaymentHistoryEntry {
 }
 interface NextThreshold {
   amountMXN: number; amountUSD: number; totalAfterUSD: number; description: string;
+}
+interface MaintenanceLogEntry {
+  time: string; phase: number; event: string; detail: string;
+  status: "done" | "active" | "pending";
 }
 
 interface SubscriptionData {
@@ -30,7 +35,7 @@ interface SubscriptionData {
   currency: string;
   contractDate: string;
   contractTerm: string;
-  status: "partial" | "complete" | "pending";
+  status: "partial" | "complete" | "pending" | "maintenance";
   restricted?: boolean;
   paymentWarning?: string;
   posUnlocked: boolean;
@@ -45,6 +50,12 @@ interface SubscriptionData {
   adminCanInterfere?: boolean;
   paymentHistory?: PaymentHistoryEntry[];
   nextThreshold?: NextThreshold;
+  maintenanceCode?: string;
+  maintenanceStarted?: string;
+  maintenanceETA?: string;
+  maintenancePhase?: number;
+  maintenanceTotalPhases?: number;
+  maintenanceLogs?: MaintenanceLogEntry[];
 }
 
 function generateContractPDF(sub: SubscriptionData) {
@@ -314,6 +325,115 @@ export default function SubscriptionPage() {
           Download Contract PDF
         </Button>
       </div>
+
+      {/* ── Panel de Mantenimiento y Restablecimiento ── */}
+      {sub.status === "maintenance" && sub.maintenanceLogs && (
+        <Card className="border-orange-300 shadow-sm overflow-hidden">
+          <CardContent className="p-0">
+
+            {/* Header naranja */}
+            <div className="bg-orange-500 px-5 py-4 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-md bg-white/20 flex items-center justify-center flex-shrink-0">
+                <Wrench className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-sm text-white uppercase tracking-wide">Sistema en Mantenimiento y Restablecimiento</p>
+                <p className="text-xs text-orange-100">Servicios suspendidos temporalmente · Ref. {sub.maintenanceCode}</p>
+              </div>
+              <Badge className="bg-white/20 text-white border-white/30 no-default-active-elevate text-[10px] shrink-0">
+                <RefreshCw className="w-3 h-3 mr-1 animate-spin" /> EN PROCESO
+              </Badge>
+            </div>
+
+            {/* Barra de fase */}
+            <div className="px-5 pt-4 pb-2 border-b">
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  Fase {sub.maintenancePhase} de {sub.maintenanceTotalPhases}
+                </p>
+                <p className="text-[10px] font-mono text-muted-foreground">
+                  Inicio: {sub.maintenanceStarted?.replace("T", " ")} &nbsp;·&nbsp;
+                  ETA: {sub.maintenanceETA?.split("T")[1]}
+                </p>
+              </div>
+              <div className="w-full bg-orange-100 rounded-full h-2 overflow-hidden">
+                <div
+                  className="h-2 rounded-full bg-orange-500 transition-all"
+                  style={{ width: `${((sub.maintenancePhase ?? 1) / (sub.maintenanceTotalPhases ?? 5)) * 100}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-[9px] text-muted-foreground mt-1 font-mono">
+                {Array.from({ length: sub.maintenanceTotalPhases ?? 5 }, (_, i) => (
+                  <span key={i} className={i + 1 < (sub.maintenancePhase ?? 1) ? "text-orange-600 font-bold" :
+                    i + 1 === (sub.maintenancePhase ?? 1) ? "text-orange-500 font-bold" : ""}>
+                    F{i + 1}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* Bitácora de eventos */}
+            <div className="px-5 py-4">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                Bitácora del Sistema · Protocolo RESET-FULL-3
+              </p>
+              <div className="space-y-2">
+                {sub.maintenanceLogs.map((log, i) => {
+                  const isDone    = log.status === "done";
+                  const isActive  = log.status === "active";
+                  const isPend    = log.status === "pending";
+                  return (
+                    <div key={i} className={`rounded-md border px-3 py-2.5 font-mono
+                      ${isDone   ? "border-green-200 bg-green-50"   : ""}
+                      ${isActive ? "border-orange-300 bg-orange-50" : ""}
+                      ${isPend   ? "border-border bg-muted/20"      : ""}
+                    `}>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[9px] text-muted-foreground shrink-0">{log.time}</span>
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded
+                          ${isDone   ? "bg-green-100 text-green-700"       : ""}
+                          ${isActive ? "bg-orange-100 text-orange-700"     : ""}
+                          ${isPend   ? "bg-muted text-muted-foreground"    : ""}
+                        `}>F{log.phase}</span>
+                        {isDone   && <CheckCircle  className="w-3 h-3 text-green-600 shrink-0" />}
+                        {isActive && <Loader       className="w-3 h-3 text-orange-500 shrink-0 animate-spin" />}
+                        {isPend   && <Circle       className="w-3 h-3 text-muted-foreground shrink-0" />}
+                        <span className={`text-[10px] font-semibold
+                          ${isDone   ? "text-green-800"          : ""}
+                          ${isActive ? "text-orange-800"         : ""}
+                          ${isPend   ? "text-muted-foreground"   : ""}
+                        `}>{log.event}</span>
+                      </div>
+                      <p className={`text-[9px] mt-1 leading-relaxed
+                        ${isDone   ? "text-green-700"         : ""}
+                        ${isActive ? "text-orange-700"        : ""}
+                        ${isPend   ? "text-muted-foreground"  : ""}
+                      `}>{log.detail}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Aviso de servicios suspendidos */}
+            <div className="mx-5 mb-4 rounded-md border border-orange-200 bg-orange-50 px-4 py-3 flex items-start gap-2.5">
+              <AlertTriangle className="w-4 h-4 text-orange-600 flex-shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                <p className="text-[11px] font-semibold text-orange-800">Servicios temporalmente fuera de línea</p>
+                <p className="text-[11px] text-orange-700 leading-relaxed">
+                  POS Virtual · Enrutamiento POS · Motor de transacciones quedan suspendidos durante el restablecimiento.
+                  Los accesos se reactivarán automáticamente al completarse la Fase 5.
+                  Se notificará por correo al concluir el proceso.
+                </p>
+                <p className="text-[9px] text-orange-500 font-mono pt-0.5">
+                  Protocolo: RESET-FULL-3 · Código: {sub.maintenanceCode} · Clearing Engine v3.1
+                </p>
+              </div>
+            </div>
+
+          </CardContent>
+        </Card>
+      )}
 
       {/* System payment warning banner */}
       {sub.paymentWarning && (
