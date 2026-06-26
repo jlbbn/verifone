@@ -327,17 +327,19 @@ const TYPE_LABEL: Record<string, string> = {
 };
 
 const STATUS_LABEL: Record<string, string> = {
-  completed: "Completada",
-  pending: "Pendiente",
-  failed: "Rechazada",
-  processing: "Procesando",
+  completed:     "Completada",
+  pending:       "Pendiente",
+  failed:        "Rechazada",
+  processing:    "Procesando",
+  checking_host: "Checking with Banking Host...",
 };
 
 const STATUS_COLOR: Record<string, string> = {
-  Completada: "bg-green-100 text-green-700",
-  Pendiente:  "bg-yellow-100 text-yellow-700",
-  Rechazada:  "bg-red-100 text-red-700",
-  Procesando: "bg-blue-100 text-blue-700",
+  Completada:                    "bg-green-100 text-green-700",
+  Pendiente:                     "bg-yellow-100 text-yellow-700",
+  Rechazada:                     "bg-red-100 text-red-700",
+  Procesando:                    "bg-blue-100 text-blue-700",
+  "Checking with Banking Host...": "bg-orange-100 text-orange-700 animate-pulse",
 };
 
 const TYPE_COLOR: Record<string, string> = {
@@ -407,7 +409,7 @@ export default function RegistrosPage() {
     queryKey: ["/api/transactions"],
     refetchInterval: (query) => {
       const txs = query.state.data as Transaction[] | undefined;
-      return txs?.some(t => t.status === "pending" || t.status === "processing") ? 2000 : false;
+      return txs?.some(t => t.status === "pending" || t.status === "processing" || t.status === "checking_host") ? 3000 : false;
     },
   });
 
@@ -716,7 +718,14 @@ export default function RegistrosPage() {
                       ${r.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })} <span className="text-xs font-normal text-muted-foreground">{r.currency}</span>
                     </td>
                     <td className="py-3 px-4">
-                      <Badge className={`text-xs no-default-active-elevate ${STATUS_COLOR[r.status]}`}>{r.status}</Badge>
+                      <div className="flex flex-col gap-0.5">
+                        <Badge className={`text-xs no-default-active-elevate ${STATUS_COLOR[r.status] ?? "bg-gray-100 text-gray-700"}`}>{r.status}</Badge>
+                        {r.status === "Checking with Banking Host..." && (
+                          <span className="text-[9px] font-mono text-red-600 leading-tight whitespace-nowrap">
+                            ⚠ BANK HOST MAINTENANCE · GLOBAL SERVER VISA ON MAINTENANCE
+                          </span>
+                        )}
+                      </div>
                     </td>
                     {isAdmin && <td className="py-3 px-4 text-xs hidden md:table-cell truncate max-w-[160px]">{r.owner}</td>}
                     <td className="py-3 px-4 font-mono text-xs hidden lg:table-cell text-muted-foreground">{r.authCode}</td>
@@ -734,7 +743,7 @@ export default function RegistrosPage() {
 
           {/* Detail row */}
           {selected && (
-            <div className="border-t bg-muted/20 px-4 py-3">
+            <div className="border-t bg-muted/20 px-4 py-3 space-y-2">
               <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs">
                 {[
                   { label: "ID Transacción", value: selected.id },
@@ -751,6 +760,17 @@ export default function RegistrosPage() {
                   </div>
                 ))}
               </div>
+              {selected.status === "Checking with Banking Host..." && (
+                <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2">
+                  <span className="text-red-500 text-xs mt-0.5">⚠</span>
+                  <div>
+                    <p className="text-xs font-bold text-red-700 font-mono">FAILED SERVER — Bank Host Maintenance</p>
+                    <p className="text-[10px] text-red-600 font-mono mt-0.5">
+                      GLOBAL SERVER VISA ON MAINTENANCE · Transaction queued — pending host reconnection
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
