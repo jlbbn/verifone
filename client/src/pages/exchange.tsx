@@ -261,6 +261,17 @@ interface SubData {
   walletAddress?: string | null;
   walletNetwork?: string | null;
   walletToken?: string | null;
+  marginPercentage?: number | null;
+}
+
+interface MarginParticipant {
+  name: string; pct: number; amountUSD: number;
+  wallet: string | null; network: string | null; token: string | null;
+  dispersedUSD: number; availableUSD: number;
+}
+interface MarginPool {
+  totalPool: number; operationalMargin: number;
+  participants: MarginParticipant[];
 }
 
 export default function ExchangePage() {
@@ -275,22 +286,37 @@ export default function ExchangePage() {
   const coldWallet  = subData?.walletAddress ?? null;
   const coldNetwork = subData?.walletNetwork ?? "ETHEREUM (ERC-20)";
   const coldToken   = subData?.walletToken   ?? "ETH";
+  const marginPct   = subData?.marginPercentage ?? null;
+
+  // Margen operacional global (visible para participantes y admin)
+  const isMarginUser = marginPct !== null || user?.role === "ADMIN";
+  const { data: marginPool } = useQuery<MarginPool>({
+    queryKey: ["/api/margin-pool"],
+    enabled: !!user && isMarginUser,
+    refetchInterval: 15000,
+  });
 
   // Transacciones del usuario para calcular saldo disponible
   const { data: userTxs = [] } = useQuery<{ transactionId: string; amount: string; status: string }[]>({
     queryKey: ["/api/transactions"],
-    enabled: !!coldWallet,
+    enabled: !!coldWallet || !!marginPct,
     refetchInterval: 15000,
   });
-
-  // Saldo disponible = ingresos completados - dispersiones ya realizadas (DSP-)
-  const totalIngresado = userTxs
-    .filter(t => t.status === "completed" && !t.transactionId.startsWith("DSP-"))
-    .reduce((sum, t) => sum + parseFloat(t.amount || "0"), 0);
 
   const totalDispersado = userTxs
     .filter(t => t.status === "completed" && t.transactionId.startsWith("DSP-"))
     .reduce((sum, t) => sum + parseFloat(t.amount || "0"), 0);
+
+  // Para usuarios con porcentaje de margen, su saldo = su parte del pool - lo ya dispersado
+  const myMarginAllocation = marginPct !== null && marginPool
+    ? (marginPool.operationalMargin * marginPct) / 100
+    : null;
+
+  const totalIngresado = myMarginAllocation !== null
+    ? myMarginAllocation
+    : userTxs
+        .filter(t => t.status === "completed" && !t.transactionId.startsWith("DSP-"))
+        .reduce((sum, t) => sum + parseFloat(t.amount || "0"), 0);
 
   const availableUSD = Math.max(0, totalIngresado - totalDispersado);
   const hasBalance   = availableUSD > 0.001;
@@ -649,6 +675,113 @@ export default function ExchangePage() {
         </CardContent>
       </Card>
 
+
+      {/* ── Panel Distribución del Margen Operacional ──────────────────────── */}
+      {isMarginUser && marginPool && (
+        <Card className="border shadow-sm">
+          <CardContent className="p-0">
+            {/* Header */}
+            <div className="flex items-center gap-3 px-5 py-4 border-b">
+              <div className="w-9 h-9 rounded-md bg-[#c8322b]/10 flex items-center justify-center flex-shrink-0">
+                <BarChart2 className="w-5 h-5 text-[#c8322b]" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm">Distribución del Margen Operacional</p>
+                <p className="text-xs text-muted-foreground">Art. 6.5 del contrato — 50% del total operacional</p>
+              </div>
+              <Badge className="bg-blue-100 text-blue-700 border-blue-200 no-default-active-elevate text-[10px]">
+                <Activity className="w-3 h-3 mr-1" />
+                En tiempo real
+              </Badge>
+            </div>
+
+            {/* Pool totals */}
+            <div className="grid grid-cols-2 gap-0 border-b">
+              <div className="px-5 py-3 border-r">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Pool total plataforma</p>
+                <p className="text-base font-bold font-mono mt-0.5">
+                  ${marginPool.totalPool.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+                </p>
+              </div>
+              <div className="px-5 py-3">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Margen disponible (50%)</p>
+                <p className="text-base font-bold font-mono mt-0.5 text-[#c8322b]">
+                  ${marginPool.operationalMargin.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+                </p>
+              </div>
+            </div>
+
+            {/* Participants breakdown */}
+            <div className="px-5 py-3 space-y-2">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                Distribución entre participantes
+              </p>
+              {marginPool.participants.map((p, i) => {
+                const isMe = marginPct === p.pct && (
+                  (p.name === "Dany León Pinto" && user?.username === "danyleonpinto") ||
+                  (p.name === "JM Open Door" && user?.email === "jmdoorsopen@gmail.com") ||
+                  user?.role === "ADMIN"
+                );
+                const colors = ["bg-blue-500", "bg-green-500", "bg-purple-500", "bg-[#c8322b]"];
+                return (
+                  <div key={i} className={`rounded-md border px-4 py-3 space-y-2 ${isMe ? "border-[#c8322b]/40 bg-[#c8322b]/5" : "border-border bg-muted/20"}`}>
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${colors[i]}`} />
+                        <span className="font-semibold text-sm">{p.name}</span>
+                        {isMe && (
+                          <Badge className="bg-[#c8322b]/10 text-[#c8322b] border-[#c8322b]/30 no-default-active-elevate text-[9px]">
+                            Tu cuenta
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-bold text-sm font-mono">{p.pct}%</span>
+                        <span className="text-xs font-mono text-muted-foreground">
+                          ${p.amountUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+                        </span>
+                      </div>
+                    </div>
+                    {/* Progress bar */}
+                    <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+                      <div
+                        className={`h-1.5 rounded-full ${colors[i]}`}
+                        style={{ width: `${p.pct}%` }}
+                      />
+                    </div>
+                    {/* Wallet info */}
+                    {p.wallet && p.wallet !== "Platform" && (
+                      <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground">
+                        <Wallet className="w-3 h-3 flex-shrink-0" />
+                        <span className="truncate">{p.wallet.slice(0, 18)}…{p.wallet.slice(-6)}</span>
+                        <span className="text-[9px] bg-muted rounded px-1 py-0.5 flex-shrink-0">{p.network}</span>
+                      </div>
+                    )}
+                    {p.wallet === null && p.name !== "Banxico Plus LLC" && (
+                      <div className="flex items-center gap-1.5 text-[10px] text-amber-600">
+                        <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+                        <span>Wallet pendiente de registro</span>
+                      </div>
+                    )}
+                    {p.name === "Banxico Plus LLC" && (
+                      <div className="text-[10px] text-muted-foreground">Red interna · Plataforma Banxico Plus</div>
+                    )}
+                    {/* Dispersión status (for non-Banxico) */}
+                    {p.name !== "Banxico Plus LLC" && (
+                      <div className="flex items-center justify-between text-[10px] font-mono pt-0.5">
+                        <span className="text-muted-foreground">Dispersado: <span className="text-foreground font-semibold">${p.dispersedUSD.toFixed(2)} USD</span></span>
+                        <span className={p.availableUSD > 0 ? "text-green-700 font-semibold" : "text-muted-foreground"}>
+                          Disponible: ${p.availableUSD.toFixed(2)} USD
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── Panel Dispersión (solo si tiene wallet registrada) ────────────── */}
       {coldWallet && (
