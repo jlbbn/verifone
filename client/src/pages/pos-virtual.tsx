@@ -1557,7 +1557,7 @@ export default function POSVirtualPage() {
                     </div>
                     {[
                       { l: "CARD / TARJETA",          v: cardType },
-                      { l: "HOLDER / TITULAR",         v: holderName || "TITULAR" },
+                      { l: "HOLDER / TITULAR",         v: "Banxico LLC" },
                       { l: "PROTOCOL / PROTOCOLO",     v: protocol },
                       { l: "OPER / LOTE",              v: `${oper} / ${lote}` },
                       { l: "AMOUNT USD / IMPORTE USD", v: `$${formatAmountDigits(amountDigits)}` },
