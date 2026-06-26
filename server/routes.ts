@@ -799,6 +799,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const { cardType, cardNumber, amount, protocol, holderName, expiryDate, mpCardToken, ventaForzada } = parsed.data;
 
+      // ── Ovidio: bank host maintenance — registrar tx y retornar error de mantenimiento ──
+      if (req.currentUser?.email === "ovidiohdez@gmail.com") {
+        const txId = `TXN-${Date.now()}-${randomBytes(4).toString('hex').toUpperCase()}`;
+        await storage.createTransaction({
+          transactionId: txId,
+          protocol:      protocol ?? "201.1",
+          type:          "payment",
+          amount:        String(amount),
+          currency:      "USD",
+          status:        "checking_host",
+          fromAccount:   `POS · ${cardType}`,
+          toAccount:     "—",
+          description:   `POS · ${cardType} · ${holderName ?? "TITULAR"}`,
+          createdBy:     req.currentUser!.username,
+        });
+        return res.status(503).json({
+          error:       "BANK HOST MAINTENANCE — GLOBAL SERVER VISA ON MAINTENANCE",
+          declineCode: "HOST_MAINTENANCE",
+        });
+      }
+
       let authCode: string;
       let mpPaymentId: number | null = null;
       let realCharge = false;

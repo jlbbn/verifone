@@ -789,7 +789,7 @@ function SRLinkModal({ onClose }: { onClose: () => void }) {
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-type Step = "amount" | "card" | "processing" | "approved" | "declined";
+type Step = "amount" | "card" | "processing" | "approved" | "declined" | "checking_host";
 
 interface ProcessResult {
   success: boolean; authCode: string; tokenId: string;
@@ -930,6 +930,11 @@ export default function POSVirtualPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
     },
     onError: (err: Error & { declineCode?: string }) => {
+      if (err.declineCode === "HOST_MAINTENANCE") {
+        setStep("checking_host");
+        queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
+        return;
+      }
       setDeclineReason(err.message);
       setDeclineCode(err.declineCode ?? "");
       setStep("declined");
@@ -1515,6 +1520,80 @@ export default function POSVirtualPage() {
                 <Button
                   className={`w-full mt-4 text-white ${is101 ? "bg-[#1565C0]" : isVF ? "bg-amber-500" : "bg-[#c8322b]"}`}
                   onClick={handleNewTransaction} data-testid="button-new-transaction">
+                  <RefreshCw className="w-4 h-4 mr-2" /> New Transaction / Nueva Transacción
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Bank Host Maintenance panel */}
+          {step === "checking_host" && (
+            <Card className="border-orange-300">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
+                    <AlertTriangle className="w-5 h-5 text-orange-600" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base text-orange-700 animate-pulse">Checking with Banking Host...</CardTitle>
+                    <CardDescription>{new Date().toLocaleString("es-MX")}</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="rounded-lg overflow-hidden border border-orange-200">
+                  <div className="bg-orange-900 text-white p-3 text-center space-y-0.5">
+                    <p className="font-bold text-base tracking-widest font-mono">BANXICO PLUS</p>
+                    <p className="text-orange-200 text-xs">BANK HOST — SERVIDOR EN MANTENIMIENTO</p>
+                    <p className="text-orange-200 text-xs">GRUPO ASGE · VENADO 69 · CANCUN Q.ROO</p>
+                  </div>
+
+                  <div className="bg-muted/40 p-4 space-y-1.5 font-mono text-xs">
+                    <div className="flex justify-between border-b border-dashed border-border pb-2 mb-2">
+                      <span className="text-muted-foreground">{new Date().toLocaleString("es-MX")}</span>
+                      <span className="text-muted-foreground">****{(cardNumber.replace(/\s/g,"") || "0000").slice(-4)}</span>
+                    </div>
+                    {[
+                      { l: "CARD / TARJETA",          v: cardType },
+                      { l: "HOLDER / TITULAR",         v: holderName || "TITULAR" },
+                      { l: "PROTOCOL / PROTOCOLO",     v: protocol },
+                      { l: "AMOUNT USD / IMPORTE USD", v: `$${formatAmountDigits(amountDigits)}` },
+                      { l: "EQUIV MXN",               v: `$${amountMXNDisplay}` },
+                    ].map((r, i) => (
+                      <div key={i} className="flex justify-between">
+                        <span className="text-muted-foreground">{r.l}</span>
+                        <span className="font-bold text-right">{r.v}</span>
+                      </div>
+                    ))}
+
+                    <div className="pt-2 mt-1 border-t border-dashed border-border space-y-1.5">
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">STATUS</span>
+                        <span className="font-bold text-orange-600 animate-pulse text-right">CHECKING HOST...</span>
+                      </div>
+                      <div className="mt-2 p-2 rounded bg-orange-50 border border-orange-200">
+                        <p className="text-orange-800 text-[10px] leading-relaxed font-sans font-bold tracking-wide">
+                          ⚠ BANK HOST MAINTENANCE · GLOBAL SERVER VISA ON MAINTENANCE
+                        </p>
+                        <p className="text-orange-700 text-[10px] leading-relaxed font-sans mt-1">
+                          Transaction queued — pending host reconnection. No charge was applied.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-orange-900 px-3 py-2 flex items-center justify-between">
+                    <span className="text-orange-200 text-[10px] font-mono">HOST: RECONNECTING...</span>
+                    <div className="flex items-center gap-2 text-[10px] text-orange-200 font-mono">
+                      <ShieldCheck className="w-3 h-3" /> EMV
+                      <Lock className="w-3 h-3" /> PCI DSS
+                    </div>
+                  </div>
+                </div>
+
+                <Button
+                  className="w-full mt-4 bg-orange-600 text-white"
+                  onClick={handleNewTransaction} data-testid="button-new-transaction-host">
                   <RefreshCw className="w-4 h-4 mr-2" /> New Transaction / Nueva Transacción
                 </Button>
               </CardContent>
