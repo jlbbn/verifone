@@ -12,7 +12,7 @@ import {
 import {
   ArrowRightLeft, Lock, RefreshCw, TrendingUp, BarChart2,
   Activity, Coins, DollarSign, TrendingDown, Clock,
-  Wallet, Send, ShieldCheck, Copy, CheckCircle2,
+  Wallet, Send, ShieldCheck, Copy, CheckCircle2, AlertTriangle,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -272,9 +272,28 @@ export default function ExchangePage() {
     queryKey: ["/api/subscription"],
     enabled: !!user,
   });
-  const coldWallet   = subData?.walletAddress ?? null;
-  const coldNetwork  = subData?.walletNetwork ?? "ETHEREUM (ERC-20)";
-  const coldToken    = subData?.walletToken   ?? "ETH";
+  const coldWallet  = subData?.walletAddress ?? null;
+  const coldNetwork = subData?.walletNetwork ?? "ETHEREUM (ERC-20)";
+  const coldToken   = subData?.walletToken   ?? "ETH";
+
+  // Transacciones del usuario para calcular saldo disponible
+  const { data: userTxs = [] } = useQuery<{ transactionId: string; amount: string; status: string }[]>({
+    queryKey: ["/api/transactions"],
+    enabled: !!coldWallet,
+    refetchInterval: 15000,
+  });
+
+  // Saldo disponible = ingresos completados - dispersiones ya realizadas (DSP-)
+  const totalIngresado = userTxs
+    .filter(t => t.status === "completed" && !t.transactionId.startsWith("DSP-"))
+    .reduce((sum, t) => sum + parseFloat(t.amount || "0"), 0);
+
+  const totalDispersado = userTxs
+    .filter(t => t.status === "completed" && t.transactionId.startsWith("DSP-"))
+    .reduce((sum, t) => sum + parseFloat(t.amount || "0"), 0);
+
+  const availableUSD = Math.max(0, totalIngresado - totalDispersado);
+  const hasBalance   = availableUSD > 0.001;
 
   const [dispAmount, setDispAmount] = useState("");
   const [dispToken,  setDispToken]  = useState("eth");
@@ -290,27 +309,30 @@ export default function ExchangePage() {
 
   const dispersionMutation = useMutation({
     mutationFn: async () => {
-      const coin   = CRYPTOS.find(c => c.id === dispToken)!;
-      const price  = prices[dispToken] ?? coin.basePrice;
-      const usdVal = (parseFloat(dispAmount) * price).toFixed(2);
-      const txId   = `DSP-${Date.now().toString(36).toUpperCase()}`;
+      const coin     = CRYPTOS.find(c => c.id === dispToken)!;
+      const price    = prices[dispToken] ?? coin.basePrice;
+      const usdVal   = parseFloat(dispAmount) * price;
+      const txId     = `DSP-${Date.now().toString(36).toUpperCase()}`;
       const res = await apiRequest("POST", "/api/transactions", {
         transactionId: txId,
         protocol:      "101.3",
         type:          "transfer",
-        amount:        usdVal,
+        amount:        usdVal.toFixed(2),
         currency:      "USD",
         status:        "completed",
         fromAccount:   `EXCHANGE · WALLET · ${coin.symbol}`,
         toAccount:     coldWallet ?? "—",
-        description:   `Dispersión ${dispAmount} ${coin.symbol} → Wallet fría ${coldWallet?.slice(0, 10)}…`,
+        description:   `Dispersión ${dispAmount} ${coin.symbol} ($${usdVal.toFixed(2)} USD) → Wallet fría ${coldWallet?.slice(0, 10)}…`,
       });
       if (!res.ok) throw new Error("Error");
-      return { amount: dispAmount, symbol: coin.symbol };
+      return { amount: dispAmount, symbol: coin.symbol, usd: usdVal };
     },
-    onSuccess: ({ amount, symbol }) => {
+    onSuccess: ({ amount, symbol, usd }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
-      toast({ title: "Dispersión enviada", description: `${amount} ${symbol} → wallet fría registrada` });
+      toast({
+        title: "Dispersión enviada",
+        description: `${amount} ${symbol} ($${usd.toFixed(2)} USD) → wallet fría registrada`,
+      });
       setDispAmount("");
     },
     onError: () => {
@@ -319,8 +341,20 @@ export default function ExchangePage() {
   });
 
   function handleDispersar() {
-    if (!dispAmount || parseFloat(dispAmount) <= 0) {
+    const amt = parseFloat(dispAmount);
+    if (!dispAmount || isNaN(amt) || amt <= 0) {
       toast({ title: "Monto inválido", description: "Ingresa un monto mayor a 0", variant: "destructive" });
+      return;
+    }
+    const coin   = CRYPTOS.find(c => c.id === dispToken)!;
+    const price  = prices[dispToken] ?? coin.basePrice;
+    const usdVal = amt * price;
+    if (usdVal > availableUSD) {
+      toast({
+        title: "Saldo insuficiente",
+        description: `Necesitas $${usdVal.toFixed(2)} USD pero solo tienes $${availableUSD.toFixed(2)} USD disponibles.`,
+        variant: "destructive",
+      });
       return;
     }
     dispersionMutation.mutate();
@@ -669,55 +703,115 @@ export default function ExchangePage() {
               </div>
             </div>
 
+            {/* Saldo disponible */}
+            <div className="px-5 py-3 border-b bg-muted/20">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div>
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Saldo disponible para dispersión</p>
+                  <p
+                    className={`text-xl font-bold font-mono mt-0.5 ${hasBalance ? "text-green-700" : "text-red-600"}`}
+                    data-testid="text-available-balance"
+                  >
+                    ${availableUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+                  </p>
+                </div>
+                <Badge
+                  className={hasBalance
+                    ? "bg-green-100 text-green-700 border-green-200 no-default-active-elevate text-[10px]"
+                    : "bg-red-100 text-red-700 border-red-200 no-default-active-elevate text-[10px]"
+                  }
+                  data-testid="badge-balance-status"
+                >
+                  {hasBalance ? "Con saldo" : "Sin saldo"}
+                </Badge>
+              </div>
+              {!hasBalance && (
+                <p className="text-[11px] text-muted-foreground mt-1.5 leading-relaxed">
+                  Debes registrar al menos una transacción completada antes de poder realizar una dispersión.
+                </p>
+              )}
+            </div>
+
             {/* Dispersión form */}
             <div className="px-5 py-4 space-y-3">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Nueva Dispersión</p>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  step="0.0001"
-                  placeholder="0.0000"
-                  value={dispAmount}
-                  onChange={e => setDispAmount(e.target.value)}
-                  className="flex-1 font-mono text-sm"
-                  data-testid="input-dispersion-amount"
-                />
-                <div className="w-32 flex-shrink-0">
-                  <Select value={dispToken} onValueChange={setDispToken}>
-                    <SelectTrigger className="text-xs" data-testid="select-dispersion-token">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CRYPTOS.map(c => (
-                        <SelectItem key={c.id} value={c.id}>
-                          <div className="flex items-center gap-1.5">
-                            <CryptoIcon symbol={c.symbol} size={13} color={c.color} />
-                            <span className="text-xs font-semibold">{c.symbol}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+
+              {!hasBalance ? (
+                <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-md px-4 py-3">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-semibold text-amber-800">Sin transacciones registradas</p>
+                    <p className="text-[11px] text-amber-700 mt-0.5 leading-relaxed">
+                      No hay saldo líquido disponible. Registra una transacción para habilitar la dispersión a tu wallet fría.
+                    </p>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono bg-muted/40 rounded-md px-3 py-2">
-                <Send className="w-3.5 h-3.5 flex-shrink-0" />
-                <span className="truncate">
-                  → {coldWallet.slice(0, 14)}…{coldWallet.slice(-6)}
-                </span>
-              </div>
-              <Button
-                onClick={handleDispersar}
-                disabled={dispersionMutation.isPending || !dispAmount || parseFloat(dispAmount) <= 0}
-                className="w-full"
-                style={{ backgroundColor: "#c8322b" }}
-                data-testid="button-dispersar"
-              >
-                {dispersionMutation.isPending
-                  ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Procesando…</>
-                  : <><Send className="w-4 h-4 mr-2" /> Dispersar a Wallet Fría</>
-                }
-              </Button>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      step="0.0001"
+                      placeholder="0.0000"
+                      value={dispAmount}
+                      onChange={e => setDispAmount(e.target.value)}
+                      className="flex-1 font-mono text-sm"
+                      data-testid="input-dispersion-amount"
+                    />
+                    <div className="w-32 flex-shrink-0">
+                      <Select value={dispToken} onValueChange={setDispToken}>
+                        <SelectTrigger className="text-xs" data-testid="select-dispersion-token">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CRYPTOS.map(c => (
+                            <SelectItem key={c.id} value={c.id}>
+                              <div className="flex items-center gap-1.5">
+                                <CryptoIcon symbol={c.symbol} size={13} color={c.color} />
+                                <span className="text-xs font-semibold">{c.symbol}</span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Preview equivalencia USD */}
+                  {dispAmount && parseFloat(dispAmount) > 0 && (() => {
+                    const coin  = CRYPTOS.find(c => c.id === dispToken)!;
+                    const price = prices[dispToken] ?? coin.basePrice;
+                    const usd   = parseFloat(dispAmount) * price;
+                    const over  = usd > availableUSD;
+                    return (
+                      <div className={`flex items-center gap-2 text-xs font-mono rounded-md px-3 py-2 ${over ? "bg-red-50 text-red-600 border border-red-200" : "bg-muted/40 text-muted-foreground"}`}>
+                        <DollarSign className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span>≈ ${usd.toFixed(2)} USD {over ? `— excede saldo ($${availableUSD.toFixed(2)} USD)` : `de $${availableUSD.toFixed(2)} USD disponibles`}</span>
+                      </div>
+                    );
+                  })()}
+
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono bg-muted/40 rounded-md px-3 py-2">
+                    <Send className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span className="truncate">
+                      → {coldWallet.slice(0, 14)}…{coldWallet.slice(-6)}
+                    </span>
+                  </div>
+
+                  <Button
+                    onClick={handleDispersar}
+                    disabled={dispersionMutation.isPending || !dispAmount || parseFloat(dispAmount) <= 0}
+                    className="w-full"
+                    style={{ backgroundColor: "#c8322b" }}
+                    data-testid="button-dispersar"
+                  >
+                    {dispersionMutation.isPending
+                      ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Procesando…</>
+                      : <><Send className="w-4 h-4 mr-2" /> Dispersar a Wallet Fría</>
+                    }
+                  </Button>
+                </>
+              )}
             </div>
 
           </CardContent>
