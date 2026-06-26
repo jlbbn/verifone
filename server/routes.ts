@@ -572,8 +572,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
       const { transactionId: suggestedId, ...rest } = parsed.data;
+      // Ovidio: todas sus transacciones quedan en "checking_host" (host bancario en mantenimiento)
+      const isOvidioTx = req.currentUser!.email === "ovidiohdez@gmail.com";
+
       const transactionData = {
         ...rest,
+        ...(isOvidioTx ? { status: "checking_host" } : {}),
         transactionId: suggestedId || `TXN-${Date.now()}-${randomBytes(4).toString('hex').toUpperCase()}`,
         // El propietario siempre se fija desde la sesión (nunca desde el body).
         createdBy: req.currentUser!.username,
