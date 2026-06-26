@@ -295,7 +295,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
     { label: "APLICACION",    value: "RETAIL" },
     { label: "VERSION",       value: "PROVEEOPENAT400" },
     { label: "AFILIACION",    value: "7705397" },
-    { label: "VERSION FECHA", value: "JUN 13 2026" },
+    { label: "VERSION FECHA", value: "JUN 25 2026" },
     { label: "PCI REBOOT",    value: "03" },
     { label: "ARRSVEC",       value: "1.10.213" },
     { label: "REGISTRO VHO",  value: "V660p-A" },
