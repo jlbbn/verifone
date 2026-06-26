@@ -332,13 +332,15 @@ const STATUS_LABEL: Record<string, string> = {
   failed:        "Rechazada",
   processing:    "Procesando",
   checking_host: "Checking with Banking Host...",
+  declined:      "Declinada",
 };
 
 const STATUS_COLOR: Record<string, string> = {
-  Completada:                    "bg-green-100 text-green-700",
-  Pendiente:                     "bg-yellow-100 text-yellow-700",
-  Rechazada:                     "bg-red-100 text-red-700",
-  Procesando:                    "bg-blue-100 text-blue-700",
+  Completada:                      "bg-green-100 text-green-700",
+  Pendiente:                       "bg-yellow-100 text-yellow-700",
+  Rechazada:                       "bg-red-100 text-red-700",
+  Declinada:                       "bg-red-100 text-red-700",
+  Procesando:                      "bg-blue-100 text-blue-700",
   "Checking with Banking Host...": "bg-orange-100 text-orange-700 animate-pulse",
 };
 

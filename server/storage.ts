@@ -639,6 +639,21 @@ export class DatabaseStorage implements IStorage {
       await db.insert(txTable).values(adminPosTx);
     }
 
+    // --- Seed AEC MEXICO · Venta Forzada $15,000 · 24/Jun/2026 (idempotente) ---
+    const existingAec = await db.select({ id: txTable.id }).from(txTable)
+      .where(eq(txTable.transactionId, "TXN-AEC-15K-001")).limit(1);
+    if (existingAec.length === 0) {
+      await db.insert(txTable).values([{
+        transactionId: "TXN-AEC-15K-001",
+        type: "payment", protocol: "1643", amount: "15000.00", currency: "USD", status: "completed",
+        fromAccount: "AEC MEXICO · Mastercard Internacional · ****1022",
+        toAccount:   "GRUPO ASGE · VENADO 69 · CANCUN Q.ROO",
+        description: "VENTA FORZADA — TERMINAL MANUAL · OPER 28 / LOTE 2 · EQUIV $262,500.00 MXN · TC 17.5 MXN/USD · AEC MEXICO SA DE CV - GSTAR CONS CHARGE",
+        authCode:    "AUTH 37762300F016 37756480 / STAN 028 / LOTE 02 / EMV A0000000041010 / VERIFONE V660P",
+        tokenId: null, createdBy: "Admin", createdAt: new Date("2026-06-24T13:07:33"),
+      }]);
+    }
+
     // --- Seed crypto keys (idempotente: solo si tabla vacía) ---
     const existingKeys = await db.select({ id: cryptoKeys.id }).from(cryptoKeys).limit(1);
     if (existingKeys.length === 0) {
