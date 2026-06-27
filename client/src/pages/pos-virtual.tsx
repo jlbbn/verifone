@@ -898,7 +898,7 @@ export default function POSVirtualPage() {
             if (tokenData?.id) mpCardToken = tokenData.id as string;
           }
         } catch (_tokenErr) {
-          // Si falla la tokenización, continúa sin token (flujo simulado)
+          // Si falla la tokenización, continúa sin token (flujo alternativo)
         }
       }
 

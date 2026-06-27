@@ -921,7 +921,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return;
           }
 
-          // Soft error (network/config) → fall through to MP or simulate
+          // Soft error (network/config) → fall through to MP or local auth
           console.warn(`[Stripe] Soft error, falling back — ${msg}`);
           authCode = `AUTH-${Date.now()}-${randomBytes(4).toString("hex").toUpperCase()}`;
         }

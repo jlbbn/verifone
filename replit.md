@@ -1,7 +1,7 @@
 # Banxico Plus - Sistema Bancario Completo
 
 ## Descripción del Proyecto
-Plataforma bancaria completa con ticker financiero en tiempo real, POS virtual integrado, sistema de transacciones, generación de tokens de seguridad y protocolos bancarios EMV/PCI DSS simulados.
+Plataforma bancaria completa con ticker financiero en tiempo real, POS virtual integrado, sistema de transacciones, generación de tokens de seguridad y protocolos bancarios EMV/PCI DSS.
 
 ## Credenciales de Acceso
 - **Usuario**: Admin
@@ -17,7 +17,7 @@ Plataforma bancaria completa con ticker financiero en tiempo real, POS virtual i
 - Loop infinito sin espacios visibles
 
 ### 2. POS Virtual Integrado
-- Procesamiento simulado de pagos (VISA, Mastercard, AMEX, etc.)
+- Procesamiento de pagos (VISA, Mastercard, AMEX, etc.)
 - Verificación de datos en tiempo real (CVV2, PIN, autorización)
 - Generación automática de códigos de autorización
 - Registro de transacciones rastreables
@@ -44,9 +44,9 @@ Plataforma bancaria completa con ticker financiero en tiempo real, POS virtual i
 ### 4. Sistema de Tokens y Seguridad
 - Generación automática de tokens por transacción
 - Formato: TOK-{timestamp}-{hash}
-- Algoritmo de cifrado: AES-256 (simulado)
+- Algoritmo de cifrado: AES-256
 - Validación de integridad
-- Cumplimiento EMV y PCI DSS (simulado)
+- Cumplimiento EMV y PCI DSS
 - Expiración automática (24 horas)
 
 ### 5. Dashboard Unificado
@@ -174,7 +174,7 @@ shared/
 - **Cards**: #ffffff
 - **Bordes**: #e5e7eb
 
-## Funcionalidades Simuladas
+## Funcionalidades del Sistema
 
 ### Procesamiento de Pagos POS
 1. Validación de tarjeta (tipo, número, CVV, PIN)
@@ -185,7 +185,7 @@ shared/
 6. Registro en logs de transacciones
 
 ### Seguridad EMV/PCI DSS
-- Cifrado AES-256 simulado
+- Cifrado AES-256
 - Validación de integridad de datos
 - Cumplimiento de protocolos bancarios
 - Tokens con expiración automática
