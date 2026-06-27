@@ -1337,6 +1337,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const isAvoExport = user.email === "avoexport03@gmail.com";
     const isJMDoors   = user.email === "jmdoorsopen@gmail.com";
     const isDanyLeon  = user.username === "danyleonpinto";
+    const isJETC76    = user.email === "jetc76@hotmail.com";
 
     if (isOvidio) {
       return res.json({
@@ -1458,6 +1459,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         signerName:       "José Luis Barrientos Terreros",
         signerTitle:      "Founder",
         supplierAddress:  "7652 Sawmill Road, Suite 341, Dublin, Ohio 43016",
+      });
+    }
+
+    if (isJETC76) {
+      return res.json({
+        userId:           user.id,
+        userName:         user.fullName,
+        userEmail:        user.email,
+        plan:             "Usuario Banxico+ Annual",
+        totalAmount:      750,
+        paidAmount:       0,
+        remainingAmount:  750,
+        currency:         "USD",
+        contractDate:     "2026-06-27",
+        contractTerm:     "12 months",
+        status:           "pending",
+        posUnlocked:      false,
+        posLocked:        true,
+        restricted:       false,
+        routingLocked:    true,
+        paymentWarning:   "BLOQUEO PREVENTIVO — Cuenta registrada sin pago inicial. POS Virtual y Enrutamiento POS bloqueados de forma preventiva hasta confirmar pago. Referencia de contrato: BNXP-2026-062701 · Código de estado: 0x4E43-PREV-LOCK · Usuario: jetc76@hotmail.com",
+        walletAddress:    null,
+        walletNetwork:    null,
+        walletToken:      null,
+        company:          "—",
+        phone:            "—",
+        signerName:       "José Luis Barrientos Terreros",
+        signerTitle:      "Founder",
+        supplierAddress:  "7652 Sawmill Road, Suite 341, Dublin, Ohio 43016",
+        lockReason:       "PREVENTIVO — Sin pago registrado al momento del alta",
+        lockCode:         "0x4E43-PREV-LOCK",
+        lockDate:         "2026-06-27T00:00:00",
       });
     }
 
