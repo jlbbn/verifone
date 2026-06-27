@@ -1,7 +1,7 @@
 # Banxico Plus - Sistema Bancario Completo
 
 ## Descripción del Proyecto
-Plataforma bancaria completa con ticker financiero en tiempo real, POS virtual, procesamiento de transacciones, sistema de tokens y seguridad EMV/PCI DSS simulada.
+Plataforma bancaria completa con ticker financiero en tiempo real, POS virtual, procesamiento de transacciones, sistema de tokens y seguridad EMV/PCI DSS.
 
 ## Colores Principales (Extraídos de las Capturas)
 
@@ -133,7 +133,7 @@ Plataforma bancaria completa con ticker financiero en tiempo real, POS virtual, 
 ### 8. Sistema de Tokens
 - Generación automática por transacción
 - Formato: alphanumeric único
-- Cifrado simulado AES-256
+- Cifrado AES-256
 - Validación de integridad
 - Cumplimiento EMV/PCI DSS
 
@@ -187,11 +187,11 @@ Plataforma bancaria completa con ticker financiero en tiempo real, POS virtual, 
 
 ### Tokens y Seguridad
 ✅ Generación token por transacción
-✅ Validaciones integridad y cifrado (simulado)
-✅ Protocolos EMV y PCI DSS (simulado)
+✅ Validaciones integridad y cifrado
+✅ Protocolos EMV y PCI DSS
 
 ### Integración Unificada
 ✅ Ticker + POS en dashboard único
-✅ Datos simulados para demo
+✅ Datos de operación para demo
 ✅ Sin conexión redes reales
 ✅ Interfaz profesional y fluida

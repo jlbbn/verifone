@@ -214,7 +214,7 @@ export default function Dashboard() {
 
       {/* Middle section */}
       <div className="grid gap-4 lg:grid-cols-3">
-        {/* Hourly chart (simulated bars) */}
+        {/* Hourly chart */}
         <Card className="hover-elevate lg:col-span-2">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between gap-2">

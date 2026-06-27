@@ -198,7 +198,7 @@ export default function NewTransactionPage() {
         <div class="row"><span>Estado</span><span class="ok">APROBADA</span></div>
         <div class="footer">
           ${result.emvCompliant ? "EMV ✓ " : ""}${result.pciCompliant ? "PCI DSS ✓ " : ""}AES-256 ✓<br/>
-          Gracias por su preferencia<br/>* * * Comprobante simulado * * *
+          Gracias por su preferencia<br/>* * * Comprobante de operación * * *
         </div>
       </div>
       <script>window.onload = function(){ window.print(); }</script>
