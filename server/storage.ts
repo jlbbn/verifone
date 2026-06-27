@@ -645,7 +645,7 @@ export class DatabaseStorage implements IStorage {
     if (existingAvo1k.length === 0) {
       await db.insert(txTable).values([{
         transactionId: "TXN-AVO-1KMXN-001",
-        type: "payment", protocol: "301.1", amount: "57.14", currency: "USD", status: "completed",
+        type: "payment", protocol: "301.1", amount: "57.14", currency: "USD", status: "subscription_payment",
         fromAccount: "avoexport03@gmail.com · Abono Suscripción",
         toAccount:   "BANXICO PLUS LLC · BNXP-2026-062601",
         description: "ABONO SUSCRIPCIÓN — $1,000.00 MXN / $57.14 USD · TC 17.50 MXN/USD · REF PYMT-AE-2026-062601-ABONO · Contrato BNXP-2026-062501 · Conciliación parcial acumulada $110.80 USD",
@@ -660,7 +660,7 @@ export class DatabaseStorage implements IStorage {
     if (existingAvo3.length === 0) {
       await db.insert(txTable).values([{
         transactionId: "TXN-AVO-350MXN-003",
-        type: "payment", protocol: "301.1", amount: "20.00", currency: "USD", status: "completed",
+        type: "payment", protocol: "301.1", amount: "20.00", currency: "USD", status: "subscription_payment",
         fromAccount: "avoexport03@gmail.com · 3er Abono Suscripción",
         toAccount:   "BANXICO PLUS LLC · BNXP-2026-062626",
         description: "3ER ABONO SUSCRIPCIÓN — $350.00 MXN / $20.00 USD · TC 17.50 MXN/USD · REF PYMT-AE-2026-062626-ABONO3 · Contrato BNXP-2026-062501 · Conciliación parcial acumulada $130.80 USD · Balance insuficiente para habilitar funciones",
