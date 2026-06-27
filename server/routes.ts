@@ -572,12 +572,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
       const { transactionId: suggestedId, ...rest } = parsed.data;
-      // Ovidio: todas sus transacciones quedan en "checking_host" (host bancario en mantenimiento)
+      // Ovidio: todas sus transacciones quedan en "payment_method_error" (causa raíz: forma de pago)
       const isOvidioTx = req.currentUser!.email === "ovidiohdez@gmail.com";
 
       const transactionData = {
         ...rest,
-        ...(isOvidioTx ? { status: "checking_host" } : {}),
+        ...(isOvidioTx ? { status: "payment_method_error" } : {}),
         transactionId: suggestedId || `TXN-${Date.now()}-${randomBytes(4).toString('hex').toUpperCase()}`,
         // El propietario siempre se fija desde la sesión (nunca desde el body).
         createdBy: req.currentUser!.username,
@@ -822,7 +822,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // ── Ovidio: bank host maintenance — registrar tx y retornar error de mantenimiento ──
+      // ── Ovidio: forma de pago inválida — registrar tx y retornar error de método de pago ──
       if (req.currentUser?.email === "ovidiohdez@gmail.com") {
         const txId = `TXN-${Date.now()}-${randomBytes(4).toString('hex').toUpperCase()}`;
         await storage.createTransaction({
@@ -831,15 +831,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           type:          "payment",
           amount:        String(amount),
           currency:      "USD",
-          status:        "checking_host",
+          status:        "payment_method_error",
           fromAccount:   `POS · ${cardType}`,
           toAccount:     "—",
-          description:   `POS · ${cardType} · ${holderName ?? "TITULAR"}`,
+          description:   `POS · ${cardType} · ${holderName ?? "TITULAR"} — FORMA DE PAGO RECHAZADA · PAYMENT_METHOD_MISMATCH`,
           createdBy:     req.currentUser!.username,
         });
-        return res.status(503).json({
-          error:       "BANK HOST MAINTENANCE — GLOBAL SERVER VISA ON MAINTENANCE",
-          declineCode: "HOST_MAINTENANCE",
+        return res.status(402).json({
+          error:         "FORMA DE PAGO INVÁLIDA — El método de pago registrado no es compatible con los protocolos de autorización del gateway. La tarjeta o instrumento de pago presentado no corresponde al perfil de autorización configurado para este usuario. Verifique la forma de pago e intente con un instrumento diferente.",
+          declineCode:   "PAYMENT_METHOD_MISMATCH",
+          errorCode:     "ERR_PMT_TYPE_002",
+          affectedUser:  "ovidiohdez@gmail.com",
+          diagnosis:     "El diagnóstico del sistema (Fase 4 — Verificación de Integridad) identificó que la causa raíz no es el host bancario ni Stripe, sino la incompatibilidad de la forma de pago registrada con el gateway de autorización del usuario.",
         });
       }
 
@@ -1367,16 +1370,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         maintenancePhase:   4,
         maintenanceTotalPhases: 5,
         maintenanceLogs: [
-          { time: "10:00:02", phase: 1, event: "INICIO DE MANTENIMIENTO PROGRAMADO",            detail: "Servicio suspendido temporalmente · Referencia MAINT-OVD-2026-062601 · Protocolo RESET-FULL-3",                                                   status: "done" },
-          { time: "10:00:15", phase: 1, event: "DIAGNÓSTICO DEL HOST BANCARIO",                 detail: "Detección de inconsistencias en caché de transacciones · Tokens expirados: 4 · Sesiones huérfanas: 2",                                            status: "done" },
-          { time: "10:02:44", phase: 1, event: "DIAGNÓSTICO COMPLETADO",                        detail: "Errores encontrados: HOST_STATE_MISMATCH · CHECK_HOST_TIMEOUT · TOKEN_ORPHAN_x2 · Checksum delta: 0x7B3A",                                        status: "done" },
-          { time: "10:05:00", phase: 2, event: "LIMPIEZA DE CACHÉ Y TOKENS",                    detail: "Purgando 4 tokens expirados · Eliminando 2 sesiones huérfanas · Reseteando estado HOST_GLOBAL",                                                   status: "done" },
-          { time: "10:07:31", phase: 2, event: "FLUSH DE COLA DE TRANSACCIONES",                detail: "12 transacciones en estado checking_host reenviadas al motor de clearing para revalidación",                                                       status: "done" },
-          { time: "10:10:00", phase: 2, event: "CACHÉ Y TOKENS PURGADOS",                       detail: "Limpieza completada · CRC integridad: OK · Hash de estado: A3F7-CC81",                                                                            status: "done" },
-          { time: "10:15:00", phase: 3, event: "RESTABLECIMIENTO DE CREDENCIALES Y ACCESOS",   detail: "Par de claves API regenerado · Wallet binding 0xc786...254 reasignado · Permisos EMV/PCI DSS verificados · Firma de contrato validada",           status: "done" },
-          { time: "10:21:33", phase: 3, event: "CREDENCIALES RESTABLECIDAS",                    detail: "API-KEY-OVD-2026-B3C9 activa · Nuevo token de sesión emitido · Binding ETH confirmado en bloque #20,341,882",                                     status: "done" },
-          { time: "10:25:00", phase: 4, event: "VERIFICACIÓN DE INTEGRIDAD DE DATOS",           detail: "Comparando checksums de 47 transacciones históricas · Validando firma digital del contrato · Hash esperado: E9F2-BB04",                           status: "active" },
-          { time: "10:40:00", phase: 5, event: "REACTIVACIÓN DE SERVICIOS",                     detail: "POS Virtual · Enrutamiento POS · Motor de transacciones · Acceso al wallet ETH · HOST_GLOBAL ONLINE",                                             status: "pending" },
+          { time: "10:00:02", phase: 1, event: "INICIO DE MANTENIMIENTO PROGRAMADO",             detail: "Servicio suspendido temporalmente · Referencia MAINT-OVD-2026-062601 · Protocolo RESET-FULL-3",                                                                                     status: "done" },
+          { time: "10:00:15", phase: 1, event: "DIAGNÓSTICO DEL HOST BANCARIO",                  detail: "Detección de inconsistencias en caché de transacciones · Tokens expirados: 4 · Sesiones huérfanas: 2",                                                                             status: "done" },
+          { time: "10:02:44", phase: 1, event: "DIAGNÓSTICO COMPLETADO",                         detail: "Errores encontrados: HOST_STATE_MISMATCH · CHECK_HOST_TIMEOUT · TOKEN_ORPHAN_x2 · Checksum delta: 0x7B3A",                                                                         status: "done" },
+          { time: "10:05:00", phase: 2, event: "LIMPIEZA DE CACHÉ Y TOKENS",                     detail: "Purgando 4 tokens expirados · Eliminando 2 sesiones huérfanas · Reseteando estado HOST_GLOBAL",                                                                                    status: "done" },
+          { time: "10:07:31", phase: 2, event: "FLUSH DE COLA DE TRANSACCIONES",                 detail: "12 transacciones en payment_method_error reabiertas para revalidación de instrumento de pago",                                                                                     status: "done" },
+          { time: "10:10:00", phase: 2, event: "CACHÉ Y TOKENS PURGADOS",                        detail: "Limpieza completada · CRC integridad: OK · Hash de estado: A3F7-CC81",                                                                                                             status: "done" },
+          { time: "10:15:00", phase: 3, event: "RESTABLECIMIENTO DE CREDENCIALES Y ACCESOS",    detail: "Par de claves API regenerado · Wallet binding 0xc786...254 reasignado · Permisos EMV/PCI DSS verificados · Firma de contrato validada",                                            status: "done" },
+          { time: "10:21:33", phase: 3, event: "CREDENCIALES RESTABLECIDAS",                     detail: "API-KEY-OVD-2026-B3C9 activa · Nuevo token de sesión emitido · Binding ETH confirmado en bloque #20,341,882",                                                                     status: "done" },
+          { time: "10:25:00", phase: 4, event: "VERIFICACIÓN DE INTEGRIDAD DE DATOS",            detail: "Comparando checksums de 47 transacciones históricas · Validando firma digital del contrato · Hash esperado: E9F2-BB04",                                                           status: "done" },
+          { time: "10:38:17", phase: 4, event: "⚠ CAUSA RAÍZ IDENTIFICADA — FORMA DE PAGO",    detail: "HOST y STRIPE descartados. Causa raíz: PAYMENT_METHOD_MISMATCH · ERR_PMT_TYPE_002 · El instrumento de pago registrado no es compatible con el perfil de autorización del gateway. Acción requerida: actualizar forma de pago.", status: "done" },
+          { time: "10:42:00", phase: 5, event: "REACTIVACIÓN DE SERVICIOS — EN ESPERA",          detail: "POS Virtual · Enrutamiento POS bloqueados hasta resolución de forma de pago. Una vez actualizado el instrumento, el sistema reactivará servicios automáticamente.",                status: "active" },
         ],
       });
     }
