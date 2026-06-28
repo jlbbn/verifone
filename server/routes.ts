@@ -139,6 +139,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     await db.delete(txTable).where(eq(txTable.transactionId, "EXC-MQELR20A"));
   } catch (_) { /* ignore */ }
 
+  // ── Startup patch: AvoExport membresía impaga → todas sus txns a en_validacion ──
+  try {
+    await db.update(txTable)
+      .set({ status: "en_validacion" })
+      .where(eq(txTable.createdBy, "avoexport03@gmail.com"));
+  } catch (_) { /* ignore */ }
+
   // ====================================================================
   // AUTENTICACIÓN
   // ====================================================================
@@ -819,6 +826,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           error:         "APPROVED BY BANXICO — REJECTED FROM HOST ORIGIN",
           declineCode:   "APPROVED_BANXICO_REJECTED_HOST",
           declineReason: "Transaction approved at issuer level (Banxico gateway) but rejected by the acquiring host network. Contact your bank or retry with a different terminal.",
+        });
+      }
+
+      // ── AvoExport: membresía impaga — POS bloqueado ──
+      if (req.currentUser?.email === "avoexport03@gmail.com") {
+        return res.status(402).json({
+          error:        "POS BLOQUEADO — Membresía pendiente de pago. Saldo restante: $619.20 USD. Liquide su membresía para reactivar el servicio.",
+          declineCode:  "MEMBERSHIP_UNPAID",
+          errorCode:    "0x4E43-MEMB-LOCK",
+          lockReason:   "MEMBRESÍA IMPAGA — $619.20 USD pendiente",
+          walletETH:    "0x4cea64a0C3f4856471db1e5513d9377049Ba9FeE",
         });
       }
 
