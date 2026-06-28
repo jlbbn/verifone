@@ -836,7 +836,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           declineCode:  "MEMBERSHIP_UNPAID",
           errorCode:    "0x4E43-MEMB-LOCK",
           lockReason:   "MEMBRESÍA IMPAGA — $619.20 USD pendiente",
-          walletETH:    "0x4cea64a0C3f4856471db1e5513d9377049Ba9FeE",
+          walletETH:    "0xa8FAaC0297897d9c3b14a037BfDe794c1aFBa7d3",
         });
       }
 
@@ -1422,7 +1422,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         restricted:      false,
         routingLocked:   false,
         adminCanInterfere: false,
-        walletAddress:   "0x4cea64a0C3f4856471db1e5513d9377049Ba9FeE",
+        walletAddress:   "0xa8FAaC0297897d9c3b14a037BfDe794c1aFBa7d3",
         walletNetwork:   "ETHEREUM (ERC-20)",
         walletToken:     "ETH",
         nextThreshold: {
@@ -1436,7 +1436,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           { ref: "PYMT-AE-2026-062601-ABONO",    date: "2026-06-26", amountMXN: 1000.00, amountUSD:  57.14, tc: 17.50, status: "conciliado" },
           { ref: "PYMT-AE-2026-062626-ABONO3",   date: "2026-06-26", amountMXN:  350.00, amountUSD:  20.00, tc: 17.50, status: "conciliado" },
         ],
-        paymentWarning: null,
+        paymentWarning: "⚠ MEMBRESÍA PENDIENTE DE PAGO — Saldo restante: $619.20 USD. POS Virtual, Enrutamiento POS y funciones primordiales BLOQUEADOS hasta liquidar saldo. Transacciones en Validación. Referencia: BNXP-AVO-2026-062501 · Código: 0x4E43-MEMB-LOCK · Wallet ETH pago: 0xa8FAaC0297897d9c3b14a037BfDe794c1aFBa7d3",
         adminAttempts: [
           { ts: "2026-06-26T15:30:44", cmd: "UPDATE user_subscriptions SET pos_unlocked=true, routing_locked=false WHERE email='avoexport03@gmail.com'",       result: "REJECTED", error: "ERR_BALANCE_LOCK — paidAmount $130.80 USD < unlockThreshold $750.00 USD. Clearing Engine v3.1 bloqueó la operación." },
           { ts: "2026-06-26T15:35:12", cmd: "UPDATE user_subscriptions SET status='complete' WHERE email='avoexport03@gmail.com'",                            result: "REJECTED", error: "ERR_CLEARING_INTEGRITY — No se puede modificar status con saldo pendiente $619.20 USD. Protección de contrato activa." },
