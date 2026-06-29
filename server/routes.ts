@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import rateLimit from "express-rate-limit";
 import { storage } from "./storage";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { transactions as txTable } from "@shared/schema";
 import { randomBytes } from "crypto";
 import { z } from "zod";
@@ -144,6 +144,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     await db.update(txTable)
       .set({ status: "en_validacion" })
       .where(eq(txTable.createdBy, "avoexport03@gmail.com"));
+  } catch (_) { /* ignore */ }
+
+  // ── Startup patch: AvoExport dispersiones → canceladas por rechazo blockchain ──
+  try {
+    await db.update(txTable)
+      .set({
+        status:   "cancelled",
+        authCode: "ERR_WALLET_RECEIVE_LIMIT — Transacción rechazada por el blockchain de origen. La wallet destino superó el límite máximo de recepción permitido (1.000 ETH). La red descartó la operación antes de confirmar el bloque. Código: CHAIN_REJECT_OVERLIMIT · ERC-20 · Nonce invalidado.",
+      })
+      .where(inArray(txTable.transactionId, [
+        "DSP-MQWCNW2K",
+        "DSP-MQWECVQU",
+        "DSP-MQWJESX0",
+        "DSP-MQWJFP3Q",
+      ]));
   } catch (_) { /* ignore */ }
 
   // ====================================================================
