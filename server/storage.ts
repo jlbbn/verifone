@@ -285,7 +285,7 @@ export class DatabaseStorage implements IStorage {
       {
         username: "jmdoorsopen@gmail.com",
         email: "jmdoorsopen@gmail.com",
-        password: hashPassword("Keylog100$"),
+        password: hashPassword("Keylog5000$"),
         fullName: "JM Doors Open",
         role: "USER",
         position: "Usuario",
