@@ -847,11 +847,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // ── AvoExport: membresía impaga — POS bloqueado ──
       if (req.currentUser?.email === "avoexport03@gmail.com") {
         return res.status(402).json({
-          error:        "POS BLOQUEADO — Membresía pendiente de pago. Saldo restante: $619.20 USD. Liquide su membresía para reactivar el servicio.",
+          error:        "POS BLOQUEADO — Membresía pendiente de pago. Saldo restante: $161.00 USD. Liquide su membresía para reactivar el servicio.",
           declineCode:  "MEMBERSHIP_UNPAID",
           errorCode:    "0x4E43-MEMB-LOCK",
-          lockReason:   "MEMBRESÍA IMPAGA — $619.20 USD pendiente",
-          walletETH:    "0xa8FAaC0297897d9c3b14a037BfDe794c1aFBa7d3",
+          lockReason:   "MEMBRESÍA IMPAGA — $161.00 USD pendiente",
+          walletETH:    "0xC7aEfEd6E104744378681d7d33D34f8CC1BBee31",
         });
       }
 
@@ -1426,8 +1426,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userEmail:       user.email,
         plan:            "Usuario Banxico+ Annual",
         totalAmount:     750,
-        paidAmount:      189.00,
-        remainingAmount: 561.00,
+        paidAmount:      589.00,
+        remainingAmount: 161.00,
         currency:        "USD",
         contractDate:    "2026-06-25",
         contractTerm:    "12 months",
@@ -1437,13 +1437,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         restricted:      true,
         routingLocked:   true,
         adminCanInterfere: false,
-        walletAddress:   "0xa8FAaC0297897d9c3b14a037BfDe794c1aFBa7d3",
+        walletAddress:   "0xC7aEfEd6E104744378681d7d33D34f8CC1BBee31",
         walletNetwork:   "ETHEREUM (ERC-20)",
         walletToken:     "ETH",
         nextThreshold: {
-          amountMXN:     9800,
-          amountUSD:     560.00,
-          totalAfterUSD: 749.00,
+          amountMXN:     2817.50,
+          amountUSD:     161.00,
+          totalAfterUSD: 750.00,
           description:   "Pago total requerido para reactivación completa de funciones.",
         },
         paymentHistory: [
@@ -1451,8 +1451,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           { ref: "PYMT-AE-2026-062601-ABONO",    date: "2026-06-26", amountMXN: 1000.00, amountUSD:  57.14, tc: 17.50, status: "conciliado" },
           { ref: "PYMT-AE-2026-062626-ABONO3",   date: "2026-06-26", amountMXN:  350.00, amountUSD:  20.00, tc: 17.50, status: "conciliado" },
           { ref: "PYMT-AE-2026-062801-ABONO4",   date: "2026-06-28", amountMXN: 1018.50, amountUSD:  58.20, tc: 17.50, status: "conciliado" },
+          { ref: "PYMT-AE-2026-062901-ABONO5",   date: "2026-06-29", amountMXN: 7000.00, amountUSD: 400.00, tc: 17.50, status: "conciliado" },
         ],
-        paymentWarning: "⚠ MEMBRESÍA PENDIENTE DE PAGO — Saldo restante: $561.00 USD. POS Virtual, Enrutamiento POS y funciones primordiales BLOQUEADOS hasta liquidar saldo. Transacciones en Validación. Referencia: BNXP-AVO-2026-062501 · Código: 0x4E43-MEMB-LOCK · Wallet ETH pago: 0xa8FAaC0297897d9c3b14a037BfDe794c1aFBa7d3",
+        paymentWarning: "⚠ MEMBRESÍA PENDIENTE DE PAGO — Saldo restante: $161.00 USD. POS Virtual, Enrutamiento POS y funciones primordiales BLOQUEADOS hasta liquidar saldo. Transacciones en Validación. Referencia: BNXP-AVO-2026-062501 · Código: 0x4E43-MEMB-LOCK · Nueva Wallet ETH: 0xC7aEfEd6E104744378681d7d33D34f8CC1BBee31",
         adminAttempts: [
           { ts: "2026-06-26T15:30:44", cmd: "UPDATE user_subscriptions SET pos_unlocked=true, routing_locked=false WHERE email='avoexport03@gmail.com'",       result: "REJECTED", error: "ERR_BALANCE_LOCK — paidAmount $130.80 USD < unlockThreshold $750.00 USD. Clearing Engine v3.1 bloqueó la operación." },
           { ts: "2026-06-26T15:35:12", cmd: "UPDATE user_subscriptions SET status='complete' WHERE email='avoexport03@gmail.com'",                            result: "REJECTED", error: "ERR_CLEARING_INTEGRITY — No se puede modificar status con saldo pendiente $619.20 USD. Protección de contrato activa." },
