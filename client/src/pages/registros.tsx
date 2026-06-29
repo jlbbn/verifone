@@ -336,6 +336,7 @@ const STATUS_LABEL: Record<string, string> = {
   subscription_payment:  "Abono Suscripción",
   payment_method_error:  "Error Forma de Pago",
   en_validacion:         "En Validación",
+  cancelled:             "Cancelada",
 };
 
 const STATUS_COLOR: Record<string, string> = {
@@ -348,6 +349,7 @@ const STATUS_COLOR: Record<string, string> = {
   "Abono Suscripción":             "bg-slate-100 text-slate-600",
   "Error Forma de Pago":           "bg-rose-100 text-rose-700",
   "En Validación":                 "bg-amber-100 text-amber-700 animate-pulse",
+  "Cancelada":                     "bg-gray-100 text-gray-600",
 };
 
 const TYPE_COLOR: Record<string, string> = {
