@@ -262,6 +262,9 @@ interface SubData {
   walletNetwork?: string | null;
   walletToken?: string | null;
   marginPercentage?: number | null;
+  posLocked?: boolean;
+  restricted?: boolean;
+  paymentWarning?: string | null;
 }
 
 interface MarginParticipant {
@@ -283,10 +286,12 @@ export default function ExchangePage() {
     queryKey: ["/api/subscription"],
     enabled: !!user,
   });
-  const coldWallet  = subData?.walletAddress ?? null;
-  const coldNetwork = subData?.walletNetwork ?? "ETHEREUM (ERC-20)";
-  const coldToken   = subData?.walletToken   ?? "ETH";
-  const marginPct   = subData?.marginPercentage ?? null;
+  const coldWallet      = subData?.walletAddress ?? null;
+  const coldNetwork     = subData?.walletNetwork ?? "ETHEREUM (ERC-20)";
+  const coldToken       = subData?.walletToken   ?? "ETH";
+  const marginPct       = subData?.marginPercentage ?? null;
+  const subLocked       = !!(subData?.posLocked);
+  const subPayWarning   = subData?.paymentWarning ?? null;
 
   // Margen operacional global (visible para participantes y admin)
   const isMarginUser = marginPct !== null || user?.role === "ADMIN";
@@ -505,6 +510,42 @@ export default function ExchangePage() {
 
   return (
     <div className="p-4 md:p-6 pb-20 max-w-2xl mx-auto space-y-5">
+
+      {/* ── Aviso de suscripción suspendida (solo cuando posLocked) ── */}
+      {subLocked && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-4 space-y-2.5">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-md bg-amber-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <AlertTriangle className="w-4 h-4 text-amber-700" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-amber-900 text-sm">Membresía con saldo pendiente</p>
+              <p className="text-xs text-amber-800 mt-0.5 leading-relaxed">
+                Tu acceso a Exchange está activo para consulta de precios. Las operaciones de dispersión permanecen <strong>suspendidas</strong> hasta regularizar el contrato de suscripción.
+              </p>
+              {coldWallet && (
+                <div className="mt-2 bg-amber-100 border border-amber-200 rounded px-2.5 py-2 space-y-0.5">
+                  <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wider">Wallet registrada para dispersión</p>
+                  <p className="text-[11px] font-mono text-amber-900 break-all">{coldWallet}</p>
+                  <p className="text-[10px] text-amber-700">{coldNetwork} · {coldToken}</p>
+                </div>
+              )}
+              {subPayWarning && (
+                <p className="text-[10px] text-amber-900 font-mono mt-2 bg-amber-100 border border-amber-200 rounded px-2 py-1.5 leading-relaxed">
+                  {subPayWarning}
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button size="sm" variant="outline"
+              className="text-xs border-amber-400 text-amber-800 flex-shrink-0"
+              onClick={() => window.location.href = "/subscription"}>
+              Ver membresía
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* ── Exchange widget ─────────────────────────────────────────────── */}
       <Card className="border shadow-sm">
