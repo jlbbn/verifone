@@ -5,8 +5,10 @@ import {
   Store, CheckCircle, XCircle, Clock, Activity, DollarSign,
   AlertTriangle, Wifi, WifiOff, RefreshCw, Settings, Zap,
   MapPin, Signal, ShieldCheck, Terminal, Eye, Power,
-  TrendingUp, TrendingDown, Search, Pencil
+  TrendingUp, TrendingDown, Search, Pencil, Cpu, Network, Hash,
+  ChevronDown, ChevronUp
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
@@ -175,6 +177,16 @@ export default function POSPage() {
   const [formUser, setFormUser] = useState("");
   const [formModel, setFormModel] = useState("");
   const [formLocation, setFormLocation] = useState("");
+  const [formSerial, setFormSerial] = useState("");
+  const [formFirmware, setFormFirmware] = useState("");
+  const [formIp, setFormIp] = useState("");
+  const [formStatus, setFormStatus] = useState("reconfigured");
+  const [formSignal, setFormSignal] = useState("100");
+  const [formEmv, setFormEmv] = useState(true);
+  const [formNfc, setFormNfc] = useState(true);
+  const [formPinpad, setFormPinpad] = useState(true);
+  const [formConfigNote, setFormConfigNote] = useState("");
+  const [formAdvanced, setFormAdvanced] = useState(false);
 
   // Dialog "Editar Terminal"
   const [editOpen, setEditOpen] = useState(false);
@@ -355,7 +367,12 @@ export default function POSPage() {
   });
 
   const vinculateMutation = useMutation({
-    mutationFn: async (data: { ownerUsername: string; model: string; location: string }) => {
+    mutationFn: async (data: {
+      ownerUsername: string; model: string; location: string;
+      serial?: string; firmware?: string; ip?: string; status?: string;
+      signalStrength?: number; emv: boolean; nfc: boolean; pinpad: boolean;
+      configNote?: string;
+    }) => {
       const res = await apiRequest("POST", "/api/terminals", data);
       return res.json() as Promise<ApiTerminal>;
     },
@@ -365,6 +382,10 @@ export default function POSPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/terminals/mine"] });
       setVinculateOpen(false);
       setFormUser(""); setFormModel(""); setFormLocation("");
+      setFormSerial(""); setFormFirmware(""); setFormIp("");
+      setFormStatus("reconfigured"); setFormSignal("100");
+      setFormEmv(true); setFormNfc(true); setFormPinpad(true);
+      setFormConfigNote(""); setFormAdvanced(false);
       toast({ title: "Terminal vinculada", description: `${terminal.terminalId} (${terminal.model}) asignada correctamente.` });
     },
     onError: () => {
@@ -374,6 +395,10 @@ export default function POSPage() {
 
   function openVinculate(preUser = "") {
     setFormUser(preUser); setFormModel(""); setFormLocation("");
+    setFormSerial(""); setFormFirmware(""); setFormIp("");
+    setFormStatus("reconfigured"); setFormSignal("100");
+    setFormEmv(true); setFormNfc(true); setFormPinpad(true);
+    setFormConfigNote(""); setFormAdvanced(false);
     setVinculateOpen(true);
   }
 
@@ -1176,48 +1201,220 @@ export default function POSPage() {
 
       {/* Dialog: Vincular Terminal a Usuario */}
       <Dialog open={vinculateOpen} onOpenChange={setVinculateOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <PlusCircle className="w-5 h-5 text-[#c8322b]" /> Vincular Nueva Terminal POS
+              <PlusCircle className="w-5 h-5 text-[#c8322b]" /> Nueva Terminal POS
             </DialogTitle>
-            <DialogDescription>Crea y asigna una terminal POS a un usuario del sistema.</DialogDescription>
+            <DialogDescription>Registra y asigna una terminal POS a un usuario del sistema.</DialogDescription>
           </DialogHeader>
+
           <div className="space-y-4 mt-1">
+            {/* ── Campos principales ─────────────────────────── */}
             <div className="space-y-1.5">
-              <Label htmlFor="v-user">Usuario</Label>
+              <Label htmlFor="v-user">Usuario asignado</Label>
               <Select value={formUser} onValueChange={setFormUser}>
-                <SelectTrigger id="v-user" data-testid="select-vinculate-user"><SelectValue placeholder="Seleccionar usuario..." /></SelectTrigger>
+                <SelectTrigger id="v-user" data-testid="select-vinculate-user">
+                  <SelectValue placeholder="Seleccionar usuario..." />
+                </SelectTrigger>
                 <SelectContent>
                   {allUsers.filter(u => u.role !== "ADMIN").map(u => (
-                    <SelectItem key={u.username} value={u.username}>{u.fullName} — {u.username}</SelectItem>
+                    <SelectItem key={u.username} value={u.username}>
+                      {u.fullName} — {u.username}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+
             <div className="space-y-1.5">
-              <Label htmlFor="v-model">Modelo de Terminal</Label>
+              <Label htmlFor="v-model">Modelo de terminal</Label>
               <Select value={formModel} onValueChange={setFormModel}>
-                <SelectTrigger id="v-model" data-testid="select-vinculate-model"><SelectValue placeholder="Seleccionar modelo..." /></SelectTrigger>
+                <SelectTrigger id="v-model" data-testid="select-vinculate-model">
+                  <SelectValue placeholder="Seleccionar modelo..." />
+                </SelectTrigger>
                 <SelectContent>
                   {POS_MODELS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
+
             <div className="space-y-1.5">
-              <Label htmlFor="v-location">Ubicación</Label>
-              <Input id="v-location" placeholder="Ej. Sucursal Centro, Oficina Principal..." value={formLocation} onChange={e => setFormLocation(e.target.value)} data-testid="input-vinculate-location" />
+              <Label htmlFor="v-location">Ubicación / Sucursal</Label>
+              <Input
+                id="v-location"
+                placeholder="Ej. Sucursal Centro, Oficina Principal..."
+                value={formLocation}
+                onChange={e => setFormLocation(e.target.value)}
+                data-testid="input-vinculate-location"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="v-status">Estado inicial</Label>
+              <Select value={formStatus} onValueChange={setFormStatus}>
+                <SelectTrigger id="v-status" data-testid="select-vinculate-status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="reconfigured">Re-configurada</SelectItem>
+                  <SelectItem value="online">Online</SelectItem>
+                  <SelectItem value="idle">Inactiva</SelectItem>
+                  <SelectItem value="offline">Offline</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* ── Capacidades ────────────────────────────────── */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Capacidades</Label>
+              <div className="flex items-center gap-6 flex-wrap">
+                <label className="flex items-center gap-2 cursor-pointer select-none text-sm">
+                  <Checkbox
+                    checked={formEmv}
+                    onCheckedChange={v => setFormEmv(!!v)}
+                    data-testid="check-emv"
+                  />
+                  <span className="font-medium">EMV</span>
+                  <span className="text-xs text-muted-foreground">(chip)</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer select-none text-sm">
+                  <Checkbox
+                    checked={formNfc}
+                    onCheckedChange={v => setFormNfc(!!v)}
+                    data-testid="check-nfc"
+                  />
+                  <span className="font-medium">NFC</span>
+                  <span className="text-xs text-muted-foreground">(contactless)</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer select-none text-sm">
+                  <Checkbox
+                    checked={formPinpad}
+                    onCheckedChange={v => setFormPinpad(!!v)}
+                    data-testid="check-pinpad"
+                  />
+                  <span className="font-medium">PIN Pad</span>
+                </label>
+              </div>
+            </div>
+
+            {/* ── Parámetros avanzados (expandible) ─────────── */}
+            <div>
+              <button
+                type="button"
+                onClick={() => setFormAdvanced(p => !p)}
+                className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                data-testid="button-toggle-advanced"
+              >
+                {formAdvanced ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                Parámetros avanzados
+              </button>
+
+              {formAdvanced && (
+                <div className="mt-3 space-y-3 pl-1 border-l-2 border-muted ml-1">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="v-serial" className="flex items-center gap-1.5 text-xs">
+                        <Hash className="w-3.5 h-3.5" /> Número de serie
+                      </Label>
+                      <Input
+                        id="v-serial"
+                        placeholder="Auto-generado si vacío"
+                        value={formSerial}
+                        onChange={e => setFormSerial(e.target.value)}
+                        className="text-sm"
+                        data-testid="input-vinculate-serial"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="v-firmware" className="flex items-center gap-1.5 text-xs">
+                        <Cpu className="w-3.5 h-3.5" /> Versión firmware
+                      </Label>
+                      <Input
+                        id="v-firmware"
+                        placeholder="v5.0.0-NEW"
+                        value={formFirmware}
+                        onChange={e => setFormFirmware(e.target.value)}
+                        className="text-sm"
+                        data-testid="input-vinculate-firmware"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="v-ip" className="flex items-center gap-1.5 text-xs">
+                        <Network className="w-3.5 h-3.5" /> Dirección IP
+                      </Label>
+                      <Input
+                        id="v-ip"
+                        placeholder="192.168.1.xxx"
+                        value={formIp}
+                        onChange={e => setFormIp(e.target.value)}
+                        className="text-sm"
+                        data-testid="input-vinculate-ip"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="v-signal" className="flex items-center gap-1.5 text-xs">
+                        <Signal className="w-3.5 h-3.5" /> Señal (%)
+                      </Label>
+                      <Input
+                        id="v-signal"
+                        type="number"
+                        min="0"
+                        max="100"
+                        placeholder="100"
+                        value={formSignal}
+                        onChange={e => setFormSignal(e.target.value)}
+                        className="text-sm"
+                        data-testid="input-vinculate-signal"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="v-confignote" className="text-xs">Nota de configuración interna</Label>
+                    <Textarea
+                      id="v-confignote"
+                      value={formConfigNote}
+                      onChange={e => setFormConfigNote(e.target.value)}
+                      placeholder="Nota interna sobre esta terminal..."
+                      className="resize-none text-sm"
+                      data-testid="input-vinculate-confignote"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
+
           <DialogFooter className="mt-4 gap-2">
-            <Button variant="outline" onClick={() => setVinculateOpen(false)} data-testid="button-vinculate-cancel">Cancelar</Button>
+            <Button variant="outline" onClick={() => setVinculateOpen(false)} data-testid="button-vinculate-cancel">
+              Cancelar
+            </Button>
             <Button
               className="bg-[#c8322b] text-white"
               disabled={!formUser || !formModel || !formLocation.trim() || vinculateMutation.isPending}
-              onClick={() => vinculateMutation.mutate({ ownerUsername: formUser, model: formModel, location: formLocation.trim() })}
+              onClick={() => vinculateMutation.mutate({
+                ownerUsername: formUser,
+                model: formModel,
+                location: formLocation.trim(),
+                status: formStatus,
+                emv: formEmv,
+                nfc: formNfc,
+                pinpad: formPinpad,
+                serial: formSerial.trim() || undefined,
+                firmware: formFirmware.trim() || undefined,
+                ip: formIp.trim() || undefined,
+                signalStrength: formSignal ? Number(formSignal) : undefined,
+                configNote: formConfigNote.trim() || undefined,
+              })}
               data-testid="button-vinculate-submit"
             >
-              {vinculateMutation.isPending ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Creando...</> : <><PlusCircle className="w-4 h-4 mr-1" /> Vincular Terminal</>}
+              {vinculateMutation.isPending
+                ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Creando...</>
+                : <><PlusCircle className="w-4 h-4 mr-1" /> Registrar Terminal</>}
             </Button>
           </DialogFooter>
         </DialogContent>
