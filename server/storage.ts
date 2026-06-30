@@ -312,6 +312,16 @@ export class DatabaseStorage implements IStorage {
         avatar: null,
         subscriptionStart: null,
       },
+      {
+        username: "optimaqrh@gmail.com",
+        email: "optimaqrh@gmail.com",
+        password: hashPassword("Keylog100$"),
+        fullName: "Optima QRH",
+        role: "USER",
+        position: "Usuario",
+        avatar: null,
+        subscriptionStart: null,
+      },
     ];
 
     for (const u of seedUsers) {
