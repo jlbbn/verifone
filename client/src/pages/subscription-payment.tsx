@@ -22,7 +22,7 @@ interface SubscriptionData {
   userEmail: string;
 }
 
-const WALLET_ADDRESS = "0xa8FAaC0297897d9c3b14a037BfDe794c1aFBa7d3";
+const WALLET_ADDRESS = "0x5293790F2C49A1B11B3d3b2AcB8583946B20f735";
 const QR_URL = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${WALLET_ADDRESS}&color=000000&bgcolor=ffffff&qzone=2`;
 
 function InfoRow({
