@@ -232,7 +232,7 @@ export type InsertDocument = z.infer<typeof insertDocumentSchema>;
 
 export type PosTerminal = typeof posTerminals.$inferSelect;
 
-// InsertPosTerminal: sólo los campos que el admin proporciona al crear una terminal
+// InsertPosTerminal: campos que el admin puede proporcionar al crear una terminal
 export interface InsertPosTerminal {
   model: string;
   location: string;
@@ -240,6 +240,13 @@ export interface InsertPosTerminal {
   emv?: boolean;
   nfc?: boolean;
   pinpad?: boolean;
+  serial?: string;
+  firmware?: string;
+  ip?: string;
+  status?: string;
+  signalStrength?: number;
+  configNote?: string;
+  brand?: string;
 }
 
 // ─── System Settings ─────────────────────────────────────────────────────────

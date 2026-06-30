@@ -429,13 +429,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         emv: z.boolean().optional().default(true),
         nfc: z.boolean().optional().default(true),
         pinpad: z.boolean().optional().default(true),
+        serial: z.string().optional(),
+        firmware: z.string().optional(),
+        ip: z.string().optional(),
+        status: z.enum(["online", "offline", "idle", "reconfigured", "Online", "Offline", "Idle", "Reconfigured"]).optional(),
+        signalStrength: z.number().min(0).max(100).optional(),
+        configNote: z.string().optional(),
       });
       const parsed = bodySchema.safeParse(req.body);
       if (!parsed.success) {
         res.status(400).json({ error: "Datos inválidos", details: parsed.error.issues });
         return;
       }
-      const { ownerUsername, model, location, emv, nfc, pinpad } = parsed.data;
+      const { ownerUsername, model, location, emv, nfc, pinpad, serial, firmware, ip, status, signalStrength, configNote } = parsed.data;
 
       const targetUser = await storage.getUserByUsername(ownerUsername);
       if (!targetUser) {
@@ -443,7 +449,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
 
-      const terminal = await storage.createTerminal({ model, location, owner: ownerUsername, emv, nfc, pinpad });
+      const statusMap: Record<string, string> = {
+        online: "Online", offline: "Offline", idle: "Idle", reconfigured: "Reconfigured",
+        Online: "Online", Offline: "Offline", Idle: "Idle", Reconfigured: "Reconfigured",
+      };
+
+      const terminal = await storage.createTerminal({
+        model, location, owner: ownerUsername, emv, nfc, pinpad,
+        serial, firmware, ip,
+        status: status ? (statusMap[status] ?? "Reconfigured") : "Reconfigured",
+        signalStrength, configNote,
+      });
 
       // Auto-resolver cualquier solicitud POS pendiente de ese usuario
       await storage.resolvePendingPosRequest(ownerUsername);
