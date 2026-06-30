@@ -1060,10 +1060,10 @@ export default function POSVirtualPage() {
               </div>
               <div>
                 <p className="font-bold text-red-800 text-sm">
-                  {user?.fullName} — Suscripción con pago pendiente
+                  {user?.fullName} — Membresía con saldo pendiente
                 </p>
                 <p className="text-xs text-red-700 mt-1 leading-relaxed">
-                  Tu terminal POS física y el <strong>Enrutamiento POS</strong> están desactivados. Sin enrutamiento activo, las transacciones que digites aquí <strong>no tendrán efecto real ni procesamiento concreto.</strong>
+                  Tu membresía tiene un saldo pendiente de liquidación. El POS Virtual está disponible para captura de datos, pero el procesamiento real de transacciones permanece <strong>suspendido</strong> hasta regularizar el contrato.
                 </p>
                 {paymentWarning && (
                   <p className="text-[10px] text-red-800 font-mono mt-2 bg-red-100 rounded px-2 py-1.5 border border-red-200 leading-relaxed">
@@ -1077,36 +1077,14 @@ export default function POSVirtualPage() {
             </button>
           </div>
 
-          {/* Explicación conceptual */}
-          <div className="grid grid-cols-2 gap-3 text-xs">
-            <div className="rounded-md bg-white border border-red-200 px-3 py-2.5 space-y-1">
-              <div className="flex items-center gap-1.5 font-semibold text-gray-700">
-                <MonitorSmartphone className="w-3.5 h-3.5 text-gray-500" />
-                POS Virtual — Digitaliza
-              </div>
-              <p className="text-gray-500 leading-relaxed">
-                Captura y registra los datos de la transacción. <strong>Disponible</strong>, pero sin enrutamiento, su registro queda en espera.
-              </p>
-            </div>
-            <div className="rounded-md bg-red-100 border border-red-300 px-3 py-2.5 space-y-1">
-              <div className="flex items-center gap-1.5 font-semibold text-red-800">
-                <Router className="w-3.5 h-3.5 text-red-600" />
-                Enrutamiento POS — Ejecuta
-              </div>
-              <p className="text-red-700 leading-relaxed">
-                Es quien efectúa el procesamiento real con la red bancaria. <strong>Inactivo</strong> hasta regularizar la suscripción.
-              </p>
-            </div>
-          </div>
-
           <div className="flex items-center justify-between pt-1">
             <p className="text-[11px] text-red-600">
-              Regulariza tu suscripción para reactivar el enrutamiento y el procesamiento real de pagos.
+              Regulariza tu membresía para reactivar el procesamiento completo de pagos.
             </p>
             <Button size="sm" variant="outline"
-              className="text-xs border-red-400 text-red-700 hover:bg-red-100 flex-shrink-0 ml-3"
+              className="text-xs border-red-400 text-red-700 flex-shrink-0 ml-3"
               onClick={() => window.location.href = "/subscription"}>
-              Ver suscripción
+              Ver membresía
             </Button>
           </div>
         </div>
