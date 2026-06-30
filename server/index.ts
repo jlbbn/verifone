@@ -4,6 +4,8 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
 import { storage } from "./storage";
+import { db } from "./db";
+import { sql } from "drizzle-orm";
 
 const app = express();
 
@@ -78,6 +80,12 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // ── DB migration: add permission columns before seed ─────────────────────
+  try {
+    await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS payment_engine_access boolean NOT NULL DEFAULT false`);
+    await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS pos_full_access boolean NOT NULL DEFAULT false`);
+  } catch (_) { /* ignore */ }
+
   await storage.initialize();
   await setupAuth(app);
   registerAuthRoutes(app);

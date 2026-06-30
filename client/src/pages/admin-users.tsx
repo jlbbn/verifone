@@ -12,8 +12,10 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   Users, UserPlus, Search, Calendar, Terminal, Shield,
-  User, Loader2, CheckCircle, RefreshCw, Mail, Ban, Unlock
+  User, Loader2, CheckCircle, RefreshCw, Mail, Ban, Unlock,
+  CreditCard, Monitor
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 interface UserRecord {
   id: string;
@@ -23,6 +25,8 @@ interface UserRecord {
   role: "ADMIN" | "USER";
   subscriptionStart: string | null;
   suspended: boolean;
+  paymentEngineAccess: boolean;
+  posFullAccess: boolean;
 }
 
 interface TerminalRecord {
@@ -82,6 +86,18 @@ export default function AdminUsuariosPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       toast({ title: vars.suspended ? "Usuario suspendido" : "Acceso restaurado" });
     },
+    onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const permissionsMutation = useMutation({
+    mutationFn: async ({ id, paymentEngineAccess, posFullAccess }: {
+      id: string; paymentEngineAccess?: boolean; posFullAccess?: boolean;
+    }) => {
+      const res = await apiRequest("PATCH", `/api/admin/user-permissions/${id}`, { paymentEngineAccess, posFullAccess });
+      if (!res.ok) { const b = await res.json(); throw new Error(b.error ?? "Error"); }
+      return res.json();
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/users"] }); },
     onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
 
@@ -325,6 +341,32 @@ export default function AdminUsuariosPage() {
                             : <><Ban className="w-3 h-3" /> Suspender</>
                           }
                         </Button>
+                      )}
+                      {u.role !== "ADMIN" && (
+                        <div className="flex flex-col gap-1.5 mt-1 pt-2 border-t border-border w-full">
+                          <label className="flex items-center justify-between gap-2 text-xs cursor-pointer">
+                            <span className="flex items-center gap-1 text-muted-foreground">
+                              <CreditCard className="w-3 h-3" /> Motor Pagos
+                            </span>
+                            <Switch
+                              checked={!!u.paymentEngineAccess}
+                              onCheckedChange={(v) => permissionsMutation.mutate({ id: u.id, paymentEngineAccess: v })}
+                              disabled={permissionsMutation.isPending}
+                              data-testid={`switch-payment-engine-${u.id}`}
+                            />
+                          </label>
+                          <label className="flex items-center justify-between gap-2 text-xs cursor-pointer">
+                            <span className="flex items-center gap-1 text-muted-foreground">
+                              <Monitor className="w-3 h-3" /> POS Virtual
+                            </span>
+                            <Switch
+                              checked={!!u.posFullAccess}
+                              onCheckedChange={(v) => permissionsMutation.mutate({ id: u.id, posFullAccess: v })}
+                              disabled={permissionsMutation.isPending}
+                              data-testid={`switch-pos-${u.id}`}
+                            />
+                          </label>
+                        </div>
                       )}
                     </div>
                   </div>
