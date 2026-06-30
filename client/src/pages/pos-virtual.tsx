@@ -846,6 +846,12 @@ export default function POSVirtualPage() {
   const posLocked = !!(subData?.posLocked);
   const paymentWarning = subData?.paymentWarning;
   const [showSubAlert, setShowSubAlert] = useState(true);
+
+  const { data: userPerms } = useQuery<{ paymentEngineAccess: boolean; posFullAccess: boolean }>({
+    queryKey: ["/api/user/permissions"],
+    enabled: !!user,
+  });
+  const posFullAccess = user?.role === "ADMIN" ? true : !!(userPerms?.posFullAccess);
   // Reset alert every time the page mounts so Patricio sees it on every visit
   useEffect(() => { setShowSubAlert(true); }, []);
 
@@ -1049,6 +1055,25 @@ export default function POSVirtualPage() {
           )}
         </div>
       </div>
+
+      {/* ── Acceso no autorizado al POS Virtual ── */}
+      {!posLocked && !posFullAccess && userPerms !== undefined && user?.role !== "ADMIN" && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-6 py-8 text-center space-y-4">
+          <div className="w-14 h-14 rounded-full bg-amber-100 flex items-center justify-center mx-auto">
+            <Lock className="w-7 h-7 text-amber-600" />
+          </div>
+          <div>
+            <h3 className="font-bold text-amber-900 text-lg">Acceso no autorizado</h3>
+            <p className="text-sm text-amber-700 mt-1 max-w-sm mx-auto">
+              Tu cuenta no tiene acceso al POS Virtual. Contacta al administrador del sistema para que active tu acceso al terminal.
+            </p>
+          </div>
+          <div className="inline-flex items-center gap-2 bg-amber-100 border border-amber-200 rounded-md px-4 py-2 text-xs font-mono text-amber-800">
+            <ShieldCheck className="w-3.5 h-3.5" />
+            ERR_POS_PERM_001 — Permiso no otorgado
+          </div>
+        </div>
+      )}
 
       {/* ── Aviso de suscripción pendiente (solo cuando posLocked) ── */}
       {posLocked && showSubAlert && (

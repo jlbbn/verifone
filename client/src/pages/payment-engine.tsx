@@ -27,8 +27,9 @@ type ChargeRecord = {
   description: string;
   cardLast4?: string;
   cardBrand?: string;
-  receiptUrl?: string;
+  receiptUrl?: string | null;
   createdAt: string;
+  createdBy?: string;
 };
 
 const CURRENCIES = [
@@ -88,6 +89,11 @@ export default function PaymentEnginePage() {
     queryKey: ["/api/stripe/config"],
   });
 
+  const { data: perms } = useQuery<{ paymentEngineAccess: boolean; posFullAccess: boolean }>({
+    queryKey: ["/api/user/permissions"],
+    enabled: !!user,
+  });
+
   const chargeMutation = useMutation({
     mutationFn: async (body: object) => {
       const res = await apiRequest("POST", "/api/payment-engine/charge", body);
@@ -135,6 +141,33 @@ export default function PaymentEnginePage() {
     .filter(c => c.status === "succeeded" || c.status === "approved" || c.status === "in_process")
     .reduce((s, c) => s + c.amount, 0);
 
+  // ── Access gate for non-admin users ─────────────────────────────────────
+  if (user?.role !== "ADMIN" && perms !== undefined && !perms.paymentEngineAccess) {
+    return (
+      <div className="max-w-5xl mx-auto p-4 md:p-6">
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-6 py-12 text-center space-y-4">
+          <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mx-auto">
+            <Lock className="w-8 h-8 text-amber-600" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Zap className="w-5 h-5 text-[#c8322b]" />
+              <h1 className="text-xl font-bold">Visa Quantum 9.0 — Payment Engine</h1>
+            </div>
+            <h3 className="font-bold text-amber-900 text-lg mt-2">Acceso no autorizado</h3>
+            <p className="text-sm text-amber-700 mt-2 max-w-md mx-auto">
+              Tu cuenta no tiene acceso al Motor de Pagos. Contacta al administrador del sistema para que active tu permiso.
+            </p>
+          </div>
+          <div className="inline-flex items-center gap-2 bg-amber-100 border border-amber-200 rounded-md px-4 py-2 text-xs font-mono text-amber-800">
+            <Shield className="w-3.5 h-3.5" />
+            PAYMENT_ENGINE_ACCESS_DENIED — ERR_PE_PERM_001
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-5">
 
@@ -169,7 +202,7 @@ export default function PaymentEnginePage() {
       </div>
 
       {/* ── Stats ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card><CardContent className="px-4 py-3">
           <p className="text-xs text-muted-foreground">Total Charges</p>
           <p className="text-2xl font-bold">{charges.length}</p>
@@ -183,8 +216,10 @@ export default function PaymentEnginePage() {
           <p className="text-2xl font-bold text-[#635bff]">{charges.filter(c => c.processor === "stripe").length}</p>
         </CardContent></Card>
         <Card><CardContent className="px-4 py-3">
-          <p className="text-xs text-muted-foreground">Mercado Pago</p>
-          <p className="text-2xl font-bold text-[#00b1ea]">{charges.filter(c => c.processor === "mercadopago").length}</p>
+          <p className="text-xs text-muted-foreground">Volumen Total</p>
+          <p className="text-lg font-bold text-[#c8322b] leading-tight mt-0.5">
+            {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(totalVolume)}
+          </p>
         </CardContent></Card>
       </div>
 
@@ -445,6 +480,12 @@ export default function PaymentEnginePage() {
                             <span>{c.cardBrand ? `${c.cardBrand} ····${c.cardLast4}` : "—"}</span>
                             <span className="text-muted-foreground">Date</span>
                             <span>{fmtDate(c.createdAt)}</span>
+                            {user?.role === "ADMIN" && c.createdBy && (
+                              <>
+                                <span className="text-muted-foreground">Creado por</span>
+                                <span className="font-mono text-[10px] truncate">{c.createdBy}</span>
+                              </>
+                            )}
                           </div>
                           {c.receiptUrl && (
                             <a

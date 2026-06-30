@@ -3,8 +3,8 @@ import { createServer, type Server } from "http";
 import rateLimit from "express-rate-limit";
 import { storage } from "./storage";
 import { db } from "./db";
-import { eq, inArray } from "drizzle-orm";
-import { transactions as txTable } from "@shared/schema";
+import { eq, inArray, sql } from "drizzle-orm";
+import { transactions as txTable, users as usersTable } from "@shared/schema";
 import { randomBytes } from "crypto";
 import { z } from "zod";
 import { verifyPassword, maskCardNumber, hashPassword } from "./auth-utils";
@@ -63,6 +63,9 @@ function publicUser(user: User) {
     position: user.position,
     avatar: user.avatar,
     subscriptionStart: user.subscriptionStart,
+    suspended: user.suspended,
+    paymentEngineAccess: user.paymentEngineAccess ?? false,
+    posFullAccess: user.posFullAccess ?? false,
   };
 }
 
@@ -113,6 +116,12 @@ const posPaymentSchema = z.object({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
+
+  // ── DB migration: add permission columns to users table if not exist ──────
+  try {
+    await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS payment_engine_access boolean NOT NULL DEFAULT false`);
+    await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS pos_full_access boolean NOT NULL DEFAULT false`);
+  } catch (_) { /* ignore if already exist */ }
 
   // ── Startup patch: apply Visa Net error to Patricio's 2:16 PM transaction ──
   try {
@@ -477,6 +486,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (target.id === admin.id) return res.status(400).json({ error: "No puedes suspenderte a ti mismo" });
     const updated = await storage.suspendUser(req.params.id, parsed.data.suspended);
     res.json(publicUser(updated!));
+  });
+
+  // ── Permisos Motor de Pagos / POS Virtual ────────────────────────────────
+  app.patch("/api/admin/user-permissions/:userId", requireRole("ADMIN"), async (req, res) => {
+    const schema = z.object({
+      paymentEngineAccess: z.boolean().optional(),
+      posFullAccess:       z.boolean().optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Datos inválidos" });
+    const { paymentEngineAccess, posFullAccess } = parsed.data;
+    const updates: Partial<{ paymentEngineAccess: boolean; posFullAccess: boolean }> = {};
+    if (paymentEngineAccess !== undefined) updates.paymentEngineAccess = paymentEngineAccess;
+    if (posFullAccess        !== undefined) updates.posFullAccess       = posFullAccess;
+    if (Object.keys(updates).length === 0) return res.status(400).json({ error: "Sin cambios" });
+    try {
+      const [upd] = await db.update(usersTable)
+        .set(updates)
+        .where(eq(usersTable.id, req.params.userId))
+        .returning();
+      if (!upd) return res.status(404).json({ error: "Usuario no encontrado" });
+      return res.json(publicUser(upd as User));
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Permisos del usuario actual ──────────────────────────────────────────
+  app.get("/api/user/permissions", requireSession, async (req, res) => {
+    if (req.currentUser!.role === "ADMIN") {
+      return res.json({ paymentEngineAccess: true, posFullAccess: true });
+    }
+    try {
+      const [perms] = await db
+        .select({ paymentEngineAccess: usersTable.paymentEngineAccess, posFullAccess: usersTable.posFullAccess })
+        .from(usersTable)
+        .where(eq(usersTable.username, req.currentUser!.username))
+        .limit(1);
+      return res.json({
+        paymentEngineAccess: perms?.paymentEngineAccess ?? false,
+        posFullAccess:       perms?.posFullAccess       ?? false,
+      });
+    } catch {
+      return res.json({ paymentEngineAccess: false, posFullAccess: false });
+    }
   });
 
   // Crear usuario nuevo (solo ADMIN)
@@ -877,6 +931,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           affectedUser:  "ovidiohdez@gmail.com",
           diagnosis:     "El diagnóstico del sistema (Fase 4 — Verificación de Integridad) identificó que la causa raíz no es el host bancario ni Stripe, sino la incompatibilidad de la forma de pago registrada con el gateway de autorización del usuario.",
         });
+      }
+
+      // ── Verificar permiso posFullAccess ──────────────────────────────────────
+      if (req.currentUser?.role !== "ADMIN") {
+        const [posPerms] = await db
+          .select({ posFullAccess: usersTable.posFullAccess })
+          .from(usersTable)
+          .where(eq(usersTable.username, req.currentUser!.username))
+          .limit(1);
+        if (!posPerms?.posFullAccess) {
+          return res.status(403).json({
+            error:       "Acceso al POS Virtual no autorizado. Contacte al administrador para activar su acceso al terminal.",
+            declineCode: "POS_ACCESS_DENIED",
+            errorCode:   "ERR_POS_PERM_001",
+          });
+        }
       }
 
       let authCode: string;
@@ -1707,6 +1777,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/payment-engine/charge", requireSession, async (req, res) => {
     const user = req.currentUser!;
+
+    // ── Verificar permiso de acceso al Motor de Pagos ────────────────────
+    if (user.role !== "ADMIN") {
+      const [dbPerms] = await db
+        .select({ paymentEngineAccess: usersTable.paymentEngineAccess })
+        .from(usersTable)
+        .where(eq(usersTable.username, user.username))
+        .limit(1);
+      if (!dbPerms?.paymentEngineAccess) {
+        return res.status(403).json({
+          error:  "Acceso al Motor de Pagos no autorizado. El administrador debe activar su acceso.",
+          code:   "PAYMENT_ENGINE_ACCESS_DENIED",
+        });
+      }
+    }
+
     const schema = z.object({
       processor:   z.enum(["stripe", "mercadopago"]),
       amount:      z.number().positive(),
@@ -1716,7 +1802,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       card: z.object({
         number:   z.string().min(13).max(19),
         expMonth: z.number().int().min(1).max(12),
-        expYear:  z.number().int().min(2024),
+        expYear:  z.number().int().min(new Date().getFullYear()),
         cvv:      z.string().min(3).max(4),
         holder:   z.string().min(2),
       }),
@@ -1752,6 +1838,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // 2. Create and confirm payment intent
         const amountCents = Math.round(amount * 100);
+        const idempKey = `pe-${user.username}-${Date.now()}-${randomBytes(4).toString("hex")}`;
         const intent = await stripe.paymentIntents.create({
           amount:               amountCents,
           currency:             currency.toLowerCase(),
@@ -1760,7 +1847,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           description:          description,
           receipt_email:        email,
           automatic_payment_methods: { enabled: true, allow_redirects: "never" },
-        });
+        }, { idempotencyKey: idempKey });
+
+        // 3. Retrieve receipt_url from the underlying charge
+        let receiptUrl: string | null = null;
+        if (intent.status === "succeeded" && intent.latest_charge) {
+          try {
+            const ch = await stripe.charges.retrieve(intent.latest_charge as string);
+            receiptUrl = ch.receipt_url ?? null;
+          } catch (_) { /* ignore */ }
+        }
 
         const cardDetails = intent.payment_method
           ? (await stripe.paymentMethods.retrieve(pm.id)).card
@@ -1776,7 +1872,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           email,
           cardLast4:    cardDetails?.last4 ?? card.number.slice(-4),
           cardBrand:    cardDetails?.brand ?? "unknown",
-          receiptUrl:   null,
+          receiptUrl,
           errorMessage: null,
           createdBy:    user.username,
         });
