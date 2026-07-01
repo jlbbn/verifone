@@ -55,6 +55,11 @@ interface SubscriptionData {
   disputeBlock?: string;
   disputeRef?: string;
   disputeDate?: string;
+  diagnosticPatch?: boolean;
+  diagnosticPatchActive?: boolean;
+  diagnosticPatchThreshold?: number;
+  diagnosticPatchPct?: number;
+  diagnosticPatchMessage?: string;
   paymentHistory?: PaymentHistoryEntry[];
   nextThreshold?: NextThreshold;
   maintenanceCode?: string;
@@ -480,6 +485,79 @@ export default function SubscriptionPage() {
                 ADMIN OVERRIDE DENEGADO
               </Badge>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Parche de seguridad — ventana de diagnóstico ── */}
+      {sub.diagnosticPatch && (
+        <Card className={sub.diagnosticPatchActive
+          ? "border-green-500 bg-green-50"
+          : "border-amber-400 bg-amber-50"}>
+          <CardContent className="py-3 px-4 space-y-2">
+
+            {/* Header */}
+            <div className="flex items-start justify-between gap-2 flex-wrap">
+              <div className="flex items-start gap-2">
+                <Wrench className={`w-4 h-4 flex-shrink-0 mt-0.5 ${sub.diagnosticPatchActive ? "text-green-600" : "text-amber-600"}`} />
+                <p className={`text-xs font-bold uppercase tracking-wide ${sub.diagnosticPatchActive ? "text-green-800" : "text-amber-800"}`}>
+                  Parche de Seguridad — Ventana de Diagnóstico
+                </p>
+              </div>
+              <Badge className={sub.diagnosticPatchActive
+                ? "bg-green-100 text-green-800 border-green-300 no-default-active-elevate text-[9px]"
+                : "bg-amber-100 text-amber-800 border-amber-300 no-default-active-elevate text-[9px]"}>
+                {sub.diagnosticPatchActive ? "ACTIVO" : "EN ESPERA"}
+              </Badge>
+            </div>
+
+            {/* Mensaje del parche */}
+            <p className={`text-xs leading-relaxed font-mono rounded px-3 py-2 border ${
+              sub.diagnosticPatchActive
+                ? "text-green-700 bg-green-100 border-green-200"
+                : "text-amber-700 bg-amber-100 border-amber-200"
+            }`}>
+              {sub.diagnosticPatchMessage}
+            </p>
+
+            {/* Barra de progreso hacia el umbral */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-[10px] font-mono">
+                <span className="text-muted-foreground">Progreso hacia ventana de diagnóstico</span>
+                <span className={`font-bold ${sub.diagnosticPatchActive ? "text-green-700" : "text-amber-700"}`}>
+                  {((sub.paidAmount / (sub.diagnosticPatchThreshold ?? 375)) * 100).toFixed(1)}% de umbral (50%)
+                </span>
+              </div>
+              <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+                <div
+                  className={`h-1.5 rounded-full transition-all ${sub.diagnosticPatchActive ? "bg-green-500" : "bg-amber-400"}`}
+                  style={{ width: `${Math.min(100, (sub.paidAmount / (sub.diagnosticPatchThreshold ?? 375)) * 100)}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-[9px] text-muted-foreground font-mono">
+                <span>${sub.paidAmount.toFixed(2)} USD pagado</span>
+                <span className="text-amber-600 font-semibold">Umbral: ${sub.diagnosticPatchThreshold?.toFixed(2)} USD ({sub.diagnosticPatchPct}%)</span>
+                <span>$750.00 USD (total)</span>
+              </div>
+            </div>
+
+            {/* Falta / Estado */}
+            {!sub.diagnosticPatchActive && (
+              <div className="flex items-center gap-1.5 text-[10px] text-amber-600 font-mono pt-0.5">
+                <Clock className="w-3 h-3" />
+                <span>
+                  Faltan <span className="font-bold">${((sub.diagnosticPatchThreshold ?? 375) - sub.paidAmount).toFixed(2)} USD</span>
+                  {" "}(~${(((sub.diagnosticPatchThreshold ?? 375) - sub.paidAmount) * 17.50).toLocaleString("es-MX", { minimumFractionDigits: 2 })} MXN a TC 17.50) para activar la ventana.
+                </span>
+              </div>
+            )}
+            {sub.diagnosticPatchActive && (
+              <div className="flex items-center gap-1.5 text-[10px] text-green-600 font-mono pt-0.5">
+                <CheckCircle className="w-3 h-3" />
+                <span>Ventana de diagnóstico activa. El administrador puede asignar terminal POS en modo restringido.</span>
+              </div>
+            )}
+
           </CardContent>
         </Card>
       )}
