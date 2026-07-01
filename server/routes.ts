@@ -1334,6 +1334,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const failRate = recentTx.length > 0 ? recentFailed / recentTx.length : 0;
       const terminals = await storage.getAllTerminals();
       const activeTerminals = terminals.filter(t => t.status === "Online" || t.status === "Reconfigured" || t.status === "Configured").length;
+      const { getStripeMode } = await import("./stripeClient");
+      const stripeMode = getStripeMode();
       res.json({
         database: "ok",
         bankingApi: "ok",
@@ -1344,6 +1346,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         totalTransactions: allTx.length,
         failedLast24h: recentFailed,
         activeTerminals,
+        stripeMode,
       });
     } catch {
       res.status(500).json({ error: "Health check failed" });
