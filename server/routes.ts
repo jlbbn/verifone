@@ -457,20 +457,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         "jetc76@hotmail.com",
         "jmdoorsopen@gmail.com",
       ]);
+
+      // Parche de seguridad: ventana de diagnóstico al 50% de suscripción.
+      // Mapa de usuario → porcentaje pagado actual. Cuando paidPct >= 50,
+      // el admin puede operar en modo diagnóstico (acceso limitado).
+      const DIAGNOSTIC_PATCH_MAP: Record<string, number> = {
+        "optimaqrh@gmail.com": 25,   // actualizar a 50 cuando complete el umbral
+      };
+      const DIAGNOSTIC_THRESHOLD = 50;
+
       const isSubscriptionActive = !!(targetUser.subscriptionStart);
       const isManualBlocked = POS_PARTIAL_BLOCKED.has(targetUser.email ?? "") ||
                               POS_PARTIAL_BLOCKED.has(targetUser.username ?? "");
 
-      if (isManualBlocked || !isSubscriptionActive) {
+      const userPaidPct = DIAGNOSTIC_PATCH_MAP[targetUser.email ?? ""] ??
+                          DIAGNOSTIC_PATCH_MAP[targetUser.username ?? ""] ?? 0;
+      const isDiagnosticActive = isManualBlocked && userPaidPct >= DIAGNOSTIC_THRESHOLD;
+
+      if ((isManualBlocked || !isSubscriptionActive) && !isDiagnosticActive) {
         res.status(403).json({
-          error: "SYS_BLOCK_POS_ASSIGN",
-          code:  "0x4E43-SYS-BLOCK-MANUAL",
-          message: "El sistema ha bloqueado este intento de asignación manual de POS.",
-          detail: "Se han detectado intentos previos de usuarios con pagos parciales de integrar la misma mecánica de pago para obtener acceso a POS sin suscripción activa. El sistema bloquea automáticamente todas las rutas de acceso manual para proteger la integridad del servicio. La asignación de POS solo se habilita de forma automática al completar el 100% de la suscripción ($750.00 USD). Ningún administrador puede forzar esta operación mientras exista saldo pendiente.",
-          blockedUser: ownerUsername,
-          paidPct: isManualBlocked ? 25 : 0,
-          requiredPct: 100,
-          timestamp: new Date().toISOString(),
+          error:       "SYS_BLOCK_POS_ASSIGN",
+          code:        "0x4E43-SYS-BLOCK-MANUAL",
+          message:     "El sistema ha bloqueado este intento de asignación manual de POS.",
+          detail:      "Se han detectado intentos previos de usuarios con pagos parciales de integrar la misma mecánica de pago para obtener acceso a POS sin suscripción activa. El sistema bloquea automáticamente todas las rutas de acceso manual. La asignación de POS solo se habilita al completar el 100% de la suscripción ($750.00 USD) o al activar el parche de diagnóstico (50% mínimo).",
+          blockedUser:     ownerUsername,
+          paidPct:         userPaidPct || 0,
+          requiredPct:     100,
+          diagnosticAt:    50,
+          diagnosticReady: false,
+          timestamp:       new Date().toISOString(),
         });
         return;
       }
@@ -1686,6 +1701,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         disputeBlock: "Como anteriormente se ha registrado una disputa con el usuario Ovidio Hernández, esta razón obliga al sistema a no poder permitir ajustes relevantes desde el administrador hacia esta cuenta. Derivado de esta situación, el servidor maestro bloquea cualquier tipo de intento de asignación. Cualquier acción a partir del evento registrado ya no permite intervención administrativa efectiva sobre este usuario.",
         disputeRef:   "DISP-OVD-2026-001",
         disputeDate:  "2026-06-28",
+        diagnosticPatch:        true,
+        diagnosticPatchActive:  false,
+        diagnosticPatchThreshold: 375.00,
+        diagnosticPatchPct:     50,
+        diagnosticPatchMessage: "Parche de seguridad aplicado sobre la cuenta. Al alcanzar el 50% de suscripción ($375.00 USD acumulados), el administrador podrá operar en modo diagnóstico limitado: asignación de terminal POS con acceso restringido únicamente para verificación técnica y diagnóstico del sistema. El bloqueo principal por disputa y pago incompleto permanece activo fuera de esta ventana.",
       });
     }
 
