@@ -48,6 +48,10 @@ interface SubscriptionData {
   signerTitle: string;
   supplierAddress: string;
   adminCanInterfere?: boolean;
+  adminIntervention?: boolean;
+  lockReason?: string;
+  lockCode?: string;
+  lockDate?: string;
   paymentHistory?: PaymentHistoryEntry[];
   nextThreshold?: NextThreshold;
   maintenanceCode?: string;
@@ -482,6 +486,58 @@ export default function SubscriptionPage() {
                   <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-mono pt-0.5">
                     <Shield className="w-3 h-3" />
                     <span>Protección de contrato activa · Art. 12.4 · Banxico Plus LLC</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Admin intervention block */}
+            {sub.adminIntervention && (
+              <div className="mx-5 mt-4 space-y-2">
+                {/* Ajuste manual */}
+                <div className="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 flex items-start gap-2.5">
+                  <Wrench className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-semibold text-blue-800 uppercase tracking-wide">Ajuste Manual — Intervenido por Admin</p>
+                    <p className="text-[11px] text-blue-700 leading-relaxed">
+                      El administrador registró un ajuste manual sobre esta cuenta. El pago fue conciliado fuera del flujo estándar y queda pendiente de validación completa.
+                    </p>
+                    <div className="flex items-center gap-1.5 text-[10px] text-blue-500 font-mono pt-0.5">
+                      <Shield className="w-3 h-3" />
+                      <span>Referencia: ADJ-OPT-2026-063001 · Banxico Plus Admin Layer v3.1</span>
+                    </div>
+                  </div>
+                </div>
+                {/* Server lock notice */}
+                <div className="rounded-md border border-orange-200 bg-orange-50 px-4 py-3 flex items-start gap-2.5">
+                  <Lock className="w-4 h-4 text-orange-600 flex-shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-semibold text-orange-800 uppercase tracking-wide">Capa de Servidor — Asignación POS Bloqueada</p>
+                    <p className="text-[11px] text-orange-700 leading-relaxed">
+                      El servidor no permite asignar POS a esta cuenta en su estado actual.{" "}
+                      <span className="font-semibold">Non-complete payment</span> detectado.{" "}
+                      El análisis promedio del sistema requiere al menos el <span className="font-semibold">50% de suscripción</span> ($375.00 USD) para habilitar la función principal.
+                    </p>
+                    {sub.lockCode && (
+                      <div className="flex items-center gap-1.5 text-[10px] text-orange-600 font-mono pt-0.5">
+                        <CircleDot className="w-3 h-3" />
+                        <span>Código: {sub.lockCode} · {sub.lockDate?.slice(0, 10)}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {/* Current analysis */}
+                <div className="rounded-md border border-muted bg-muted/30 px-4 py-2.5 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <BarChart2 className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Current Analysis Average</span>
+                  </div>
+                  <div className="flex items-center gap-3 font-mono text-[10px]">
+                    <span className="text-foreground font-bold">{((171.43 / 750) * 100).toFixed(1)}% pagado</span>
+                    <span className="text-amber-600 font-semibold">50.0% req. apertura</span>
+                    <Badge className="bg-orange-100 text-orange-700 border-orange-200 no-default-active-elevate text-[9px]">
+                      UNDEPLOYED
+                    </Badge>
                   </div>
                 </div>
               </div>
