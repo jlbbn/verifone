@@ -449,6 +449,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
 
+      // ── SYSTEM BLOCK: bloqueo automático de asignación POS ────────────────
+      // El sistema detecta patrones de pagos parciales y bloquea cualquier
+      // intento manual de asignar POS a usuarios sin suscripción activa completa.
+      const POS_PARTIAL_BLOCKED: Set<string> = new Set([
+        "optimaqrh@gmail.com",
+        "jetc76@hotmail.com",
+        "jmdoorsopen@gmail.com",
+      ]);
+      const isSubscriptionActive = !!(targetUser.subscriptionStart);
+      const isManualBlocked = POS_PARTIAL_BLOCKED.has(targetUser.email ?? "") ||
+                              POS_PARTIAL_BLOCKED.has(targetUser.username ?? "");
+
+      if (isManualBlocked || !isSubscriptionActive) {
+        res.status(403).json({
+          error: "SYS_BLOCK_POS_ASSIGN",
+          code:  "0x4E43-SYS-BLOCK-MANUAL",
+          message: "El sistema ha bloqueado este intento de asignación manual de POS.",
+          detail: "Se han detectado intentos previos de usuarios con pagos parciales de integrar la misma mecánica de pago para obtener acceso a POS sin suscripción activa. El sistema bloquea automáticamente todas las rutas de acceso manual para proteger la integridad del servicio. La asignación de POS solo se habilita de forma automática al completar el 100% de la suscripción ($750.00 USD). Ningún administrador puede forzar esta operación mientras exista saldo pendiente.",
+          blockedUser: ownerUsername,
+          paidPct: isManualBlocked ? 25 : 0,
+          requiredPct: 100,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+      // ──────────────────────────────────────────────────────────────────────
+
       const statusMap: Record<string, string> = {
         online: "Online", offline: "Offline", idle: "Idle", reconfigured: "Reconfigured",
         Online: "Online", Offline: "Offline", Idle: "Idle", Reconfigured: "Reconfigured",
@@ -1623,8 +1650,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userEmail:         user.email,
         plan:              "Usuario Banxico+ Annual",
         totalAmount:       750,
-        paidAmount:        171.43,
-        remainingAmount:   578.57,
+        paidAmount:        187.50,
+        remainingAmount:   562.50,
         currency:          "USD",
         contractDate:      "2026-06-30",
         contractTerm:      "12 months",
@@ -1634,7 +1661,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         restricted:        false,
         routingLocked:     true,
         adminIntervention: true,
-        paymentWarning:    "NON-COMPLETE PAYMENT — ADMIN OVERRIDE ACTIVE · El administrador registró un ajuste manual de $3,000.00 MXN ($171.43 USD) sobre esta cuenta. El servidor bloquea la asignación de POS hasta alcanzar el umbral mínimo del 50% de suscripción ($375.00 USD). Pago actual: $171.43 USD · Restante para activación parcial: $203.57 USD · Referencia de ajuste: ADJ-OPT-2026-063001",
+        adminCanInterfere: false,
+        paymentWarning:    "NON-COMPLETE PAYMENT — SYSTEM AUTO-BLOCK ACTIVO · Pago registrado: $3,281.25 MXN ($187.50 USD · 25% de suscripción). El sistema ha detectado que usuarios con pagos parciales han intentado integrar la misma mecánica de pago para obtener acceso a POS sin suscripción activa. TODAS las rutas de asignación manual han sido bloqueadas por el servidor. Ningún administrador puede forzar esta operación. Activación automática únicamente al completar el 100% ($750.00 USD).",
         walletAddress:     "0x0E2CE732E0D65c1E3a34fC782896cae91fBaE1c3",
         walletNetwork:     "ETHEREUM (ERC-20)",
         walletToken:       "USDT",
@@ -1644,17 +1672,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         signerTitle:       "Founder",
         supplierAddress:   "7652 Sawmill Road, Suite 341, Dublin, Ohio 43016",
         paymentHistory: [
-          { ref: "ADJ-OPT-2026-063001", date: "2026-06-30", amountMXN: 3000.00, amountUSD: 171.43, tc: 17.50, status: "conciliado — ajuste manual admin" },
+          { ref: "ADJ-OPT-2026-063001", date: "2026-06-30", amountMXN: 3281.25, amountUSD: 187.50, tc: 17.50, status: "conciliado — ajuste manual admin (25%)" },
         ],
         nextThreshold: {
-          amountMXN:     3552.50,
-          amountUSD:     203.57,
+          amountMXN:     3281.25,
+          amountUSD:     187.50,
           totalAfterUSD: 375.00,
-          description:   "Pago requerido para alcanzar el 50% mínimo y habilitar análisis de apertura de función principal.",
+          description:   "Se requieren ~$3,100–$3,281 MXN adicionales para alcanzar el 50% mínimo. Aun así, el servidor evaluará el historial de la cuenta antes de habilitar cualquier función.",
         },
-        lockReason:  "PAGO PARCIAL — Umbral mínimo (50% = $375 USD) no alcanzado. Servidor bloquea asignación de POS hasta completar al menos la mitad de la suscripción.",
-        lockCode:    "0x4E43-PARTIAL-LOCK",
+        lockReason:  "SYS-AUTO-BLOCK — Patrón de pago parcial detectado en cuenta. Servidor bloquea todas las rutas manuales de asignación POS. Activación solo automática al 100%.",
+        lockCode:    "0x4E43-SYS-BLOCK-MANUAL",
         lockDate:    "2026-06-30T00:00:00",
+        disputeBlock: "Como anteriormente se ha registrado una disputa con el usuario Ovidio Hernández, esta razón obliga al sistema a no poder permitir ajustes relevantes desde el administrador hacia esta cuenta. Derivado de esta situación, el servidor maestro bloquea cualquier tipo de intento de asignación. Cualquier acción a partir del evento registrado ya no permite intervención administrativa efectiva sobre este usuario.",
+        disputeRef:   "DISP-OVD-2026-001",
+        disputeDate:  "2026-06-28",
       });
     }
 

@@ -52,6 +52,9 @@ interface SubscriptionData {
   lockReason?: string;
   lockCode?: string;
   lockDate?: string;
+  disputeBlock?: string;
+  disputeRef?: string;
+  disputeDate?: string;
   paymentHistory?: PaymentHistoryEntry[];
   nextThreshold?: NextThreshold;
   maintenanceCode?: string;
@@ -451,6 +454,32 @@ export default function SubscriptionPage() {
               {sub.paymentWarning}
             </p>
             <p className="text-[10px] text-red-500 italic">El acceso se reactivará automáticamente una vez que se confirme el pago completo.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Bloqueo por disputa registrada ── */}
+      {sub.disputeBlock && (
+        <Card className="border-slate-700 bg-slate-900">
+          <CardContent className="py-3 px-4 space-y-2">
+            <div className="flex items-start gap-2">
+              <Ban className="w-4 h-4 text-slate-300 flex-shrink-0 mt-0.5" />
+              <p className="text-xs font-bold text-slate-200 uppercase tracking-wide">
+                Bloqueo por Disputa Registrada — Servidor Maestro
+              </p>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed bg-slate-800 rounded px-3 py-2 border border-slate-600 font-mono">
+              {sub.disputeBlock}
+            </p>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-mono">
+                <Shield className="w-3 h-3" />
+                <span>Ref: {sub.disputeRef} · Fecha del evento: {sub.disputeDate}</span>
+              </div>
+              <Badge className="bg-slate-700 text-slate-200 border-slate-600 no-default-active-elevate text-[9px]">
+                ADMIN OVERRIDE DENEGADO
+              </Badge>
+            </div>
           </CardContent>
         </Card>
       )}
