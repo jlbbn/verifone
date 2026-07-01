@@ -871,6 +871,12 @@ export default function POSVirtualPage() {
       .catch(() => {});
   }, []);
 
+  // ── Modo Stripe (live / test) ──────────────────────────────────────────────
+  const { data: stripeConfig } = useQuery<{ mode: "live" | "test" | "unknown"; live: boolean }>({
+    queryKey: ["/api/stripe/config"],
+  });
+  const stripeIsLive = stripeConfig?.mode === "live";
+
   const processMutation = useMutation({
     mutationFn: async () => {
       const amount = parseInt(amountDigits, 10) / 100;
@@ -1185,9 +1191,20 @@ export default function POSVirtualPage() {
                       {is101 ? "VISA NET 101.1" : is1643 ? "TERMINAL MANUAL 1643" : "BANXICO PLUS POS"}
                     </span>
                   </div>
-                  <span className="text-gray-500 text-xs font-mono">
-                    {now.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {stripeConfig && (
+                      <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded tracking-widest border ${
+                        stripeIsLive
+                          ? "text-green-300 border-green-700 bg-green-900/50"
+                          : "text-yellow-300 border-yellow-700 bg-yellow-900/40"
+                      }`} data-testid="badge-stripe-mode">
+                        {stripeIsLive ? "● LIVE" : "● TEST"}
+                      </span>
+                    )}
+                    <span className="text-gray-500 text-xs font-mono">
+                      {now.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                    </span>
+                  </div>
                 </div>
 
                 {step === "amount" && (
