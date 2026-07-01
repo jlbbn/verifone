@@ -64,21 +64,28 @@ function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen w-full flex-col md:flex-row">
       <AppSidebar />
       <div className="flex flex-col flex-1 overflow-hidden">
-        <header className="bg-[#c8322b] h-[60px] flex items-center justify-between px-4 md:px-6">
+        <header className="bg-gradient-to-r from-[#c8322b] to-[#a82520] h-[60px] flex items-center justify-between px-4 md:px-6 shadow-md flex-shrink-0">
           <div className="flex items-center gap-2 md:gap-3 text-white">
             <SidebarTrigger className="md:hidden text-white hover:bg-white/10" />
-            <CreditCard className="w-5 h-5 md:w-6 md:h-6" />
-            <h1 className="text-lg md:text-xl font-semibold">Banxico Plus</h1>
-          </div>
-          <div className="flex items-center gap-2 md:gap-4 text-white">
-            <NotificationsBell />
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-                <User className="w-4 h-4 md:w-5 md:h-5" />
+              <div className="w-7 h-7 rounded-md bg-white/15 flex items-center justify-center">
+                <CreditCard className="w-4 h-4" />
+              </div>
+              <div className="leading-none">
+                <h1 className="text-base md:text-lg font-bold tracking-tight">Banxico Plus</h1>
+                <p className="text-[10px] text-white/60 font-mono hidden md:block">Banking Platform v3.1</p>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 md:gap-4 text-white">
+            <NotificationsBell />
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-white/20 ring-2 ring-white/20 flex items-center justify-center flex-shrink-0">
+                <User className="w-4 h-4" />
               </div>
               <div className="hidden sm:block leading-tight">
                 <p className="text-xs font-semibold" data-testid="text-header-username">{user?.fullName}</p>
-                <p className="text-[10px] text-white/70" data-testid="text-header-email">{user?.email}</p>
+                <p className="text-[10px] text-white/65" data-testid="text-header-email">{user?.email}</p>
               </div>
             </div>
           </div>
