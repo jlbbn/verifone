@@ -14,17 +14,17 @@
   --elevate-1: rgba(0,0,0, .03);
   --elevate-2: rgba(0,0,0, .08);
 
-  --background: 0 0% 96%;
+  --background: 214 22% 96%;
 
   --foreground: 0 0% 12%;
 
-  --border: 0 0% 90%;
+  --border: 214 16% 91%;
 
   --card: 0 0% 100%;
 
   --card-foreground: 0 0% 12%;
 
-  --card-border: 0 0% 93%;
+  --card-border: 214 16% 93%;
 
   --sidebar: 10 5% 10%;
 
@@ -80,14 +80,14 @@
   --font-serif: Georgia, serif;
   --font-mono: Menlo, monospace;
   --radius: .5rem; /* 8px */
-  --shadow-2xs: 0px 2px 0px 0px hsl(0 0% 0% / 0.00);
-  --shadow-xs: 0px 2px 0px 0px hsl(0 0% 0% / 0.00);
-  --shadow-sm: 0px 2px 0px 0px hsl(0 0% 0% / 0.00), 0px 1px 2px -1px hsl(0 0% 0% / 0.00);
-  --shadow: 0px 2px 0px 0px hsl(0 0% 0% / 0.00), 0px 1px 2px -1px hsl(0 0% 0% / 0.00);
-  --shadow-md: 0px 2px 0px 0px hsl(0 0% 0% / 0.00), 0px 2px 4px -1px hsl(0 0% 0% / 0.00);
-  --shadow-lg: 0px 2px 0px 0px hsl(0 0% 0% / 0.00), 0px 4px 6px -1px hsl(0 0% 0% / 0.00);
-  --shadow-xl: 0px 2px 0px 0px hsl(0 0% 0% / 0.00), 0px 8px 10px -1px hsl(0 0% 0% / 0.00);
-  --shadow-2xl: 0px 2px 0px 0px hsl(0 0% 0% / 0.00);
+  --shadow-2xs: 0px 1px 2px 0px hsl(214 20% 0% / 0.04);
+  --shadow-xs:  0px 1px 3px 0px hsl(214 20% 0% / 0.06);
+  --shadow-sm:  0px 1px 3px 0px hsl(214 20% 0% / 0.07), 0px 1px 2px -1px hsl(214 20% 0% / 0.05);
+  --shadow:     0px 2px 5px 0px hsl(214 20% 0% / 0.07), 0px 1px 2px -1px hsl(214 20% 0% / 0.04);
+  --shadow-md:  0px 4px 8px -1px hsl(214 20% 0% / 0.08), 0px 2px 4px -2px hsl(214 20% 0% / 0.05);
+  --shadow-lg:  0px 8px 16px -3px hsl(214 20% 0% / 0.09), 0px 4px 6px -4px hsl(214 20% 0% / 0.05);
+  --shadow-xl:  0px 16px 24px -5px hsl(214 20% 0% / 0.10), 0px 8px 10px -6px hsl(214 20% 0% / 0.06);
+  --shadow-2xl: 0px 24px 40px -8px hsl(214 20% 0% / 0.14);
   --tracking-normal: 0em;
   --spacing: 0.25rem;
 

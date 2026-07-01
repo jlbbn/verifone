@@ -39,6 +39,7 @@ interface SubscriptionData {
   restricted?: boolean;
   paymentWarning?: string;
   posUnlocked: boolean;
+  posLocked?: boolean;
   walletAddress: string | null;
   walletNetwork: string | null;
   walletToken: string | null;
@@ -320,9 +321,23 @@ export default function SubscriptionPage() {
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <FileText className="w-5 h-5 text-[#c8322b]" />
             <h1 className="text-xl font-bold">Mi Membresía y Contrato</h1>
+            <Badge className={`text-[10px] no-default-active-elevate ${
+              sub.status === "complete"
+                ? "bg-green-100 text-green-700 border-green-200"
+                : sub.status === "partial"
+                ? "bg-amber-100 text-amber-800 border-amber-200"
+                : sub.status === "maintenance"
+                ? "bg-orange-100 text-orange-800 border-orange-200"
+                : "bg-red-100 text-red-800 border-red-200"
+            }`}>
+              {sub.status === "complete" ? "Pagado en su totalidad"
+                : sub.status === "partial" ? "Pago Parcial"
+                : sub.status === "maintenance" ? "En Mantenimiento"
+                : "Pago Pendiente"}
+            </Badge>
           </div>
           <p className="text-sm text-muted-foreground mt-0.5">{sub.plan} · {sub.contractTerm}</p>
         </div>
@@ -334,7 +349,7 @@ export default function SubscriptionPage() {
           data-testid="button-download-contract"
         >
           <Download className="w-3.5 h-3.5" />
-          Download Contract PDF
+          Descargar Contrato PDF
         </Button>
       </div>
 
@@ -374,7 +389,7 @@ export default function SubscriptionPage() {
                   style={{ width: `${((sub.maintenancePhase ?? 1) / (sub.maintenanceTotalPhases ?? 5)) * 100}%` }}
                 />
               </div>
-              <div className="flex justify-between text-[9px] text-muted-foreground mt-1 font-mono">
+              <div className="flex justify-between text-[10px] text-muted-foreground mt-1 font-mono">
                 {Array.from({ length: sub.maintenanceTotalPhases ?? 5 }, (_, i) => (
                   <span key={i} className={i + 1 < (sub.maintenancePhase ?? 1) ? "text-orange-600 font-bold" :
                     i + 1 === (sub.maintenancePhase ?? 1) ? "text-orange-500 font-bold" : ""}>
@@ -401,8 +416,8 @@ export default function SubscriptionPage() {
                       ${isPend   ? "border-border bg-muted/20"      : ""}
                     `}>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[9px] text-muted-foreground shrink-0">{log.time}</span>
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded
+                        <span className="text-[10px] text-muted-foreground shrink-0">{log.time}</span>
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded
                           ${isDone   ? "bg-green-100 text-green-700"       : ""}
                           ${isActive ? "bg-orange-100 text-orange-700"     : ""}
                           ${isPend   ? "bg-muted text-muted-foreground"    : ""}
@@ -416,7 +431,7 @@ export default function SubscriptionPage() {
                           ${isPend   ? "text-muted-foreground"   : ""}
                         `}>{log.event}</span>
                       </div>
-                      <p className={`text-[9px] mt-1 leading-relaxed
+                      <p className={`text-[10px] mt-1 leading-relaxed
                         ${isDone   ? "text-green-700"         : ""}
                         ${isActive ? "text-orange-700"        : ""}
                         ${isPend   ? "text-muted-foreground"  : ""}
@@ -437,7 +452,7 @@ export default function SubscriptionPage() {
                   Los accesos se reactivarán automáticamente al completarse la Fase 5.
                   Se notificará por correo al concluir el proceso.
                 </p>
-                <p className="text-[9px] text-orange-500 font-mono pt-0.5">
+                <p className="text-[10px] text-orange-500 font-mono pt-0.5">
                   Protocolo: RESET-FULL-3 · Código: {sub.maintenanceCode} · Clearing Engine v3.1
                 </p>
               </div>
@@ -465,15 +480,15 @@ export default function SubscriptionPage() {
 
       {/* ── Bloqueo por disputa registrada ── */}
       {sub.disputeBlock && (
-        <Card className="border-slate-700 bg-slate-900">
+        <Card className="border-slate-600 bg-slate-800">
           <CardContent className="py-3 px-4 space-y-2">
             <div className="flex items-start gap-2">
               <Ban className="w-4 h-4 text-slate-300 flex-shrink-0 mt-0.5" />
-              <p className="text-xs font-bold text-slate-200 uppercase tracking-wide">
+              <p className="text-xs font-bold text-slate-100 uppercase tracking-wide">
                 Bloqueo por Disputa Registrada — Servidor Maestro
               </p>
             </div>
-            <p className="text-xs text-slate-300 leading-relaxed bg-slate-800 rounded px-3 py-2 border border-slate-600 font-mono">
+            <p className="text-xs text-slate-300 leading-relaxed bg-slate-700/60 rounded px-3 py-2 border border-slate-600/70 font-mono">
               {sub.disputeBlock}
             </p>
             <div className="flex items-center justify-between flex-wrap gap-2">
@@ -481,7 +496,7 @@ export default function SubscriptionPage() {
                 <Shield className="w-3 h-3" />
                 <span>Ref: {sub.disputeRef} · Fecha del evento: {sub.disputeDate}</span>
               </div>
-              <Badge className="bg-slate-700 text-slate-200 border-slate-600 no-default-active-elevate text-[9px]">
+              <Badge className="bg-slate-600 text-slate-200 border-slate-500 no-default-active-elevate text-[10px]">
                 ADMIN OVERRIDE DENEGADO
               </Badge>
             </div>
@@ -505,8 +520,8 @@ export default function SubscriptionPage() {
                 </p>
               </div>
               <Badge className={sub.diagnosticPatchActive
-                ? "bg-green-100 text-green-800 border-green-300 no-default-active-elevate text-[9px]"
-                : "bg-amber-100 text-amber-800 border-amber-300 no-default-active-elevate text-[9px]"}>
+                ? "bg-green-100 text-green-800 border-green-300 no-default-active-elevate text-[10px]"
+                : "bg-amber-100 text-amber-800 border-amber-300 no-default-active-elevate text-[10px]"}>
                 {sub.diagnosticPatchActive ? "ACTIVO" : "EN ESPERA"}
               </Badge>
             </div>
@@ -534,7 +549,7 @@ export default function SubscriptionPage() {
                   style={{ width: `${Math.min(100, (sub.paidAmount / (sub.diagnosticPatchThreshold ?? 375)) * 100)}%` }}
                 />
               </div>
-              <div className="flex justify-between text-[9px] text-muted-foreground font-mono">
+              <div className="flex justify-between text-[10px] text-muted-foreground font-mono">
                 <span>${sub.paidAmount.toFixed(2)} USD pagado</span>
                 <span className="text-amber-600 font-semibold">Umbral: ${sub.diagnosticPatchThreshold?.toFixed(2)} USD ({sub.diagnosticPatchPct}%)</span>
                 <span>$750.00 USD (total)</span>
@@ -634,15 +649,15 @@ export default function SubscriptionPage() {
                   </div>
                 </div>
                 {/* Current analysis */}
-                <div className="rounded-md border border-muted bg-muted/30 px-4 py-2.5 flex items-center justify-between gap-3">
+                <div className="rounded-md border border-muted bg-muted/30 px-4 py-2.5 flex items-center justify-between gap-3 flex-wrap">
                   <div className="flex items-center gap-2">
                     <BarChart2 className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Current Analysis Average</span>
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Análisis Promedio del Sistema</span>
                   </div>
                   <div className="flex items-center gap-3 font-mono text-[10px]">
-                    <span className="text-foreground font-bold">{((171.43 / 750) * 100).toFixed(1)}% pagado</span>
+                    <span className="text-foreground font-bold">{((sub.paidAmount / sub.totalAmount) * 100).toFixed(1)}% pagado</span>
                     <span className="text-amber-600 font-semibold">50.0% req. apertura</span>
-                    <Badge className="bg-orange-100 text-orange-700 border-orange-200 no-default-active-elevate text-[9px]">
+                    <Badge className="bg-orange-100 text-orange-700 border-orange-200 no-default-active-elevate text-[10px]">
                       UNDEPLOYED
                     </Badge>
                   </div>
@@ -665,7 +680,7 @@ export default function SubscriptionPage() {
                   style={{ width: `${Math.min(100, (sub.paidAmount / sub.totalAmount) * 100)}%` }}
                 />
               </div>
-              <div className="flex justify-between text-[9px] text-muted-foreground mt-1 font-mono">
+              <div className="flex justify-between text-[10px] text-muted-foreground mt-1 font-mono">
                 <span>$0</span>
                 <span className="text-amber-600 font-semibold">Mínimo para activación ${sub.nextThreshold?.totalAfterUSD.toFixed(2)}</span>
                 <span>${sub.totalAmount} USD (acceso total)</span>
@@ -684,15 +699,15 @@ export default function SubscriptionPage() {
                       <div className="flex items-center gap-1.5">
                         <CheckCircle className="w-3 h-3 text-green-600 flex-shrink-0" />
                         <span className="text-[10px] font-semibold text-green-700 uppercase">{p.status}</span>
-                        <span className="text-[9px] text-muted-foreground">{p.date}</span>
+                        <span className="text-[10px] text-muted-foreground">{p.date}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] font-bold">${p.amountMXN.toFixed(2)} MXN</span>
-                        <span className="text-[9px] text-muted-foreground">= ${p.amountUSD.toFixed(2)} USD</span>
-                        <span className="text-[9px] bg-muted rounded px-1 py-0.5">TC {p.tc}</span>
+                        <span className="text-[10px] text-muted-foreground">= ${p.amountUSD.toFixed(2)} USD</span>
+                        <span className="text-[10px] bg-muted rounded px-1 py-0.5">TC {p.tc}</span>
                       </div>
                     </div>
-                    <p className="text-[9px] text-muted-foreground mt-0.5 truncate">REF: {p.ref}</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5 truncate">REF: {p.ref}</p>
                   </div>
                 ))}
               </div>
@@ -758,13 +773,13 @@ export default function SubscriptionPage() {
             <Clock className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
             <div>
               <p className="text-sm font-semibold text-amber-800">
-                Action required within 48 hours
+                Acción requerida en las próximas 48 horas
               </p>
               <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
-                Your POS terminal is currently active and fully operational. Complete your remaining
-                payment of <strong>${sub.remainingAmount} {sub.currency}</strong> within 48 hours to permanently
-                confirm your deployment. After this window, the assigned POS will be unlinked from
-                your account until payment is processed.
+                {sub.posLocked
+                  ? <>Tu terminal POS permanece <strong>bloqueada</strong> por pago incompleto. Completa el pago pendiente de <strong>${sub.remainingAmount} {sub.currency}</strong> para habilitar el acceso.</>
+                  : <>Tu terminal POS está activa y operativa. Completa el pago pendiente de <strong>${sub.remainingAmount} {sub.currency}</strong> dentro de 48 horas para confirmar el despliegue de forma permanente. Después de esta ventana, el POS asignado se desvinculará hasta que se procese el pago.</>
+                }
               </p>
             </div>
           </CardContent>
@@ -777,7 +792,7 @@ export default function SubscriptionPage() {
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <CreditCard className="w-4 h-4 text-[#c8322b]" />
-              <span className="font-semibold text-sm">Payment Status</span>
+              <span className="font-semibold text-sm">Estado de Pago</span>
             </div>
             <Badge
               className={`text-xs no-default-active-elevate ${
@@ -788,17 +803,17 @@ export default function SubscriptionPage() {
                   : "bg-green-100 text-green-700 border-green-200"
               }`}
             >
-              {isPending ? "Pago Pendiente" : isPartial ? "Partial Payment" : "Paid in Full"}
+              {isPending ? "Pago Pendiente" : isPartial ? "Pago Parcial" : "Pagado en su totalidad"}
             </Badge>
           </div>
 
           {/* Progress bar */}
           <div>
             <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
-              <span>Paid: <strong className="text-foreground">${sub.paidAmount} {sub.currency}</strong></span>
+              <span>Pagado: <strong className="text-foreground">${sub.paidAmount} {sub.currency}</strong></span>
               <span>Total: <strong className="text-foreground">${sub.totalAmount} {sub.currency}</strong></span>
             </div>
-            <div className="w-full h-3 bg-muted rounded-full overflow-hidden">
+            <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-700"
                 style={{
@@ -810,15 +825,15 @@ export default function SubscriptionPage() {
               />
             </div>
             <div className="flex justify-between text-xs mt-1.5">
-              <span className="text-green-600 font-semibold">{pct}% paid</span>
+              <span className="text-green-600 font-semibold">{pct}% pagado</span>
               {isPartial && (
                 <span className="text-amber-600 font-semibold">
-                  Remaining: ${sub.remainingAmount} {sub.currency}
+                  Pendiente: ${sub.remainingAmount} {sub.currency}
                 </span>
               )}
               {!isPartial && (
                 <span className="text-green-600 font-semibold flex items-center gap-1">
-                  <CheckCircle className="w-3 h-3" /> Complete
+                  <CheckCircle className="w-3 h-3" /> Completado
                 </span>
               )}
             </div>
@@ -834,21 +849,21 @@ export default function SubscriptionPage() {
           )}
           {!isPartial && !isPending && (
             <div className="flex items-center gap-2 text-green-600 text-sm font-medium justify-center py-1">
-              <CheckCircle className="w-4 h-4" /> Payment complete — POS permanently confirmed
+              <CheckCircle className="w-4 h-4" /> Pago completado — POS confirmado permanentemente
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Non Deployment POS Tracking System */}
+      {/* Sistema de Seguimiento POS */}
       <Card>
         <CardContent className="px-5 py-5 space-y-4">
           <div className="flex items-center gap-2">
-            <MonitorSmartphone className="w-4 h-4 text-blue-600" />
-            <span className="font-semibold text-sm">Non Deployment POS Tracking System</span>
+            <MonitorSmartphone className="w-4 h-4 text-[#c8322b]" />
+            <span className="font-semibold text-sm">Seguimiento de Despliegue POS</span>
           </div>
 
-          {/* Checkbox row */}
+          {/* Status indicator row */}
           <div className="flex items-start gap-3 p-3 rounded-md border border-border bg-muted/20">
             <div
               className={`mt-0.5 w-4 h-4 rounded flex-shrink-0 border-2 flex items-center justify-center ${
@@ -861,11 +876,11 @@ export default function SubscriptionPage() {
               {!sub.posUnlocked && <Clock className="w-2.5 h-2.5 text-amber-500" />}
             </div>
             <div>
-              <p className="text-sm font-medium">Non Deployment POS Tracking System</p>
+              <p className="text-sm font-medium">Estado de Despliegue POS</p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {sub.posUnlocked
-                  ? "POS deployment is permanently active and confirmed."
-                  : "POS is fully operational during the 0–48h payment window. Permanent deployment locks in upon full payment."}
+                  ? "El despliegue del POS está activo y confirmado de forma permanente."
+                  : "El despliegue permanente del POS se activa al completar el pago total de la suscripción."}
               </p>
             </div>
           </div>
@@ -873,10 +888,10 @@ export default function SubscriptionPage() {
           {/* Status bar */}
           <div className="space-y-2">
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>System received & paid</span>
-              <span>Remaining to confirm</span>
+              <span>Recibido y pagado</span>
+              <span>Pendiente de confirmar</span>
             </div>
-            <div className="w-full h-2.5 bg-muted rounded-full overflow-hidden flex">
+            <div className="w-full h-2 bg-muted rounded-full overflow-hidden flex">
               <div
                 className="h-full bg-green-500 rounded-l-full transition-all duration-700"
                 style={{ width: `${pct}%` }}
@@ -888,34 +903,32 @@ export default function SubscriptionPage() {
                 />
               )}
             </div>
-            <div className="flex justify-between text-[11px] font-medium">
-              <span className="text-green-600">Received: ${sub.paidAmount} {sub.currency}</span>
+            <div className="flex justify-between text-xs font-medium">
+              <span className="text-green-600">Recibido: ${sub.paidAmount} {sub.currency}</span>
               {isPartial
-                ? <span className="text-amber-600">Remaining: ${sub.remainingAmount} {sub.currency}</span>
-                : <span className="text-green-600 flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Fully confirmed</span>
+                ? <span className="text-amber-600">Pendiente: ${sub.remainingAmount} {sub.currency}</span>
+                : <span className="text-green-600 flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Confirmado completamente</span>
               }
             </div>
           </div>
 
-          {/* Access status */}
+          {/* Access status grid */}
           <div className="grid grid-cols-3 gap-2">
             {[
-              { label: "POS Terminal", active: true },
-              { label: "All Protocols", active: true },
-              { label: "Permanent Deploy", active: sub.posUnlocked },
+              { label: "Terminal POS",          active: !sub.posLocked },
+              { label: "Todos los Protocolos",  active: !sub.posLocked },
+              { label: "Despliegue Permanente", active: sub.posUnlocked },
             ].map(({ label, active }) => (
               <div
                 key={label}
                 className={`rounded-md border px-3 py-2 text-center ${
-                  active
-                    ? "border-green-200 bg-green-50"
-                    : "border-amber-200 bg-amber-50"
+                  active ? "border-green-200 bg-green-50" : "border-amber-200 bg-amber-50"
                 }`}
               >
                 <div className={`w-2 h-2 rounded-full mx-auto mb-1 ${active ? "bg-green-500" : "bg-amber-400"}`} />
                 <p className="text-[10px] font-medium leading-tight">{label}</p>
-                <p className={`text-[9px] mt-0.5 ${active ? "text-green-600" : "text-amber-600"}`}>
-                  {active ? "Active" : "Pending"}
+                <p className={`text-[10px] mt-0.5 ${active ? "text-green-600" : "text-amber-600"}`}>
+                  {active ? "Activo" : "Pendiente"}
                 </p>
               </div>
             ))}
@@ -923,26 +936,26 @@ export default function SubscriptionPage() {
         </CardContent>
       </Card>
 
-      {/* Contract details */}
+      {/* Detalles del contrato */}
       <Card>
         <CardContent className="px-5 py-5 space-y-4">
           <div className="flex items-center gap-2">
             <Shield className="w-4 h-4 text-[#c8322b]" />
-            <span className="font-semibold text-sm">Contract Details</span>
+            <span className="font-semibold text-sm">Detalles del Contrato</span>
           </div>
 
           <div className="divide-y divide-border">
             {[
-              { label: "Customer", value: sub.userName },
-              { label: "Company", value: sub.company },
-              { label: "Email", value: sub.userEmail },
-              { label: "Phone", value: sub.phone },
-              { label: "Plan", value: sub.plan },
-              { label: "Contract Term", value: sub.contractTerm },
-              { label: "Contract Date", value: sub.contractDate },
-              { label: "Total Amount", value: `$${sub.totalAmount}.00 ${sub.currency}` },
-              { label: "Supplier", value: "Banxico Plus LLC — " + sub.supplierAddress },
-              { label: "Authorized by", value: `${sub.signerName} · ${sub.signerTitle}` },
+              { label: "Cliente",           value: sub.userName },
+              { label: "Empresa",           value: sub.company },
+              { label: "Correo",            value: sub.userEmail },
+              { label: "Teléfono",          value: sub.phone },
+              { label: "Plan",              value: sub.plan },
+              { label: "Plazo",             value: sub.contractTerm },
+              { label: "Fecha contrato",    value: sub.contractDate },
+              { label: "Monto total",       value: `$${sub.totalAmount}.00 ${sub.currency}` },
+              { label: "Proveedor",         value: "Banxico Plus LLC — " + sub.supplierAddress },
+              { label: "Autorizado por",    value: `${sub.signerName} · ${sub.signerTitle}` },
             ].map(({ label, value }) => (
               <div key={label} className="flex items-start justify-between gap-4 py-2.5">
                 <span className="text-xs text-muted-foreground flex-shrink-0 w-28">{label}</span>
@@ -951,10 +964,10 @@ export default function SubscriptionPage() {
             ))}
           </div>
 
-          {/* Payment wallet info (if partial) */}
+          {/* Wallet de pago */}
           {isPartial && sub.walletAddress && (
             <div className="mt-3 pt-3 border-t border-border space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Payment Wallet</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Wallet de Pago</p>
               <div className="flex items-center gap-2 p-3 bg-muted/40 rounded-md">
                 <div className="flex-1 min-w-0">
                   <p className="text-[10px] text-muted-foreground">{sub.walletToken} · {sub.walletNetwork}</p>
@@ -967,7 +980,7 @@ export default function SubscriptionPage() {
               <Link href="/subscription/payment">
                 <Button variant="outline" className="w-full text-xs gap-2" data-testid="button-go-to-payment">
                   <ExternalLink className="w-3.5 h-3.5" />
-                  Go to Payment Page
+                  Ir a Página de Pago
                 </Button>
               </Link>
             </div>
@@ -980,7 +993,7 @@ export default function SubscriptionPage() {
             data-testid="button-download-contract-bottom"
           >
             <Download className="w-3.5 h-3.5" />
-            Download Contract as PDF
+            Descargar Contrato PDF
           </Button>
         </CardContent>
       </Card>

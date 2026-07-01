@@ -200,7 +200,7 @@ export function AppSidebar() {
               <Link href="/subscription">
                 <button className="flex items-center gap-2.5 w-full px-2 py-2 rounded-md hover-elevate text-sm text-muted-foreground" data-testid="link-profile-subscription">
                   <CreditCard className="w-3.5 h-3.5 text-[#c8322b]" />
-                  <span className="text-xs">My Subscription & Contract</span>
+                  <span className="text-xs">Mi Suscripción y Contrato</span>
                 </button>
               </Link>
             </div>
@@ -244,20 +244,23 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {visibleMenuItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    className={location === item.url ? "bg-sidebar-accent" : ""}
-                    data-testid={`nav-${item.title.toLowerCase().replace(/ /g, "-")}`}
-                  >
-                    <Link href={item.url}>
-                      <item.icon className="w-4 h-4" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {visibleMenuItems.map((item) => {
+                const isActive = location === item.url;
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      className={isActive ? "bg-sidebar-accent font-medium" : ""}
+                      data-testid={`nav-${item.title.toLowerCase().replace(/ /g, "-")}`}
+                    >
+                      <Link href={item.url}>
+                        <item.icon className={`w-4 h-4 ${isActive ? "text-[#c8322b]" : ""}`} />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -269,37 +272,42 @@ export function AppSidebar() {
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {adminItems.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      asChild
-                      className={location === item.url ? "bg-sidebar-accent" : ""}
-                      data-testid={`nav-${item.title.toLowerCase().replace(/ /g, "-")}`}
-                    >
-                      <Link href={item.url}>
-                        <item.icon className="w-4 h-4" />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
+                {adminItems.map((item) => {
+                  const isActive = location === item.url;
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton
+                        asChild
+                        className={isActive ? "bg-sidebar-accent font-medium" : ""}
+                        data-testid={`nav-${item.title.toLowerCase().replace(/ /g, "-")}`}
+                      >
+                        <Link href={item.url}>
+                          <item.icon className={`w-4 h-4 ${isActive ? "text-[#c8322b]" : ""}`} />
+                          <span>{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
         )}
       </SidebarContent>
 
-      <SidebarFooter className="p-4 border-t border-sidebar-border">
-        <Button
-          variant="outline"
-          className="w-full justify-start gap-2"
+      <SidebarFooter className="px-3 py-3 border-t border-sidebar-border">
+        <button
+          className="flex items-center gap-2 w-full px-3 py-2 rounded-md text-sidebar-foreground/60 hover-elevate text-xs transition-colors"
           onClick={() => logout()}
           disabled={isLoggingOut}
           data-testid="button-logout"
         >
-          <LogOut className="w-4 h-4" />
-          {isLoggingOut ? "Cerrando..." : "Cerrar Sesión"}
-        </Button>
+          <LogOut className="w-3.5 h-3.5 flex-shrink-0" />
+          <span>{isLoggingOut ? "Cerrando sesión..." : "Cerrar Sesión"}</span>
+        </button>
+        <p className="text-[10px] text-sidebar-foreground/25 font-mono text-center mt-1 tracking-wider">
+          Banxico Plus · v3.1.0
+        </p>
       </SidebarFooter>
     </Sidebar>
   );
