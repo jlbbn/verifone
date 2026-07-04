@@ -261,6 +261,8 @@ export interface SystemSettings {
   merchantCity: string;
   afiliacion: string;
   tipoCambio: number;
+  // Mantenimiento global
+  maintenanceMode: boolean;
   // Caja / Balances
   saldoAperturaUSD: number;
   saldoSistemaUSD: number;
@@ -282,6 +284,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   merchantCity: "CANCUN Q.ROO",
   afiliacion: "7705397",
   tipoCambio: 17.50,
+  maintenanceMode: true,
   saldoAperturaUSD: 45890,
   saldoSistemaUSD: 1250000,
   feedMerchant1: "GRUPO ASGE VENADO 69",

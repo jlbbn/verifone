@@ -8,7 +8,9 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { FinancialTicker } from "@/components/financial-ticker";
 import { CreditCard, User, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { useSystemSettings } from "@/hooks/use-system-settings";
 import { NotificationsBell } from "@/components/notifications-bell";
+import { ShieldAlert } from "lucide-react";
 import LoginPage from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
 import NewTransactionPage from "@/pages/new-transaction";
@@ -31,6 +33,7 @@ import NotFound from "@/pages/not-found";
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading, isAuthenticated } = useAuth();
+  const { data: settings } = useSystemSettings();
 
   if (isLoading) {
     return (
@@ -42,6 +45,26 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (!isAuthenticated) {
     return <Redirect to="/login" />;
+  }
+
+  // ── Mantenimiento global — bloquea a todos los usuarios excepto ADMIN ──
+  if (settings?.maintenanceMode && user?.role !== "ADMIN") {
+    return (
+      <div className="flex h-screen w-full flex-col items-center justify-center bg-[#0f0f0f] px-6" data-testid="screen-maintenance">
+        <div className="max-w-md w-full mx-auto text-center">
+          <div className="w-16 h-16 rounded-full bg-[#c8322b]/15 flex items-center justify-center mx-auto mb-6">
+            <ShieldAlert className="w-8 h-8 text-[#c8322b]" />
+          </div>
+          <p className="text-white/40 text-xs font-mono tracking-widest uppercase mb-2">Banxico Plus</p>
+          <h1 className="text-white text-2xl font-bold mb-3" data-testid="text-maintenance-title">
+            On Maintenance
+          </h1>
+          <p className="text-white/70 text-sm leading-relaxed" data-testid="text-maintenance-message">
+            El sistema se encuentra en mantenimiento global para todos los usuarios. El acceso se restablecerá automáticamente al finalizar.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   // ── Suspensión de cuenta — solo mensaje, sin acceso a ninguna función ──
