@@ -227,6 +227,33 @@ export default function AdminSettingsPage() {
               </div>
             </CardContent>
           </Card>
+
+          <Card className="mt-5 border-amber-300 dark:border-amber-800">
+            <CardHeader>
+              <CardTitle>Mantenimiento Global</CardTitle>
+              <CardDescription>
+                Al activarlo, todos los usuarios (excepto administradores) verán una pantalla de mantenimiento y no podrán operar el sistema
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between gap-4 rounded-md border p-4">
+                <div className="space-y-0.5">
+                  <Label htmlFor="maintenanceMode">Sistema en mantenimiento</Label>
+                  <p className="text-xs text-muted-foreground">
+                    {draft.maintenanceMode
+                      ? "Activo — los usuarios ven la pantalla de mantenimiento ahora mismo"
+                      : "Inactivo — el sistema opera con normalidad para todos los usuarios"}
+                  </p>
+                </div>
+                <Switch
+                  id="maintenanceMode"
+                  checked={draft.maintenanceMode}
+                  onCheckedChange={(checked) => set("maintenanceMode", checked)}
+                  data-testid="switch-maintenance-mode"
+                />
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* ── BALANCES ────────────────────────────────────────────────────── */}
