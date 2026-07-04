@@ -66,6 +66,7 @@ function publicUser(user: User) {
     suspended: user.suspended,
     paymentEngineAccess: user.paymentEngineAccess ?? false,
     posFullAccess: user.posFullAccess ?? false,
+    cajaSaldoUSD: user.cajaSaldoUSD ?? 0,
   };
 }
 
@@ -566,6 +567,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const [upd] = await db.update(usersTable)
         .set(updates)
+        .where(eq(usersTable.id, req.params.userId))
+        .returning();
+      if (!upd) return res.status(404).json({ error: "Usuario no encontrado" });
+      return res.json(publicUser(upd as User));
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Caja individual de usuarios (editable por ADMIN, aparte de la caja central) ──
+  app.patch("/api/admin/user-caja/:userId", requireRole("ADMIN"), async (req, res) => {
+    const schema = z.object({ cajaSaldoUSD: z.number().finite() });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Datos inválidos" });
+    try {
+      const [upd] = await db.update(usersTable)
+        .set({ cajaSaldoUSD: parsed.data.cajaSaldoUSD })
         .where(eq(usersTable.id, req.params.userId))
         .returning();
       if (!upd) return res.status(404).json({ error: "Usuario no encontrado" });

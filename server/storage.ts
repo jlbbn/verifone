@@ -120,6 +120,11 @@ export class DatabaseStorage implements IStorage {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended BOOLEAN NOT NULL DEFAULT FALSE
     `);
 
+    // --- Migrate: add caja_saldo_usd column to users if missing ---
+    await db.execute(sql`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS caja_saldo_usd DOUBLE PRECISION NOT NULL DEFAULT 0
+    `);
+
     // --- Ensure payment_charges table exists ---
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS payment_charges (

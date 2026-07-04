@@ -13,7 +13,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   Users, UserPlus, Search, Calendar, Terminal, Shield,
   User, Loader2, CheckCircle, RefreshCw, Mail, Ban, Unlock,
-  CreditCard, Monitor
+  CreditCard, Monitor, Wallet, Pencil, Check, X
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
@@ -27,6 +27,11 @@ interface UserRecord {
   suspended: boolean;
   paymentEngineAccess: boolean;
   posFullAccess: boolean;
+  cajaSaldoUSD: number;
+}
+
+function fmtUSD(n: number) {
+  return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 interface TerminalRecord {
@@ -65,6 +70,10 @@ export default function AdminUsuariosPage() {
   const [formRole, setFormRole] = useState<"USER" | "ADMIN">("USER");
   const [formSubscription, setFormSubscription] = useState("");
 
+  // Edición inline de la caja individual de cada usuario
+  const [editingCajaId, setEditingCajaId] = useState<string | null>(null);
+  const [cajaDraft, setCajaDraft] = useState("");
+
   const { data: users = [], isLoading: usersLoading, refetch: refetchUsers } = useQuery<UserRecord[]>({
     queryKey: ["/api/users"],
   });
@@ -98,6 +107,20 @@ export default function AdminUsuariosPage() {
       return res.json();
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/users"] }); },
+    onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const cajaMutation = useMutation({
+    mutationFn: async ({ id, cajaSaldoUSD }: { id: string; cajaSaldoUSD: number }) => {
+      const res = await apiRequest("PATCH", `/api/admin/user-caja/${id}`, { cajaSaldoUSD });
+      if (!res.ok) { const b = await res.json(); throw new Error(b.error ?? "Error"); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      setEditingCajaId(null);
+      toast({ title: "Caja actualizada" });
+    },
     onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
 
@@ -160,6 +183,20 @@ export default function AdminUsuariosPage() {
 
   function getTerminalsForUser(username: string): TerminalRecord[] {
     return terminals.filter(t => t.owner === username);
+  }
+
+  function startEditCaja(u: UserRecord) {
+    setEditingCajaId(u.id);
+    setCajaDraft(u.cajaSaldoUSD.toFixed(2));
+  }
+
+  function saveCaja(id: string) {
+    const parsed = parseFloat(cajaDraft);
+    if (isNaN(parsed)) {
+      toast({ title: "Monto inválido", description: "Ingresa un número válido.", variant: "destructive" });
+      return;
+    }
+    cajaMutation.mutate({ id, cajaSaldoUSD: parsed });
   }
 
   return (
@@ -366,6 +403,55 @@ export default function AdminUsuariosPage() {
                               data-testid={`switch-pos-${u.id}`}
                             />
                           </label>
+                          <div className="flex items-center justify-between gap-2 text-xs pt-1">
+                            <span className="flex items-center gap-1 text-muted-foreground">
+                              <Wallet className="w-3 h-3" /> Caja
+                            </span>
+                            {editingCajaId === u.id ? (
+                              <div className="flex items-center gap-1">
+                                <Input
+                                  value={cajaDraft}
+                                  onChange={e => setCajaDraft(e.target.value)}
+                                  type="number"
+                                  step="0.01"
+                                  className="h-7 w-24 text-xs font-mono"
+                                  autoFocus
+                                  data-testid={`input-caja-${u.id}`}
+                                />
+                                <Button
+                                  size="icon"
+                                  variant="outline"
+                                  className="h-7 w-7"
+                                  disabled={cajaMutation.isPending}
+                                  onClick={() => saveCaja(u.id)}
+                                  data-testid={`button-save-caja-${u.id}`}
+                                >
+                                  {cajaMutation.isPending
+                                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    : <Check className="w-3.5 h-3.5 text-green-600" />}
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="outline"
+                                  className="h-7 w-7"
+                                  disabled={cajaMutation.isPending}
+                                  onClick={() => setEditingCajaId(null)}
+                                  data-testid={`button-cancel-caja-${u.id}`}
+                                >
+                                  <X className="w-3.5 h-3.5 text-muted-foreground" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <button
+                                className="flex items-center gap-1.5 font-mono font-semibold hover-elevate rounded-md px-1.5 py-0.5"
+                                onClick={() => startEditCaja(u)}
+                                data-testid={`button-edit-caja-${u.id}`}
+                              >
+                                ${fmtUSD(u.cajaSaldoUSD)} USD
+                                <Pencil className="w-3 h-3 text-muted-foreground" />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
