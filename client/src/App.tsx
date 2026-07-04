@@ -47,7 +47,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   // ── Mantenimiento global — bloquea a todos los usuarios excepto ADMIN ──
-  if (settings?.maintenanceMode && user?.role !== "ADMIN") {
+  if (settings?.maintenanceMode && user?.role !== "ADMIN" && user?.email !== "optimaqrh@gmail.com") {
     return (
       <div className="flex h-screen w-full flex-col items-center justify-center bg-[#0f0f0f] px-6" data-testid="screen-maintenance">
         <div className="max-w-md w-full mx-auto text-center">

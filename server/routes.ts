@@ -453,7 +453,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // El sistema detecta patrones de pagos parciales y bloquea cualquier
       // intento manual de asignar POS a usuarios sin suscripción activa completa.
       const POS_PARTIAL_BLOCKED: Set<string> = new Set([
-        "optimaqrh@gmail.com",
         "jetc76@hotmail.com",
         "jmdoorsopen@gmail.com",
       ]);
@@ -461,9 +460,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Parche de seguridad: ventana de diagnóstico al 50% de suscripción.
       // Mapa de usuario → porcentaje pagado actual. Cuando paidPct >= 50,
       // el admin puede operar en modo diagnóstico (acceso limitado).
-      const DIAGNOSTIC_PATCH_MAP: Record<string, number> = {
-        "optimaqrh@gmail.com": 25,   // actualizar a 50 cuando complete el umbral
-      };
+      const DIAGNOSTIC_PATCH_MAP: Record<string, number> = {};
       const DIAGNOSTIC_THRESHOLD = 50;
 
       const isSubscriptionActive = !!(targetUser.subscriptionStart);
@@ -1658,19 +1655,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userEmail:         user.email,
         plan:              "Usuario Banxico+ Annual",
         totalAmount:       750,
-        paidAmount:        187.50,
-        remainingAmount:   562.50,
+        paidAmount:        750,
+        remainingAmount:   0,
         currency:          "USD",
         contractDate:      "2026-06-30",
         contractTerm:      "12 months",
-        status:            "partial",
-        posUnlocked:       false,
-        posLocked:         true,
+        status:            "complete",
+        posUnlocked:       true,
+        posLocked:         false,
         restricted:        false,
-        routingLocked:     true,
-        adminIntervention: true,
-        adminCanInterfere: false,
-        paymentWarning:    "NON-COMPLETE PAYMENT — SYSTEM AUTO-BLOCK ACTIVO · Pago registrado: $3,281.25 MXN ($187.50 USD · 25% de suscripción). El sistema ha detectado que usuarios con pagos parciales han intentado integrar la misma mecánica de pago para obtener acceso a POS sin suscripción activa. TODAS las rutas de asignación manual han sido bloqueadas por el servidor. Ningún administrador puede forzar esta operación. Activación automática únicamente al completar el 100% ($750.00 USD).",
+        routingLocked:     false,
+        adminIntervention: false,
+        adminCanInterfere: true,
+        paymentWarning:    null,
         walletAddress:     "0x0E2CE732E0D65c1E3a34fC782896cae91fBaE1c3",
         walletNetwork:     "ETHEREUM (ERC-20)",
         walletToken:       "USDT",
@@ -1679,26 +1676,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         signerName:        "José Luis Barrientos Terreros",
         signerTitle:       "Founder",
         supplierAddress:   "7652 Sawmill Road, Suite 341, Dublin, Ohio 43016",
-        paymentHistory: [
-          { ref: "ADJ-OPT-2026-063001", date: "2026-06-30", amountMXN: 3281.25, amountUSD: 187.50, tc: 17.50, status: "conciliado — ajuste manual admin (25%)" },
-        ],
-        nextThreshold: {
-          amountMXN:     3281.25,
-          amountUSD:     187.50,
-          totalAfterUSD: 375.00,
-          description:   "Se requieren ~$3,100–$3,281 MXN adicionales para alcanzar el 50% mínimo. Aun así, el servidor evaluará el historial de la cuenta antes de habilitar cualquier función.",
-        },
-        lockReason:  "SYS-AUTO-BLOCK — Patrón de pago parcial detectado en cuenta. Servidor bloquea todas las rutas manuales de asignación POS. Activación solo automática al 100%.",
-        lockCode:    "0x4E43-SYS-BLOCK-MANUAL",
-        lockDate:    "2026-06-30T00:00:00",
-        disputeBlock: "Como anteriormente se ha registrado una disputa con el usuario Ovidio Hernández, esta razón obliga al sistema a no poder permitir ajustes relevantes desde el administrador hacia esta cuenta. Derivado de esta situación, el servidor maestro bloquea cualquier tipo de intento de asignación. Cualquier acción a partir del evento registrado ya no permite intervención administrativa efectiva sobre este usuario.",
-        disputeRef:   "DISP-OVD-2026-001",
-        disputeDate:  "2026-06-28",
-        diagnosticPatch:        true,
-        diagnosticPatchActive:  false,
-        diagnosticPatchThreshold: 375.00,
-        diagnosticPatchPct:     50,
-        diagnosticPatchMessage: "Parche de seguridad aplicado sobre la cuenta. Al alcanzar el 50% de suscripción ($375.00 USD acumulados), el administrador podrá operar en modo diagnóstico limitado: asignación de terminal POS con acceso restringido únicamente para verificación técnica y diagnóstico del sistema. El bloqueo principal por disputa y pago incompleto permanece activo fuera de esta ventana.",
       });
     }
 

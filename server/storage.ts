@@ -320,7 +320,7 @@ export class DatabaseStorage implements IStorage {
         role: "USER",
         position: "Usuario",
         avatar: null,
-        subscriptionStart: null,
+        subscriptionStart: new Date("2026-06-30T00:00:00Z"),
       },
     ];
 
