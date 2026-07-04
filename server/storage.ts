@@ -46,6 +46,7 @@ export interface IStorage {
   getAllTransactions(): Promise<Transaction[]>;
   getTransactionsByUser(username: string): Promise<Transaction[]>;
   updateTransactionStatus(id: string, status: string, authCode?: string): Promise<Transaction | undefined>;
+  addTransactionNote(id: string, note: string): Promise<Transaction | undefined>;
 
   // Payment Methods
   createPaymentMethod(payment: InsertPaymentMethod): Promise<PaymentMethod>;
@@ -594,6 +595,19 @@ export class DatabaseStorage implements IStorage {
   async updateTransactionStatus(id: string, status: string, authCode?: string): Promise<Transaction | undefined> {
     const [updated] = await db.update(txTable)
       .set({ status, ...(authCode ? { authCode } : {}) })
+      .where(eq(txTable.id, id))
+      .returning();
+    return updated;
+  }
+
+  async addTransactionNote(id: string, note: string): Promise<Transaction | undefined> {
+    const existing = await this.getTransaction(id);
+    if (!existing) return undefined;
+    const newDescription = existing.description
+      ? `${existing.description} · ${note}`
+      : note;
+    const [updated] = await db.update(txTable)
+      .set({ description: newDescription })
       .where(eq(txTable.id, id))
       .returning();
     return updated;

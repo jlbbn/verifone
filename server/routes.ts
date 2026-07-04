@@ -843,6 +843,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Anota una transacción (no modifica monto ni estado — solo agrega una
+  // referencia/nota a la descripción, p. ej. para conciliación con otros
+  // módulos como Exchange).
+  app.patch("/api/transactions/:id/note", requireRole("ADMIN"), async (req, res) => {
+    try {
+      const note = typeof req.body?.note === "string" ? req.body.note.trim() : "";
+      if (!note) {
+        res.status(400).json({ error: "La nota no puede estar vacía" });
+        return;
+      }
+      const transaction = await storage.addTransactionNote(req.params.id, note);
+      if (!transaction) {
+        res.status(404).json({ error: "Transacción no encontrada" });
+        return;
+      }
+      await storage.createTransactionLog({
+        transactionId: transaction.id,
+        action: "ADD_NOTE",
+        status: transaction.status,
+        message: `Nota agregada: ${note}`,
+      });
+      res.json(transaction);
+    } catch (error) {
+      res.status(500).json({ error: "Error al anotar transacción" });
+    }
+  });
+
   // ====================================================================
   // MÉTODOS DE PAGO
   // ====================================================================
