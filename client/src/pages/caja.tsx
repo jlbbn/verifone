@@ -70,20 +70,8 @@ const today = new Date().toLocaleDateString("es-MX", { day: "2-digit", month: "s
 const lastWeek = (() => { const d = new Date(); d.setDate(d.getDate() - 7); return d.toLocaleDateString("es-MX", { day: "2-digit", month: "short" }).toUpperCase(); })();
 
 function buildLiveSeed(s: typeof DEFAULT_SYSTEM_SETTINGS): LiveTx[] {
-  const m1 = s.feedMerchant1;
-  const m2 = s.feedMerchant2;
-  const pos = s.feedPosRegularUSD;
-  const f1643 = s.feed1643USD;
-  const visa = s.feedVisaNet101USD;
-  return [
-    { id: "LX-001", terminal: "T1001", merchant: m1, amountUSD: pos,                         cardType: "Mastercard Internacional", protocol: "201.2",    protocolType: "pos",   authCode: "596122", oper: 28, lote: 2, status: "aprobado", date: today,    time: "18:55" },
-    { id: "LX-002", terminal: "T1004", merchant: m2, amountUSD: Math.round(pos * 0.925),      cardType: "VISA Internacional",       protocol: "101.2 M2", protocolType: "pos",   authCode: "441829", oper: 15, lote: 3, status: "aprobado", date: today,    time: "17:40" },
-    { id: "LX-003", terminal: "T1002", merchant: m1, amountUSD: Math.round(pos * 1.075),      cardType: "Mastercard Internacional", protocol: "201.2",    protocolType: "pos",   authCode: "334211", oper: 12, lote: 1, status: "aprobado", date: today,    time: "16:22" },
-    { id: "LX-004", terminal: "T1005", merchant: m1, amountUSD: Math.round(f1643 * 1.05),     cardType: "VISA Internacional",       protocol: "1643",     protocolType: "1643",  authCode: "881203", oper: 9,  lote: 2, status: "aprobado", date: today,    time: "14:30" },
-    { id: "LX-005", terminal: "T1001", merchant: m2, amountUSD: Math.round(pos * 1.175),      cardType: "Mastercard Internacional", protocol: "101.2 M2", protocolType: "pos",   authCode: "774019", oper: 31, lote: 4, status: "aprobado", date: today,    time: "10:15" },
-    { id: "LX-006", terminal: "T1002", merchant: m1, amountUSD: Math.round(f1643 * 0.957),    cardType: "Mastercard Internacional", protocol: "1643",     protocolType: "1643",  authCode: "221087", oper: 6,  lote: 1, status: "aprobado", date: today,    time: "09:05" },
-    { id: "LX-007", terminal: "T1004", merchant: "VISAINC ORDSHR / BANXICO LLC", amountUSD: visa, cardType: "VISA Internacional",  protocol: "101.1",    protocolType: "101.1", authCode: "978877", oper: 1,  lote: 1, status: "aprobado", date: lastWeek, time: "10:47" },
-  ];
+  // No hay operaciones activas: actualmente ningún otro usuario está transaccionando.
+  return [];
 }
 
 const LIVE_POOL: Omit<LiveTx, "id" | "date" | "time" | "isNew">[] = [
@@ -99,20 +87,8 @@ function randFrom<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.le
 
 // ─── Admin initial movements (settings-driven) ────────────────────────────────
 function buildAdminMovements(s: typeof DEFAULT_SYSTEM_SETTINGS): Movement[] {
-  const pos   = s.feedPosRegularUSD;
-  const f1643 = s.feed1643USD;
-  const visa  = s.feedVisaNet101USD;
-  const m1    = s.feedMerchant1;
-  return [
-    { id: "MOV-001", type: "ingreso", amountUSD: pos,                       category: "Venta tarjeta internacional", description: `Venta Mastercard Internacional — ${m1}`, reference: "AUTH-596122", time: "18:55", user: "Admin", protocol: "201.2",    cardType: "Mastercard", authCode: "596122" },
-    { id: "MOV-002", type: "ingreso", amountUSD: Math.round(pos * 0.925),   category: "Liquidación POS",             description: "Liquidación terminal T1004 — VISA Internacional",           reference: "AUTH-441829", time: "17:40", user: "Admin", protocol: "101.2 M2", cardType: "VISA",       authCode: "441829" },
-    { id: "MOV-003", type: "ingreso", amountUSD: Math.round(pos * 1.075),   category: "Venta tarjeta internacional", description: "Venta Mastercard Internacional — OPER 12 LOTE 1",            reference: "AUTH-334211", time: "16:22", user: "Admin", protocol: "201.2",    cardType: "Mastercard", authCode: "334211" },
-    { id: "MOV-004", type: "ingreso", amountUSD: Math.round(f1643 * 1.05),  category: "Venta tarjeta internacional", description: "Venta forzada terminal manual 1643 — T1005",                 reference: "AUTH-881203", time: "14:30", user: "Admin", protocol: "1643",      cardType: "VISA" },
-    { id: "MOV-005", type: "ingreso", amountUSD: Math.round(pos * 1.175),   category: "Venta tarjeta nacional",      description: "Venta Mastercard Internacional — Terminal T1001",            reference: "AUTH-774019", time: "10:15", user: "Admin", protocol: "101.2 M2", cardType: "Mastercard", authCode: "774019" },
-    { id: "MOV-006", type: "egreso",  amountUSD: 1200,                      category: "Comisión procesadora",        description: "Comisión red EMV — Procesadora internacional",               reference: "COM-EMV-042", time: "09:50", user: "Admin", protocol: "201.1" },
-    { id: "MOV-007", type: "ingreso", amountUSD: Math.round(f1643 * 0.957), category: "Venta tarjeta internacional", description: "Venta forzada manual 1643 — T1002 OPER 6",                   reference: "AUTH-221087", time: "09:05", user: "Admin", protocol: "1643",      cardType: "Mastercard" },
-    { id: "MOV-008", type: "ingreso", amountUSD: visa,                      category: "Liquidación POS",             description: "Visa Network Transfer 101.1 — VISAINC/BANXICO LLC — LOTE 1", reference: "AUTH-978877", time: "06/06 10:47", user: "Admin", protocol: "101.1", cardType: "VISA", authCode: "978877" },
-  ];
+  // Caja central en cero: no hay movimientos activos por el momento.
+  return [];
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -172,6 +148,8 @@ export default function CajaPage() {
   }, [settings?.feedPosRegularUSD, settings?.feed1643USD, settings?.feedVisaNet101USD, settings?.feedMerchant1, settings?.feedMerchant2, showLiveView]);
 
   useEffect(() => {
+    // Sin actividad simulada: no hay otros usuarios transaccionando por el momento.
+    return;
     if (!showLiveView) return;
     const interval = setInterval(() => {
       const s = settingsRef.current ?? DEFAULT_SYSTEM_SETTINGS;

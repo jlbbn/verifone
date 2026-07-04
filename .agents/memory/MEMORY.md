@@ -3,3 +3,4 @@
 - [Express.User type collision with passport](express-user-type-collision.md) — inside `namespace Express`, bare `User` resolves to passport's empty type; use `import("@shared/schema").User`.
 - [Version pinning constraints](version-pinning.md) — express@4, react@18, vite@5, tailwind@3 pinned; pages use recharts directly; always run `tsc --noEmit` after dep changes.
 - [Admin system settings architecture](admin-settings-arch.md) — settings are in-memory on server (reset on restart); useSystemSettings hook; TC/fmtMXN/liveSeed must be component-local (not module-level) to be reactive; hooks must be declared before useEffects that call their setters.
+- [Seed code changes don't clean a live Postgres DB](seed-vs-live-db.md) — editing idempotent seed blocks in storage.ts doesn't touch already-committed rows; must reconcile the live DB directly with psql.

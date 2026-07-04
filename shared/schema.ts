@@ -285,7 +285,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   afiliacion: "7705397",
   tipoCambio: 17.50,
   maintenanceMode: true,
-  saldoAperturaUSD: 45890,
+  saldoAperturaUSD: 0,
   saldoSistemaUSD: 1250000,
   feedMerchant1: "GRUPO ASGE VENADO 69",
   feedMerchant2: "BANXICO PLUS CANCUN",
