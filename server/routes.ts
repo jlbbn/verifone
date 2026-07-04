@@ -1897,7 +1897,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     const schema = z.object({
-      processor:   z.enum(["stripe", "mercadopago"]),
       amount:      z.number().positive(),
       currency:    z.string().length(3),
       description: z.string().default("Banxico Plus charge"),
@@ -1916,77 +1915,126 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Datos inválidos", details: parsed.error.flatten() });
 
-    const { processor, amount, currency, description, email, card } = parsed.data;
+    const { amount, currency, description, email, card } = parsed.data;
 
+    // ── Motor de Pagos unificado — intenta Stripe primero (validación real de tarjeta) ──
+    // y recurre automáticamente a Mercado Pago si Stripe no está disponible. El
+    // usuario/cliente ya no elige el procesador: el motor decide internamente.
     try {
-      if (processor === "stripe") {
-        // ── Stripe ──────────────────────────────────────────────
-        const { getStripeClient } = await import("./stripeClient");
-        const stripe = await getStripeClient();
+      const { getStripeClient } = await import("./stripeClient");
+      const stripe = await getStripeClient();
 
-        // 1. Create payment method token from raw card data
-        const pm = await stripe.paymentMethods.create({
-          type: "card",
-          card: {
-            number:    card.number,
-            exp_month: card.expMonth,
-            exp_year:  card.expYear,
-            cvc:       card.cvv,
-          },
-          billing_details: {
-            name:  card.holder,
-            email: email,
-          },
-        });
+      // 1. Create payment method token from raw card data
+      const pm = await stripe.paymentMethods.create({
+        type: "card",
+        card: {
+          number:    card.number,
+          exp_month: card.expMonth,
+          exp_year:  card.expYear,
+          cvc:       card.cvv,
+        },
+        billing_details: {
+          name:  card.holder,
+          email: email,
+        },
+      });
 
-        // 2. Create and confirm payment intent
-        const amountCents = Math.round(amount * 100);
-        const idempKey = `pe-${user.username}-${Date.now()}-${randomBytes(4).toString("hex")}`;
-        const intent = await stripe.paymentIntents.create({
-          amount:               amountCents,
-          currency:             currency.toLowerCase(),
-          payment_method:       pm.id,
-          confirm:              true,
-          description:          description,
-          receipt_email:        email,
-          automatic_payment_methods: { enabled: true, allow_redirects: "never" },
-        }, { idempotencyKey: idempKey });
+      // 2. Create and confirm payment intent
+      const amountCents = Math.round(amount * 100);
+      const idempKey = `pe-${user.username}-${Date.now()}-${randomBytes(4).toString("hex")}`;
+      const intent = await stripe.paymentIntents.create({
+        amount:               amountCents,
+        currency:             currency.toLowerCase(),
+        payment_method:       pm.id,
+        confirm:              true,
+        description:          description,
+        receipt_email:        email,
+        automatic_payment_methods: { enabled: true, allow_redirects: "never" },
+      }, { idempotencyKey: idempKey });
 
-        // 3. Retrieve receipt_url from the underlying charge
-        let receiptUrl: string | null = null;
-        if (intent.status === "succeeded" && intent.latest_charge) {
-          try {
-            const ch = await stripe.charges.retrieve(intent.latest_charge as string);
-            receiptUrl = ch.receipt_url ?? null;
-          } catch (_) { /* ignore */ }
-        }
+      // 3. Retrieve receipt_url from the underlying charge
+      let receiptUrl: string | null = null;
+      if (intent.status === "succeeded" && intent.latest_charge) {
+        try {
+          const ch = await stripe.charges.retrieve(intent.latest_charge as string);
+          receiptUrl = ch.receipt_url ?? null;
+        } catch (_) { /* ignore */ }
+      }
 
-        const cardDetails = intent.payment_method
-          ? (await stripe.paymentMethods.retrieve(pm.id)).card
-          : pm.card;
+      const cardDetails = intent.payment_method
+        ? (await stripe.paymentMethods.retrieve(pm.id)).card
+        : pm.card;
 
+      if (intent.status !== "succeeded") {
         const charge = await storage.createPaymentCharge({
           chargeId:     intent.id,
           processor:    "stripe",
-          amount,
-          currency:     currency.toUpperCase(),
-          status:       intent.status === "succeeded" ? "succeeded" : intent.status,
-          description,
-          email,
+          amount, currency: currency.toUpperCase(), status: intent.status,
+          description, email,
           cardLast4:    cardDetails?.last4 ?? card.number.slice(-4),
           cardBrand:    cardDetails?.brand ?? "unknown",
-          receiptUrl,
-          errorMessage: null,
+          receiptUrl:   null,
+          errorMessage: `Estado no exitoso: ${intent.status}`,
           createdBy:    user.username,
         });
+        return res.status(402).json({ ...charge, error: "Tarjeta no aprobada / Card not approved" });
+      }
 
-        return res.json(charge);
+      const charge = await storage.createPaymentCharge({
+        chargeId:     intent.id,
+        processor:    "stripe",
+        amount,
+        currency:     currency.toUpperCase(),
+        status:       "succeeded",
+        description,
+        email,
+        cardLast4:    cardDetails?.last4 ?? card.number.slice(-4),
+        cardBrand:    cardDetails?.brand ?? "unknown",
+        receiptUrl,
+        errorMessage: null,
+        createdBy:    user.username,
+      });
 
-      } else {
-        // ── Mercado Pago ────────────────────────────────────────
-        const mpToken = process.env.MP_ACCESS_TOKEN;
-        if (!mpToken) return res.status(503).json({ error: "Mercado Pago no configurado" });
+      return res.json(charge);
 
+    } catch (stripeErr: any) {
+      const code    = stripeErr?.code ?? "card_error";
+      const decline = stripeErr?.decline_code ?? stripeErr?.code ?? "unknown";
+      const msg     = stripeErr?.message ?? "Error al procesar tarjeta";
+      console.error(`[PaymentEngine/Stripe] ERROR — code:${code} decline:${decline} — ${msg}`);
+
+      // Hard declines → reject immediately, no fallback (the card itself was rejected)
+      const hardDeclines = ["card_declined", "incorrect_cvc", "expired_card", "incorrect_number",
+        "insufficient_funds", "lost_card", "stolen_card", "do_not_honor",
+        "transaction_not_allowed", "invalid_expiry_year", "invalid_expiry_month"];
+      if (hardDeclines.includes(code) || hardDeclines.includes(decline)) {
+        const charge = await storage.createPaymentCharge({
+          chargeId:     `err-${Date.now()}`,
+          processor:    "stripe",
+          amount, currency: currency.toUpperCase(), status: "failed",
+          description, email,
+          cardLast4: card.number.slice(-4), cardBrand: null,
+          receiptUrl: null, errorMessage: msg, createdBy: user.username,
+        }).catch(() => null);
+        return res.status(402).json({ ...(charge ?? {}), error: msg, declineCode: decline });
+      }
+
+      // ── Soft error (config/network) → fallback automático a Mercado Pago ──
+      console.warn(`[PaymentEngine] Stripe no disponible, usando Mercado Pago — ${msg}`);
+      const mpToken = process.env.MP_ACCESS_TOKEN;
+      if (!mpToken) {
+        const charge = await storage.createPaymentCharge({
+          chargeId:     `err-${Date.now()}`,
+          processor:    "stripe",
+          amount, currency: currency.toUpperCase(), status: "failed",
+          description, email,
+          cardLast4: card.number.slice(-4), cardBrand: null,
+          receiptUrl: null, errorMessage: "Motor de pagos no disponible en este momento", createdBy: user.username,
+        }).catch(() => null);
+        return res.status(502).json({ ...(charge ?? {}), error: "No se pudo procesar el cobro. Intenta nuevamente." });
+      }
+
+      try {
         // 1. Create MP card token
         const tokenRes = await fetch("https://api.mercadopago.com/v1/card_tokens", {
           method: "POST",
@@ -2065,25 +2113,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         const httpStatus = payData.status === "approved" ? 200 : 402;
         return res.status(httpStatus).json(charge);
+
+      } catch (mpErr: any) {
+        console.error("[PaymentEngine/MP] Error:", mpErr.message);
+        const charge = await storage.createPaymentCharge({
+          chargeId:     `err-${Date.now()}`,
+          processor:    "mercadopago",
+          amount, currency: currency.toUpperCase(), status: "failed",
+          description, email,
+          cardLast4: card.number.slice(-4), cardBrand: null,
+          receiptUrl: null, errorMessage: mpErr.message ?? "Unknown error",
+          createdBy: user.username,
+        }).catch(() => null);
+        return res.status(402).json({ ...(charge ?? {}), error: mpErr.message ?? "Payment processing failed" });
       }
-
-    } catch (err: any) {
-      console.error("[payment-engine] Error:", err.message);
-      // Store failed charge for audit trail
-      const charge = await storage.createPaymentCharge({
-        chargeId:     `err-${Date.now()}`,
-        processor,
-        amount, currency: currency.toUpperCase(), status: "failed",
-        description, email,
-        cardLast4: card.number.slice(-4), cardBrand: null,
-        receiptUrl: null, errorMessage: err.message ?? "Unknown error",
-        createdBy: user.username,
-      }).catch(() => null);
-
-      return res.status(402).json({
-        ...(charge ?? {}),
-        error: err.message ?? "Payment processing failed",
-      });
     }
   });
 

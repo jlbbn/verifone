@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -12,11 +12,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  CreditCard, Globe, Zap, CheckCircle, RefreshCw, AlertTriangle,
+  CreditCard, Globe, Zap, CheckCircle, RefreshCw,
   Shield, Lock, DollarSign, ChevronDown, ChevronUp,
 } from "lucide-react";
 
-// ── Types ────────────────────────────────────────────────────────────────────
 type ChargeRecord = {
   id: string;
   chargeId: string;
@@ -61,12 +60,13 @@ function fmtDate(iso: string) {
   });
 }
 
-// ── Main Component ────────────────────────────────────────────────────────────
-export default function PaymentEnginePage() {
+// ── Unified Payment Engine Panel — Visa Quantum 9.0 ─────────────────────────
+// Single automatic engine: tries Stripe first, falls back to Mercado Pago
+// transparently on the backend. No manual processor selection.
+export function PaymentEnginePanel() {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const [processor, setProcessor] = useState<"stripe" | "mercadopago">("stripe");
   const [amount, setAmount]       = useState("");
   const [currency, setCurrency]   = useState("USD");
   const [desc, setDesc]           = useState("");
@@ -76,10 +76,8 @@ export default function PaymentEnginePage() {
   const [holder, setHolder]       = useState("");
   const [email, setEmail]         = useState("");
   const [expanded, setExpanded]   = useState<string | null>(null);
-
-  // MP extra
-  const [docType, setDocType]   = useState("CPF");
-  const [docNum, setDocNum]     = useState("");
+  const [docType, setDocType]     = useState("CPF");
+  const [docNum, setDocNum]       = useState("");
 
   const { data: charges = [], isLoading } = useQuery<ChargeRecord[]>({
     queryKey: ["/api/payment-engine/charges"],
@@ -102,11 +100,11 @@ export default function PaymentEnginePage() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/payment-engine/charges"] });
       if (data.status === "succeeded" || data.status === "approved") {
-        toast({ title: "Payment approved", description: `Auth: ${data.chargeId}` });
+        toast({ title: "Cobro aprobado", description: `Auth: ${data.chargeId}` });
+        setAmount(""); setDesc(""); setCardNum(""); setExpiry(""); setCvv(""); setHolder(""); setEmail(""); setDocNum("");
       } else {
-        toast({ title: "Payment failed", description: data.error ?? "Declined", variant: "destructive" });
+        toast({ title: "Cobro rechazado", description: data.error ?? "Declined", variant: "destructive" });
       }
-      setAmount(""); setDesc(""); setCardNum(""); setExpiry(""); setCvv(""); setHolder(""); setEmail(""); setDocNum("");
     },
     onError: (err: any) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -120,7 +118,6 @@ export default function PaymentEnginePage() {
     }
     const [expMonth, expYear] = expiry.split("/").map(s => s.trim());
     chargeMutation.mutate({
-      processor,
       amount: parseFloat(amount),
       currency,
       description: desc || "Banxico Plus charge",
@@ -132,61 +129,57 @@ export default function PaymentEnginePage() {
         cvv,
         holder,
       },
-      ...(processor === "mercadopago" ? { docType, docNum } : {}),
+      docType, docNum,
     });
   }
 
-  const totalApproved  = charges.filter(c => c.status === "succeeded" || c.status === "approved").length;
-  const totalVolume    = charges
+  const totalApproved = charges.filter(c => c.status === "succeeded" || c.status === "approved").length;
+  const totalVolume = charges
     .filter(c => c.status === "succeeded" || c.status === "approved" || c.status === "in_process")
     .reduce((s, c) => s + c.amount, 0);
 
-  // ── Access gate for non-admin users ─────────────────────────────────────
   if (user?.role !== "ADMIN" && perms !== undefined && !perms.paymentEngineAccess) {
     return (
-      <div className="max-w-5xl mx-auto p-4 md:p-6">
-        <div className="rounded-lg border border-amber-300 bg-amber-50 px-6 py-12 text-center space-y-4">
-          <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mx-auto">
-            <Lock className="w-8 h-8 text-amber-600" />
+      <div className="rounded-lg border border-amber-300 bg-amber-50 px-6 py-12 text-center space-y-4">
+        <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mx-auto">
+          <Lock className="w-8 h-8 text-amber-600" />
+        </div>
+        <div>
+          <div className="flex items-center justify-center gap-2 mb-1">
+            <Zap className="w-5 h-5 text-[#c8322b]" />
+            <h1 className="text-xl font-bold">Visa Quantum 9.0 — Motor de Pagos</h1>
           </div>
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Zap className="w-5 h-5 text-[#c8322b]" />
-              <h1 className="text-xl font-bold">Visa Quantum 9.0 — Payment Engine</h1>
-            </div>
-            <h3 className="font-bold text-amber-900 text-lg mt-2">Acceso no autorizado</h3>
-            <p className="text-sm text-amber-700 mt-2 max-w-md mx-auto">
-              Tu cuenta no tiene acceso al Motor de Pagos. Contacta al administrador del sistema para que active tu permiso.
-            </p>
-          </div>
-          <div className="inline-flex items-center gap-2 bg-amber-100 border border-amber-200 rounded-md px-4 py-2 text-xs font-mono text-amber-800">
-            <Shield className="w-3.5 h-3.5" />
-            PAYMENT_ENGINE_ACCESS_DENIED — ERR_PE_PERM_001
-          </div>
+          <h3 className="font-bold text-amber-900 text-lg mt-2">Acceso no autorizado</h3>
+          <p className="text-sm text-amber-700 mt-2 max-w-md mx-auto">
+            Tu cuenta no tiene acceso al Motor de Pagos. Contacta al administrador del sistema para que active tu permiso.
+          </p>
+        </div>
+        <div className="inline-flex items-center gap-2 bg-amber-100 border border-amber-200 rounded-md px-4 py-2 text-xs font-mono text-amber-800">
+          <Shield className="w-3.5 h-3.5" />
+          PAYMENT_ENGINE_ACCESS_DENIED — ERR_PE_PERM_001
         </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-5">
-
+    <div className="space-y-5">
       {/* ── Header ── */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <div className="flex items-center gap-2">
             <Zap className="w-5 h-5 text-[#c8322b]" />
-            <h1 className="text-xl font-bold">Visa Quantum 9.0 — Payment Engine</h1>
+            <h1 className="text-xl font-bold">Visa Quantum 9.0 — Motor de Pagos Unificado</h1>
           </div>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Motor de cobros internacional · Stripe + Mercado Pago
+            Motor de cobros internacional · Selección automática de procesador
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {stripeCfg && (
             <Badge className={`no-default-active-elevate gap-1 font-bold ${stripeCfg.live ? "bg-green-600 text-white border-green-700" : "bg-amber-100 text-amber-800 border-amber-300"}`}>
               <Zap className="w-3 h-3" />
-              Stripe {stripeCfg.live ? "LIVE" : "TEST"}
+              Motor {stripeCfg.live ? "LIVE" : "TEST"}
             </Badge>
           )}
           <Badge className="bg-green-100 text-green-700 border-green-200 no-default-active-elevate gap-1">
@@ -202,18 +195,14 @@ export default function PaymentEnginePage() {
       </div>
 
       {/* ── Stats ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <Card><CardContent className="px-4 py-3">
-          <p className="text-xs text-muted-foreground">Total Charges</p>
+          <p className="text-xs text-muted-foreground">Total Cobros</p>
           <p className="text-2xl font-bold">{charges.length}</p>
         </CardContent></Card>
         <Card><CardContent className="px-4 py-3">
-          <p className="text-xs text-muted-foreground">Approved</p>
+          <p className="text-xs text-muted-foreground">Aprobados</p>
           <p className="text-2xl font-bold text-green-600">{totalApproved}</p>
-        </CardContent></Card>
-        <Card><CardContent className="px-4 py-3">
-          <p className="text-xs text-muted-foreground">Stripe</p>
-          <p className="text-2xl font-bold text-[#635bff]">{charges.filter(c => c.processor === "stripe").length}</p>
         </CardContent></Card>
         <Card><CardContent className="px-4 py-3">
           <p className="text-xs text-muted-foreground">Volumen Total</p>
@@ -230,35 +219,14 @@ export default function PaymentEnginePage() {
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <CreditCard className="w-4 h-4 text-[#c8322b]" />
-              New Charge
+              Nuevo Cobro
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
 
-            {/* Processor toggle */}
-            <div className="flex gap-2">
-              <button
-                onClick={() => setProcessor("stripe")}
-                data-testid="button-processor-stripe"
-                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md border text-sm font-medium transition-colors ${
-                  processor === "stripe"
-                    ? "bg-[#635bff] text-white border-[#635bff]"
-                    : "bg-muted/40 border-border text-muted-foreground hover:bg-muted"
-                }`}
-              >
-                <CreditCard className="w-3.5 h-3.5" /> Stripe
-              </button>
-              <button
-                onClick={() => setProcessor("mercadopago")}
-                data-testid="button-processor-mp"
-                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md border text-sm font-medium transition-colors ${
-                  processor === "mercadopago"
-                    ? "bg-[#00b1ea] text-white border-[#00b1ea]"
-                    : "bg-muted/40 border-border text-muted-foreground hover:bg-muted"
-                }`}
-              >
-                <Globe className="w-3.5 h-3.5" /> Mercado Pago
-              </button>
+            <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              <Zap className="w-3.5 h-3.5 text-[#c8322b] flex-shrink-0" />
+              Motor unificado: el sistema selecciona automáticamente Stripe o Mercado Pago.
             </div>
 
             {/* Amount + Currency */}
@@ -372,36 +340,34 @@ export default function PaymentEnginePage() {
               </div>
             </div>
 
-            {/* MP extra fields */}
-            {processor === "mercadopago" && (
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <Label className="text-xs">Document type</Label>
-                  <Select value={docType} onValueChange={setDocType}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="CPF">CPF (Brazil)</SelectItem>
-                      <SelectItem value="CNPJ">CNPJ (Brazil)</SelectItem>
-                      <SelectItem value="CURP">CURP (Mexico)</SelectItem>
-                      <SelectItem value="CC">CC (Colombia)</SelectItem>
-                      <SelectItem value="DNI">DNI (Argentina)</SelectItem>
-                      <SelectItem value="OTHER">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Document number</Label>
-                  <Input
-                    placeholder="12345678"
-                    value={docNum}
-                    onChange={e => setDocNum(e.target.value)}
-                    data-testid="input-charge-docnum"
-                  />
-                </div>
+            {/* Optional ID fields — only used if the engine falls back to Mercado Pago */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs">Document type</Label>
+                <Select value={docType} onValueChange={setDocType}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CPF">CPF (Brazil)</SelectItem>
+                    <SelectItem value="CNPJ">CNPJ (Brazil)</SelectItem>
+                    <SelectItem value="CURP">CURP (Mexico)</SelectItem>
+                    <SelectItem value="CC">CC (Colombia)</SelectItem>
+                    <SelectItem value="DNI">DNI (Argentina)</SelectItem>
+                    <SelectItem value="OTHER">Other</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-            )}
+              <div className="space-y-1">
+                <Label className="text-xs">Document number</Label>
+                <Input
+                  placeholder="12345678"
+                  value={docNum}
+                  onChange={e => setDocNum(e.target.value)}
+                  data-testid="input-charge-docnum"
+                />
+              </div>
+            </div>
 
             <Button
               className="w-full bg-[#c8322b] mt-1"
@@ -416,14 +382,14 @@ export default function PaymentEnginePage() {
             </Button>
 
             <p className="text-[10px] text-muted-foreground text-center">
-              Secured by {processor === "stripe" ? "Stripe" : "Mercado Pago"} · PCI DSS Level 1
+              Motor de Pagos Unificado · PCI DSS Level 1
             </p>
           </CardContent>
         </Card>
 
         {/* ── Transaction history ── */}
         <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Transaction History</h2>
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Historial de Cobros</h2>
           {isLoading ? (
             <div className="flex justify-center py-8">
               <RefreshCw className="w-5 h-5 animate-spin text-muted-foreground" />
