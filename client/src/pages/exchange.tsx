@@ -302,14 +302,14 @@ export default function ExchangePage() {
   });
 
   // Transacciones del usuario para calcular saldo disponible
-  const { data: userTxs = [] } = useQuery<{ transactionId: string; amount: string; status: string }[]>({
+  const { data: userTxs = [] } = useQuery<{ transactionId: string; amount: string; status: string; currency: string }[]>({
     queryKey: ["/api/transactions"],
-    enabled: !!coldWallet || !!marginPct,
+    enabled: !!user,
     refetchInterval: 15000,
   });
 
   const totalDispersado = userTxs
-    .filter(t => t.status === "completed" && t.transactionId.startsWith("DSP-"))
+    .filter(t => t.status === "completed" && t.transactionId.startsWith("DSP-") && (t.currency ?? "USD") === "USD")
     .reduce((sum, t) => sum + parseFloat(t.amount || "0"), 0);
 
   // Para usuarios con porcentaje de margen, su saldo = su parte del pool - lo ya dispersado
@@ -320,15 +320,46 @@ export default function ExchangePage() {
   const totalIngresado = myMarginAllocation !== null
     ? myMarginAllocation
     : userTxs
-        .filter(t => t.status === "completed" && !t.transactionId.startsWith("DSP-"))
+        .filter(t => t.status === "completed" && !t.transactionId.startsWith("DSP-") && (t.currency ?? "USD") === "USD")
         .reduce((sum, t) => sum + parseFloat(t.amount || "0"), 0);
 
   const availableUSD = Math.max(0, totalIngresado - totalDispersado);
-  const hasBalance   = availableUSD > 0.001;
 
+  // Saldo disponible en EUR — proviene de transacciones del POS Virtual liquidadas en EUR
+  const totalIngresadoEUR = userTxs
+    .filter(t => t.status === "completed" && !t.transactionId.startsWith("DSP-") && t.currency === "EUR")
+    .reduce((sum, t) => sum + parseFloat(t.amount || "0"), 0);
+  const totalDispersadoEUR = userTxs
+    .filter(t => t.status === "completed" && t.transactionId.startsWith("DSP-") && t.currency === "EUR")
+    .reduce((sum, t) => sum + parseFloat(t.amount || "0"), 0);
+  const availableEUR = Math.max(0, totalIngresadoEUR - totalDispersadoEUR);
+
+  const hasBalance = availableUSD > 0.001 || availableEUR > 0.001;
+
+  const [dispFiat,   setDispFiat]   = useState<"USD" | "EUR">("USD");
   const [dispAmount, setDispAmount] = useState("");
   const [dispToken,  setDispToken]  = useState("eth");
+  const [manualWallet, setManualWallet] = useState("");
   const [copied,     setCopied]     = useState(false);
+
+  const [fromId, setFromId] = useState("eth");
+  const [toId, setToId]     = useState("btc");
+  const [fromAmount, setFromAmount] = useState("0.1");
+  const [prices, setPrices] = useState<Record<string, number>>(
+    Object.fromEntries(CRYPTOS.map(c => [c.id, c.basePrice]))
+  );
+  const [updatedAt, setUpdatedAt] = useState(new Date());
+
+  // ── Motor de Dispersión Fiat → Crypto (USD/EUR de POS Virtual → activo cripto) ──
+  const FIAT_USD_RATE: Record<"USD" | "EUR", number> = { USD: 1, EUR: 1.085 };
+  const availableByFiat: Record<"USD" | "EUR", number> = { USD: availableUSD, EUR: availableEUR };
+
+  const destWallet = coldWallet ?? (manualWallet.trim() || null);
+  const currentFiatAvailable = availableByFiat[dispFiat];
+  const dispCoin = CRYPTOS.find(c => c.id === dispToken)!;
+  const dispCryptoPrice = prices[dispToken] ?? dispCoin.basePrice;
+  const dispUsdEquivalent = (parseFloat(dispAmount) || 0) * FIAT_USD_RATE[dispFiat];
+  const dispCryptoAmount = dispCryptoPrice > 0 ? dispUsdEquivalent / dispCryptoPrice : 0;
 
   function handleCopy() {
     if (!coldWallet) return;
@@ -338,31 +369,33 @@ export default function ExchangePage() {
     });
   }
 
+  function handleFlipFiat() {
+    setDispFiat(prev => (prev === "USD" ? "EUR" : "USD"));
+    setDispAmount("");
+  }
+
   const dispersionMutation = useMutation({
     mutationFn: async () => {
-      const coin     = CRYPTOS.find(c => c.id === dispToken)!;
-      const price    = prices[dispToken] ?? coin.basePrice;
-      const usdVal   = parseFloat(dispAmount) * price;
-      const txId     = `DSP-${Date.now().toString(36).toUpperCase()}`;
+      const txId  = `DSP-${Date.now().toString(36).toUpperCase()}`;
       const res = await apiRequest("POST", "/api/transactions", {
         transactionId: txId,
         protocol:      "101.3",
         type:          "transfer",
-        amount:        usdVal.toFixed(2),
-        currency:      "USD",
+        amount:        parseFloat(dispAmount).toFixed(2),
+        currency:      dispFiat,
         status:        "completed",
-        fromAccount:   `EXCHANGE · WALLET · ${coin.symbol}`,
-        toAccount:     coldWallet ?? "—",
-        description:   `Dispersión ${dispAmount} ${coin.symbol} ($${usdVal.toFixed(2)} USD) → Wallet fría ${coldWallet?.slice(0, 10)}…`,
+        fromAccount:   `EXCHANGE · POS VIRTUAL · ${dispFiat}`,
+        toAccount:     destWallet ?? "—",
+        description:   `Dispersión y conversión ${parseFloat(dispAmount).toFixed(2)} ${dispFiat} ≈ ${dispCryptoAmount.toFixed(8)} ${dispCoin.symbol} → Wallet ${destWallet?.slice(0, 10)}…`,
       });
       if (!res.ok) throw new Error("Error");
-      return { amount: dispAmount, symbol: coin.symbol, usd: usdVal };
+      return { amount: dispAmount, symbol: dispCoin.symbol, crypto: dispCryptoAmount };
     },
-    onSuccess: ({ amount, symbol, usd }) => {
+    onSuccess: ({ amount, symbol, crypto }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
       toast({
         title: "Dispersión enviada",
-        description: `${amount} ${symbol} ($${usd.toFixed(2)} USD) → wallet fría registrada`,
+        description: `${amount} ${dispFiat} → ${crypto.toFixed(8)} ${symbol} — wallet registrada`,
       });
       setDispAmount("");
     },
@@ -377,27 +410,20 @@ export default function ExchangePage() {
       toast({ title: "Monto inválido", description: "Ingresa un monto mayor a 0", variant: "destructive" });
       return;
     }
-    const coin   = CRYPTOS.find(c => c.id === dispToken)!;
-    const price  = prices[dispToken] ?? coin.basePrice;
-    const usdVal = amt * price;
-    if (usdVal > availableUSD) {
+    if (amt > currentFiatAvailable) {
       toast({
         title: "Saldo insuficiente",
-        description: `Necesitas $${usdVal.toFixed(2)} USD pero solo tienes $${availableUSD.toFixed(2)} USD disponibles.`,
+        description: `Necesitas ${amt.toFixed(2)} ${dispFiat} pero solo tienes ${currentFiatAvailable.toFixed(2)} ${dispFiat} disponibles.`,
         variant: "destructive",
       });
       return;
     }
+    if (!destWallet) {
+      toast({ title: "Wallet requerida", description: "Ingresa la dirección de destino para la dispersión.", variant: "destructive" });
+      return;
+    }
     dispersionMutation.mutate();
   }
-
-  const [fromId, setFromId] = useState("eth");
-  const [toId, setToId]     = useState("btc");
-  const [fromAmount, setFromAmount] = useState("0.1");
-  const [prices, setPrices] = useState<Record<string, number>>(
-    Object.fromEntries(CRYPTOS.map(c => [c.id, c.basePrice]))
-  );
-  const [updatedAt, setUpdatedAt] = useState(new Date());
 
   const fromCoin = CRYPTOS.find(c => c.id === fromId)!;
   const toCoin   = CRYPTOS.find(c => c.id === toId)!;
@@ -867,173 +893,190 @@ export default function ExchangePage() {
         );
       })()}
 
-      {/* ── Panel Dispersión (solo si tiene wallet registrada) ────────────── */}
-      {coldWallet && (
-        <Card className="border shadow-sm">
-          <CardContent className="p-0">
+      {/* ── Panel Dispersión — Conversión Fiat (USD/EUR de POS Virtual) → Crypto ── */}
+      <Card className="border shadow-sm">
+        <CardContent className="p-0">
 
-            {/* Header */}
-            <div className="flex items-center gap-3 px-5 py-4 border-b">
-              <div className="w-9 h-9 rounded-md bg-[#c8322b]/10 flex items-center justify-center flex-shrink-0">
-                <Wallet className="w-5 h-5 text-[#c8322b]" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm">Wallet Fría Registrada</p>
-                <p className="text-xs text-muted-foreground">Método de dispersión activo</p>
-              </div>
+          {/* Header */}
+          <div className="flex items-center gap-3 px-5 py-4 border-b">
+            <div className="w-9 h-9 rounded-md bg-[#c8322b]/10 flex items-center justify-center flex-shrink-0">
+              <Wallet className="w-5 h-5 text-[#c8322b]" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-sm">Dispersión</p>
+              <p className="text-xs text-muted-foreground">Conversión de saldo POS Virtual (USD/EUR) a criptoactivo</p>
+            </div>
+            {coldWallet ? (
               <Badge className="bg-green-100 text-green-700 border-green-200 no-default-active-elevate text-[10px]">
                 <ShieldCheck className="w-3 h-3 mr-1" />
-                Verificada
+                Wallet verificada
               </Badge>
-            </div>
+            ) : (
+              <Badge className="bg-amber-100 text-amber-700 border-amber-200 no-default-active-elevate text-[10px]">
+                <AlertTriangle className="w-3 h-3 mr-1" />
+                Sin wallet
+              </Badge>
+            )}
+          </div>
 
-            {/* Wallet info */}
-            <div className="px-5 py-4 border-b space-y-3">
-              <div>
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Dirección</p>
-                <div className="flex items-center gap-2">
-                  <p className="text-xs font-mono text-foreground break-all flex-1" data-testid="text-wallet-address">
-                    {coldWallet}
-                  </p>
+          {/* Saldo actual */}
+          <div className="px-5 py-4 border-b bg-muted/20">
+            <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Saldo actual</p>
+              <div className="flex items-center rounded-md border border-border overflow-hidden">
+                {(["USD", "EUR"] as const).map(c => (
                   <button
-                    onClick={handleCopy}
-                    className="flex-shrink-0 w-7 h-7 rounded-md border flex items-center justify-center hover-elevate"
-                    title="Copiar dirección"
-                    data-testid="button-copy-wallet"
+                    key={c}
+                    onClick={() => { setDispFiat(c); setDispAmount(""); }}
+                    data-testid={`button-fiat-${c.toLowerCase()}`}
+                    className={`px-3 py-1 text-[11px] font-bold transition-colors ${
+                      dispFiat === c ? "bg-[#c8322b] text-white" : "bg-background text-muted-foreground hover:bg-muted"
+                    }`}
                   >
-                    {copied
-                      ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
-                      : <Copy className="w-3.5 h-3.5 text-muted-foreground" />
-                    }
+                    {c}
                   </button>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Red</p>
-                  <p className="text-xs font-semibold text-foreground" data-testid="text-wallet-network">{coldNetwork}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Token</p>
-                  <p className="text-xs font-semibold text-foreground" data-testid="text-wallet-token">{coldToken}</p>
-                </div>
+                ))}
               </div>
             </div>
+            <p
+              className={`text-2xl font-bold font-mono ${currentFiatAvailable > 0.001 ? "text-green-700" : "text-red-600"}`}
+              data-testid="text-available-balance"
+            >
+              {currentFiatAvailable.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{" "}
+              <span className="text-sm font-semibold">{dispFiat}</span>
+            </p>
+            {currentFiatAvailable <= 0.001 && (
+              <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+                No hay transacciones POS Virtual completadas en {dispFiat}. Cambia de divisa o registra una transacción.
+              </p>
+            )}
+          </div>
 
-            {/* Saldo disponible */}
-            <div className="px-5 py-3 border-b bg-muted/20">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div>
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Saldo disponible para dispersión</p>
-                  <p
-                    className={`text-xl font-bold font-mono mt-0.5 ${hasBalance ? "text-green-700" : "text-red-600"}`}
-                    data-testid="text-available-balance"
-                  >
-                    ${availableUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
-                  </p>
-                </div>
-                <Badge
-                  className={hasBalance
-                    ? "bg-green-100 text-green-700 border-green-200 no-default-active-elevate text-[10px]"
-                    : "bg-red-100 text-red-700 border-red-200 no-default-active-elevate text-[10px]"
-                  }
-                  data-testid="badge-balance-status"
+          {/* Swap form: FROM (fiat) / TO (crypto) */}
+          <div className="px-5 py-4 space-y-0">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Nueva Dispersión</p>
+
+            {/* FROM box */}
+            <div className="rounded-md border border-border px-4 py-3 bg-background">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] text-muted-foreground">Envías</span>
+                <button
+                  onClick={() => setDispAmount(currentFiatAvailable > 0 ? currentFiatAvailable.toFixed(2) : "")}
+                  disabled={currentFiatAvailable <= 0.001}
+                  className="text-[10px] font-bold text-[#c8322b] disabled:opacity-40 disabled:cursor-not-allowed"
+                  data-testid="button-max-dispersion"
                 >
-                  {hasBalance ? "Con saldo" : "Sin saldo"}
+                  MAX
+                </button>
+              </div>
+              <div className="flex items-center gap-3">
+                <Input
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={dispAmount}
+                  onChange={e => setDispAmount(e.target.value)}
+                  className="flex-1 border-0 text-2xl font-light p-0 h-auto focus-visible:ring-0 shadow-none bg-transparent"
+                  data-testid="input-dispersion-amount"
+                />
+                <Badge className="bg-muted text-foreground border-border no-default-active-elevate text-xs font-bold flex-shrink-0">
+                  {dispFiat}
                 </Badge>
               </div>
-              {!hasBalance && (
-                <p className="text-[11px] text-muted-foreground mt-1.5 leading-relaxed">
-                  Debes registrar al menos una transacción completada antes de poder realizar una dispersión.
-                </p>
-              )}
             </div>
 
-            {/* Dispersión form */}
-            <div className="px-5 py-4 space-y-3">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Nueva Dispersión</p>
+            {/* Swap toggle button (overlapping) */}
+            <div className="flex justify-center -my-2.5 relative z-10">
+              <button
+                onClick={handleFlipFiat}
+                className="w-8 h-8 rounded-md bg-foreground text-background border-4 border-background flex items-center justify-center hover-elevate"
+                title="Cambiar divisa (USD ⇄ EUR)"
+                data-testid="button-flip-fiat"
+              >
+                <ArrowRightLeft className="w-3.5 h-3.5 rotate-90" />
+              </button>
+            </div>
 
-              {!hasBalance ? (
-                <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-md px-4 py-3">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-xs font-semibold text-amber-800">Sin transacciones registradas</p>
-                    <p className="text-[11px] text-amber-700 mt-0.5 leading-relaxed">
-                      No hay saldo líquido disponible. Registra una transacción para habilitar la dispersión a tu wallet fría.
-                    </p>
-                  </div>
+            {/* TO box */}
+            <div className="rounded-md border border-border px-4 py-3 bg-background">
+              <p className="text-[10px] text-muted-foreground mb-2">Recibes (estimado)</p>
+              <div className="flex items-center gap-3">
+                <div className="flex-1 text-2xl font-light text-muted-foreground truncate">
+                  {dispAmount && parseFloat(dispAmount) > 0
+                    ? `≈ ${dispCryptoAmount.toFixed(8)}`
+                    : <span className="text-muted-foreground/50">0.00000000</span>
+                  }
                 </div>
-              ) : (
-                <>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="number"
-                      step="0.0001"
-                      placeholder="0.0000"
-                      value={dispAmount}
-                      onChange={e => setDispAmount(e.target.value)}
-                      className="flex-1 font-mono text-sm"
-                      data-testid="input-dispersion-amount"
-                    />
-                    <div className="w-32 flex-shrink-0">
-                      <Select value={dispToken} onValueChange={setDispToken}>
-                        <SelectTrigger className="text-xs" data-testid="select-dispersion-token">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {CRYPTOS.map(c => (
-                            <SelectItem key={c.id} value={c.id}>
-                              <div className="flex items-center gap-1.5">
-                                <CryptoIcon symbol={c.symbol} size={13} color={c.color} />
-                                <span className="text-xs font-semibold">{c.symbol}</span>
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
+                <CryptoPicker value={dispToken} onChange={setDispToken} />
+              </div>
+            </div>
+          </div>
 
-                  {/* Preview equivalencia USD */}
-                  {dispAmount && parseFloat(dispAmount) > 0 && (() => {
-                    const coin  = CRYPTOS.find(c => c.id === dispToken)!;
-                    const price = prices[dispToken] ?? coin.basePrice;
-                    const usd   = parseFloat(dispAmount) * price;
-                    const over  = usd > availableUSD;
-                    return (
-                      <div className={`flex items-center gap-2 text-xs font-mono rounded-md px-3 py-2 ${over ? "bg-red-50 text-red-600 border border-red-200" : "bg-muted/40 text-muted-foreground"}`}>
-                        <DollarSign className="w-3.5 h-3.5 flex-shrink-0" />
-                        <span>≈ ${usd.toFixed(2)} USD {over ? `— excede saldo ($${availableUSD.toFixed(2)} USD)` : `de $${availableUSD.toFixed(2)} USD disponibles`}</span>
-                      </div>
-                    );
-                  })()}
-
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono bg-muted/40 rounded-md px-3 py-2">
-                    <Send className="w-3.5 h-3.5 flex-shrink-0" />
-                    <span className="truncate">
-                      → {coldWallet.slice(0, 14)}…{coldWallet.slice(-6)}
+          {/* Preview + validación de saldo */}
+          {dispAmount && parseFloat(dispAmount) > 0 && (
+            <div className="px-5 pb-1">
+              {(() => {
+                const over = parseFloat(dispAmount) > currentFiatAvailable;
+                return (
+                  <div className={`flex items-center gap-2 text-xs font-mono rounded-md px-3 py-2 ${over ? "bg-red-50 text-red-600 border border-red-200" : "bg-muted/40 text-muted-foreground"}`}>
+                    <DollarSign className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span>
+                      1 {dispCoin.symbol} ≈ ${fmtNum(dispCryptoPrice, 2)} USD
+                      {over ? ` — excede saldo (${currentFiatAvailable.toFixed(2)} ${dispFiat} disponibles)` : ` · de ${currentFiatAvailable.toFixed(2)} ${dispFiat} disponibles`}
                     </span>
                   </div>
-
-                  <Button
-                    onClick={handleDispersar}
-                    disabled={dispersionMutation.isPending || !dispAmount || parseFloat(dispAmount) <= 0}
-                    className="w-full"
-                    style={{ backgroundColor: "#c8322b" }}
-                    data-testid="button-dispersar"
-                  >
-                    {dispersionMutation.isPending
-                      ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Procesando…</>
-                      : <><Send className="w-4 h-4 mr-2" /> Dispersar a Wallet Fría</>
-                    }
-                  </Button>
-                </>
-              )}
+                );
+              })()}
             </div>
+          )}
 
-          </CardContent>
-        </Card>
-      )}
+          {/* Destino */}
+          <div className="px-5 py-4 space-y-2">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Wallet de destino</p>
+            {coldWallet ? (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono bg-muted/40 rounded-md px-3 py-2">
+                <Send className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="truncate flex-1" data-testid="text-wallet-address">
+                  {coldWallet.slice(0, 14)}…{coldWallet.slice(-6)} · {coldNetwork}
+                </span>
+                <button
+                  onClick={handleCopy}
+                  className="flex-shrink-0 w-6 h-6 rounded-md border flex items-center justify-center hover-elevate"
+                  title="Copiar dirección"
+                  data-testid="button-copy-wallet"
+                >
+                  {copied
+                    ? <CheckCircle2 className="w-3 h-3 text-green-600" />
+                    : <Copy className="w-3 h-3 text-muted-foreground" />
+                  }
+                </button>
+              </div>
+            ) : (
+              <Input
+                placeholder="Pega la dirección de wallet destino (ej. 0x… / T…)"
+                value={manualWallet}
+                onChange={e => setManualWallet(e.target.value)}
+                className="text-xs font-mono"
+                data-testid="input-manual-wallet"
+              />
+            )}
+
+            <Button
+              onClick={handleDispersar}
+              disabled={dispersionMutation.isPending || !dispAmount || parseFloat(dispAmount) <= 0 || !destWallet}
+              className="w-full"
+              style={{ backgroundColor: "#c8322b" }}
+              data-testid="button-dispersar"
+            >
+              {dispersionMutation.isPending
+                ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Procesando…</>
+                : <><Send className="w-4 h-4 mr-2" /> Dispersar y Convertir</>
+              }
+            </Button>
+          </div>
+
+        </CardContent>
+      </Card>
 
     </div>
   );

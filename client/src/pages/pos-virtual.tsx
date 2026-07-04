@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { PaymentEnginePanel } from "@/components/payment-engine-panel";
 import {
   MonitorSmartphone, CreditCard, Wifi, ShieldCheck, CheckCircle,
   X, XCircle, Delete, RefreshCw, Activity, Loader2, Receipt,
@@ -807,6 +808,7 @@ export default function POSVirtualPage() {
     return stored.map(p => ({ ...p, highlight: HIGHLIGHT_PARAM_LABELS.has(p.label) && p.value === "SI" }));
   }, [settings?.terminalParams]);
 
+  const [viewMode, setViewMode] = useState<"terminal" | "engine">("terminal");
   const [step, setStep] = useState<Step>("amount");
   const [amountDigits, setAmountDigits] = useState("");
   const [cardType, setCardType] = useState("Mastercard Internacional");
@@ -1035,6 +1037,20 @@ export default function POSVirtualPage() {
           <p className="text-sm text-muted-foreground mt-0.5">Terminal · EMV / PCI DSS · Visa Net 9.0 Quantum</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center rounded-md border border-border overflow-hidden">
+            <button onClick={() => setViewMode("terminal")} data-testid="button-mode-terminal"
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-colors ${
+                viewMode === "terminal" ? "bg-[#c8322b] text-white" : "bg-muted/40 text-muted-foreground hover:bg-muted"
+              }`}>
+              <MonitorSmartphone className="w-3.5 h-3.5" /> Terminal
+            </button>
+            <button onClick={() => setViewMode("engine")} data-testid="button-mode-engine"
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-colors ${
+                viewMode === "engine" ? "bg-[#c8322b] text-white" : "bg-muted/40 text-muted-foreground hover:bg-muted"
+              }`}>
+              <Zap className="w-3.5 h-3.5" /> Motor de Pagos
+            </button>
+          </div>
           <button onClick={() => setShowFunciones(true)} data-testid="button-funciones"
             className="flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold border border-blue-400 text-blue-600 bg-blue-50 transition-all">
             <Settings className="w-3.5 h-3.5" /> FUNCIONES
@@ -1062,6 +1078,10 @@ export default function POSVirtualPage() {
         </div>
       </div>
 
+      {viewMode === "engine" ? (
+        <PaymentEnginePanel />
+      ) : (
+      <>
       {/* ── Acceso no autorizado al POS Virtual ── */}
       {!posLocked && !posFullAccess && userPerms !== undefined && user?.role !== "ADMIN" && (
         <div className="rounded-lg border border-amber-300 bg-amber-50 px-6 py-8 text-center space-y-4">
@@ -1887,6 +1907,8 @@ export default function POSVirtualPage() {
           </div>
         </div>
       </div>
+      </>
+      )}
 
       {/* Footer Visa Net */}
       <div className="fixed bottom-0 left-0 right-0 z-30 flex items-center justify-between px-4 py-2 border-t border-gray-200 bg-white/90 backdrop-blur-sm">

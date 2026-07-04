@@ -25,7 +25,6 @@ import AdminSettingsPage from "@/pages/admin-settings";
 import AdminCajaUSDTPage from "@/pages/admin-caja-usdt";
 import DocumentsPage from "@/pages/documents";
 import SupportPage from "@/pages/support";
-import PaymentEnginePage from "@/pages/payment-engine";
 import POSIntelligencePage from "@/pages/pos-intelligence";
 import SubscriptionPage from "@/pages/subscription";
 import SubscriptionPaymentPage from "@/pages/subscription-payment";
@@ -200,8 +199,9 @@ function Router() {
         <AppLayout><SupportPage /></AppLayout>
       </Route>
 
+      {/* El Motor de Pagos (Quantum 9.0) fue unificado dentro de POS Virtual */}
       <Route path="/payment-engine">
-        <AppLayout><PaymentEnginePage /></AppLayout>
+        <Redirect to="/pos-virtual" />
       </Route>
 
       <Route path="/admin/caja-usdt">
