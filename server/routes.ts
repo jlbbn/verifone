@@ -677,6 +677,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ====================================================================
+  // PRECIOS CRYPTO EN TIEMPO REAL (CoinGecko)
+  // ====================================================================
+
+  const COINGECKO_IDS: Record<string, string> = {
+    btc: "bitcoin", eth: "ethereum", xrp: "ripple", ltc: "litecoin",
+    doge: "dogecoin", sol: "solana", ada: "cardano", dot: "polkadot",
+    usdt: "tether",
+  };
+
+  let cryptoPriceCache: { data: Record<string, any>; fetchedAt: number } | null = null;
+  const CRYPTO_CACHE_TTL_MS = 20_000;
+
+  app.get("/api/crypto-prices", async (_req, res) => {
+    try {
+      if (cryptoPriceCache && Date.now() - cryptoPriceCache.fetchedAt < CRYPTO_CACHE_TTL_MS) {
+        res.json(cryptoPriceCache.data);
+        return;
+      }
+
+      const ids = Object.values(COINGECKO_IDS).join(",");
+      const response = await fetch(
+        `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}`,
+        { headers: { Accept: "application/json" } }
+      );
+
+      if (!response.ok) throw new Error(`CoinGecko respondió ${response.status}`);
+      const rows: any[] = await response.json();
+
+      const byId: Record<string, any> = {};
+      for (const [localId, cgId] of Object.entries(COINGECKO_IDS)) {
+        const row = rows.find(r => r.id === cgId);
+        if (!row) continue;
+        byId[localId] = {
+          price: row.current_price,
+          change24h: row.price_change_percentage_24h,
+          volume24h: row.total_volume,
+          marketCap: row.market_cap,
+          supply: row.circulating_supply,
+          athPrice: row.ath,
+          athDate: row.ath_date,
+        };
+      }
+
+      cryptoPriceCache = { data: byId, fetchedAt: Date.now() };
+      res.json(byId);
+    } catch (error) {
+      if (cryptoPriceCache) {
+        res.json(cryptoPriceCache.data);
+        return;
+      }
+      res.status(502).json({ error: "No se pudieron obtener precios en tiempo real" });
+    }
+  });
+
+  // ====================================================================
   // TRANSACCIONES
   // ====================================================================
   

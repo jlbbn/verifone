@@ -39,6 +39,16 @@ interface Crypto {
   tvSymbol: string;
 }
 
+interface LiveCryptoData {
+  price: number;
+  change24h: number;
+  volume24h: number;
+  marketCap: number;
+  supply: number;
+  athPrice: number;
+  athDate: string;
+}
+
 const CRYPTOS: Crypto[] = [
   {
     id: "btc", name: "Bitcoin", symbol: "BTC",
@@ -345,10 +355,29 @@ export default function ExchangePage() {
   const [fromId, setFromId] = useState("eth");
   const [toId, setToId]     = useState("btc");
   const [fromAmount, setFromAmount] = useState("0.1");
-  const [prices, setPrices] = useState<Record<string, number>>(
-    Object.fromEntries(CRYPTOS.map(c => [c.id, c.basePrice]))
-  );
-  const [updatedAt, setUpdatedAt] = useState(new Date());
+
+  const { data: liveData, dataUpdatedAt } = useQuery<Record<string, LiveCryptoData>>({
+    queryKey: ["/api/crypto-prices"],
+    refetchInterval: 20000,
+    refetchOnWindowFocus: true,
+  });
+
+  function mergeLive(coin: Crypto): Crypto {
+    const live = liveData?.[coin.id];
+    if (!live) return coin;
+    return {
+      ...coin,
+      basePrice: live.price ?? coin.basePrice,
+      change24h: live.change24h ?? coin.change24h,
+      volume24h: live.volume24h ?? coin.volume24h,
+      marketCap: live.marketCap ?? coin.marketCap,
+      supply: live.supply ?? coin.supply,
+      athPrice: live.athPrice ?? coin.athPrice,
+      athDate: live.athDate
+        ? new Date(live.athDate).toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" })
+        : coin.athDate,
+    };
+  }
 
   // ── Motor de Dispersión Fiat → Crypto (USD/EUR de POS Virtual → activo cripto) ──
   const FIAT_USD_RATE: Record<"USD" | "EUR", number> = { USD: 1, EUR: 1.085 };
@@ -356,8 +385,8 @@ export default function ExchangePage() {
 
   const destWallet = coldWallet ?? (manualWallet.trim() || null);
   const currentFiatAvailable = availableByFiat[dispFiat];
-  const dispCoin = CRYPTOS.find(c => c.id === dispToken)!;
-  const dispCryptoPrice = prices[dispToken] ?? dispCoin.basePrice;
+  const dispCoin = mergeLive(CRYPTOS.find(c => c.id === dispToken)!);
+  const dispCryptoPrice = dispCoin.basePrice;
   const dispUsdEquivalent = (parseFloat(dispAmount) || 0) * FIAT_USD_RATE[dispFiat];
   const dispCryptoAmount = dispCryptoPrice > 0 ? dispUsdEquivalent / dispCryptoPrice : 0;
 
@@ -425,31 +454,14 @@ export default function ExchangePage() {
     dispersionMutation.mutate();
   }
 
-  const fromCoin = CRYPTOS.find(c => c.id === fromId)!;
-  const toCoin   = CRYPTOS.find(c => c.id === toId)!;
-  const fromPrice = prices[fromId] ?? fromCoin.basePrice;
-  const toPrice   = prices[toId]   ?? toCoin.basePrice;
+  const fromCoin = mergeLive(CRYPTOS.find(c => c.id === fromId)!);
+  const toCoin   = mergeLive(CRYPTOS.find(c => c.id === toId)!);
+  const fromPrice = fromCoin.basePrice;
+  const toPrice   = toCoin.basePrice;
   const rate = fromPrice / toPrice;
   const toAmount = fromAmount && parseFloat(fromAmount) > 0
     ? (parseFloat(fromAmount) * rate).toFixed(8)
     : "";
-
-  // Live price simulation
-  useEffect(() => {
-    const t = setInterval(() => {
-      setPrices(prev => {
-        const next = { ...prev };
-        CRYPTOS.forEach(c => {
-          const base = prev[c.id] ?? c.basePrice;
-          const delta = (Math.random() - 0.49) * base * 0.0015;
-          next[c.id] = Math.max(base + delta, 0.0001);
-        });
-        return next;
-      });
-      setUpdatedAt(new Date());
-    }, 4000);
-    return () => clearInterval(t);
-  }, []);
 
   function handleSwap() {
     const tmp = fromId;
@@ -532,7 +544,7 @@ export default function ExchangePage() {
     },
   ];
 
-  const updStr = updatedAt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+  const updStr = new Date(dataUpdatedAt || Date.now()).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
 
   return (
     <div className="p-4 md:p-6 pb-20 max-w-2xl mx-auto space-y-5">
@@ -713,7 +725,7 @@ export default function ExchangePage() {
             </span>{" "}
             in USD, {fromCoin.name} ({fromCoin.symbol}) is currently trading approximately{" "}
             <span className="font-semibold text-red-500">
-              {fromCoin.athPct.toFixed(2)}% below
+              {(fromCoin.athPrice > 0 ? ((fromCoin.athPrice - fromPrice) / fromCoin.athPrice) * 100 : 0).toFixed(2)}% below
             </span>{" "}
             its record peak.
           </p>
