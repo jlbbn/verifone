@@ -33,24 +33,24 @@ const CARD_TYPES = [
 
 const PROTOCOLS: { code: string; label: string; authDigits: number | null; desc: string }[] = [
   // Transfers / Transferencias (101.x)
-  { code: "101.1", label: "101.1 — Basic Transfer / Transferencia básica",           authDigits: 4,    desc: "4-digit approval code / Código de aprobación 4 dígitos" },
-  { code: "101.2", label: "101.2 — Validated Transfer / Transferencia con validación", authDigits: 6,  desc: "6-digit approval code / Código de aprobación 6 dígitos" },
-  { code: "101.3", label: "101.3 — Secure Transfer / Transferencia segura",           authDigits: 6,    desc: "6-digit approval code / Código de aprobación 6 dígitos" },
-  { code: "101.4", label: "101.4 — Priority Transfer / Transferencia prioritaria",    authDigits: 6,    desc: "6-digit approval code / Código de aprobación 6 dígitos" },
-  { code: "101.6", label: "101.6 — Pre-Authorization / Pre-Autorización",             authDigits: null, desc: "Pre-authorization hold / Retención pre-autorización" },
-  { code: "101.7", label: "101.7 — Fast Transfer / Transferencia rápida",             authDigits: 4,    desc: "4-digit approval code / Código de aprobación 4 dígitos" },
-  { code: "101.8", label: "101.8 — PIN-less Transaction / Transacción sin PIN",       authDigits: 6,    desc: "No PIN required / No requiere PIN" },
+  { code: "101.1", label: "101.1 — Basic Transfer / Transferencia básica",           authDigits: 4,    desc: "✔️ 101.1 - Requiere código de aprobación de 4 dígitos" },
+  { code: "101.2", label: "101.2 — Validated Transfer / Transferencia con validación", authDigits: 6,  desc: "✔️ 101.2 – Requiere código de aprobación de 6 dígitos" },
+  { code: "101.3", label: "101.3 — Secure Transfer / Transferencia segura",           authDigits: 6,    desc: "✔️ 101.3 – Requiere código de aprobación de 6 dígitos" },
+  { code: "101.4", label: "101.4 — Priority Transfer / Transferencia prioritaria",    authDigits: 6,    desc: "✔️ 101.4 – Requiere código de aprobación de 6 dígitos" },
+  { code: "101.6", label: "101.6 — Pre-Authorization / Pre-Autorización",             authDigits: null, desc: "✔️ 101.6 – Pre-Autorización" },
+  { code: "101.7", label: "101.7 — Fast Transfer / Transferencia rápida",             authDigits: 4,    desc: "✔️ 101.7 – Requiere código de aprobación de 4 dígitos" },
+  { code: "101.8", label: "101.8 — PIN-less Transaction / Transacción sin PIN",       authDigits: 6,    desc: "✔️ 101.8 – Transacción sin PIN" },
   // Payments / Pagos (201.x)
-  { code: "201.1", label: "201.1 — Domestic Payment / Pago nacional",                 authDigits: 6,    desc: "6-digit approval code / Código de aprobación 6 dígitos" },
-  { code: "201.2", label: "201.2 — International Payment / Pago internacional",       authDigits: 6,    desc: "6-digit approval code / Código de aprobación 6 dígitos" },
-  { code: "201.3", label: "201.3 — Express Payment / Pago express",                   authDigits: 6,    desc: "6-digit approval code / Código de aprobación 6 dígitos" },
+  { code: "201.1", label: "201.1 — Domestic Payment / Pago nacional",                 authDigits: 6,    desc: "✔️ 201.1 - Requiere código de aprobación de 6 dígitos" },
+  { code: "201.2", label: "201.2 — International Payment / Pago internacional",       authDigits: 6,    desc: "✔️ 201.2 – Requiere código de aprobación de 6 dígitos" },
+  { code: "201.3", label: "201.3 — Express Payment / Pago express",                   authDigits: 6,    desc: "✔️ 201.3 – Requiere código de aprobación de 6 dígitos" },
   // Deposits / Depósitos (301.x)
   { code: "301.1", label: "301.1 — Account Deposit / Depósito cuenta",                authDigits: 6,    desc: "6-digit approval code / Código de aprobación 6 dígitos" },
   { code: "301.2", label: "301.2 — Cash Deposit / Depósito efectivo",                 authDigits: 6,    desc: "6-digit approval code / Código de aprobación 6 dígitos" },
   // Withdrawals / Retiros (401.x)
   { code: "401.1", label: "401.1 — ATM Withdrawal / Retiro ATM",                      authDigits: 6,    desc: "6-digit approval code / Código de aprobación 6 dígitos" },
   // Special / Especial
-  { code: "1643",  label: "1643 — Forced Sale / Venta forzada terminal manual",       authDigits: 4,    desc: "Manual terminal offline / Terminal manual sin conexión EMV" },
+  { code: "1643",  label: "1643 — Venta manual",                                     authDigits: 4,    desc: "Manual terminal offline / Terminal manual sin conexión EMV" },
 ];
 
 const FUNCIONES_MENU = [
