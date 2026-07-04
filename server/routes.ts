@@ -471,7 +471,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
                           DIAGNOSTIC_PATCH_MAP[targetUser.username ?? ""] ?? 0;
       const isDiagnosticActive = isManualBlocked && userPaidPct >= DIAGNOSTIC_THRESHOLD;
 
-      if ((isManualBlocked || !isSubscriptionActive) && !isDiagnosticActive) {
+      // Si el admin ya autorizó explícitamente el acceso al POS de este usuario
+      // (interruptor "POS Virtual" activado en Gestión de Usuarios), esa
+      // autorización manual prevalece sobre la heurística de suscripción —
+      // que puede quedar desactualizada (p. ej. campo de fecha vacío) aunque
+      // el usuario ya esté al corriente de pago.
+      const adminAuthorizedPos = !!targetUser.posFullAccess;
+
+      if ((isManualBlocked || !isSubscriptionActive) && !isDiagnosticActive && !adminAuthorizedPos) {
         res.status(403).json({
           error:       "SYS_BLOCK_POS_ASSIGN",
           code:        "0x4E43-SYS-BLOCK-MANUAL",
