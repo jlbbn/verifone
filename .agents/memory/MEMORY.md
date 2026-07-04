@@ -4,3 +4,4 @@
 - [Version pinning constraints](version-pinning.md) — express@4, react@18, vite@5, tailwind@3 pinned; pages use recharts directly; always run `tsc --noEmit` after dep changes.
 - [Admin system settings architecture](admin-settings-arch.md) — settings are in-memory on server (reset on restart); useSystemSettings hook; TC/fmtMXN/liveSeed must be component-local (not module-level) to be reactive; hooks must be declared before useEffects that call their setters.
 - [Seed code changes don't clean a live Postgres DB](seed-vs-live-db.md) — editing idempotent seed blocks in storage.ts doesn't touch already-committed rows; must reconcile the live DB directly with psql.
+- [Per-user caja vs central caja](per-user-caja.md) — per-user cash balance is a flat persisted DB field on `users`, distinct from the in-memory central caja; admin-only edit, mirrors user-permissions endpoint pattern.

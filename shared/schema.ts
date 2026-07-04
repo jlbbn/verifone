@@ -19,6 +19,7 @@ export const users = pgTable("users", {
   suspended: boolean("suspended").notNull().default(false),
   paymentEngineAccess: boolean("payment_engine_access").notNull().default(false),
   posFullAccess: boolean("pos_full_access").notNull().default(false),
+  cajaSaldoUSD: doublePrecision("caja_saldo_usd").notNull().default(0),
 });
 
 // Transacciones bancarias
