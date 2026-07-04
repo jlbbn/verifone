@@ -12,10 +12,11 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
+import { PosAssignmentManager } from "@/components/pos-assignment-manager";
 import {
   Save, RotateCcw, Plus, Trash2, Loader2,
   Globe, Banknote, Activity, BarChart2, MonitorSmartphone,
-  Info
+  Terminal, Info
 } from "lucide-react";
 import type { SystemSettings } from "@shared/schema";
 
@@ -162,6 +163,9 @@ export default function AdminSettingsPage() {
           </TabsTrigger>
           <TabsTrigger value="terminal" className="gap-1.5">
             <MonitorSmartphone className="w-3.5 h-3.5" />Terminal
+          </TabsTrigger>
+          <TabsTrigger value="pos-asignadas" className="gap-1.5">
+            <Terminal className="w-3.5 h-3.5" />POS Asignadas
           </TabsTrigger>
         </TabsList>
 
@@ -589,6 +593,11 @@ export default function AdminSettingsPage() {
               })}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ── POS ASIGNADAS ───────────────────────────────────────────────── */}
+        <TabsContent value="pos-asignadas">
+          <PosAssignmentManager />
         </TabsContent>
       </Tabs>
 
