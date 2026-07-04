@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useSystemSettings, useUpdateSettings } from "@/hooks/use-system-settings";
 import { DEFAULT_SYSTEM_SETTINGS } from "@shared/schema";
 import { DEFAULT_TERMINAL_PARAMS } from "@/hooks/use-terminal-params";
@@ -12,7 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { PosAssignmentManager } from "@/components/pos-assignment-manager";
+import { PosAssignmentManager, statusBadgeClass, type TerminalRecord, type UserRecord } from "@/components/pos-assignment-manager";
 import {
   Save, RotateCcw, Plus, Trash2, Loader2,
   Globe, Banknote, Activity, BarChart2, MonitorSmartphone,
@@ -28,6 +29,13 @@ export default function AdminSettingsPage() {
   const { data: settings, isLoading } = useSystemSettings();
   const { mutate: saveSettings, isPending } = useUpdateSettings();
   const { toast } = useToast();
+
+  const { data: allTerminals = [], isLoading: terminalsLoading } = useQuery<TerminalRecord[]>({
+    queryKey: ["/api/terminals"],
+  });
+  const { data: allUsers = [] } = useQuery<UserRecord[]>({
+    queryKey: ["/api/users"],
+  });
 
   const [draft, setDraft] = useState<SystemSettings>(DEFAULT_SYSTEM_SETTINGS);
   const [isDirty, setIsDirty] = useState(false);
@@ -88,6 +96,23 @@ export default function AdminSettingsPage() {
   function removeTerminal(idx: number) {
     set("feedTerminales", draft.feedTerminales.filter((_, i) => i !== idx));
   }
+  function toggleFeedTerminal(terminalId: string, active: boolean) {
+    if (active) {
+      if (!draft.feedTerminales.includes(terminalId)) {
+        set("feedTerminales", [...draft.feedTerminales, terminalId]);
+      }
+    } else {
+      set("feedTerminales", draft.feedTerminales.filter(t => t !== terminalId));
+    }
+  }
+  function ownerLabel(username: string | null) {
+    if (!username) return null;
+    return allUsers.find(u => u.username === username)?.fullName ?? username;
+  }
+  const registeredTerminalIds = new Set(allTerminals.map(t => t.terminalId));
+  const customFeedEntries = draft.feedTerminales
+    .map((value, idx) => ({ value, idx }))
+    .filter(({ value }) => !registeredTerminalIds.has(value));
 
   // ── Terminal params helpers ─────────────────────────────────────────────────
   function getParamValue(label: string) {
@@ -423,34 +448,78 @@ export default function AdminSettingsPage() {
 
               {/* Terminals */}
               <div>
+                <h3 className="text-sm font-semibold mb-1">Terminales Activas en el Feed</h3>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Activa o desactiva las terminales registradas en Enrutamiento POS para que aparezcan en el feed en vivo.
+                </p>
+
+                {terminalsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : allTerminals.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No hay terminales registradas en Enrutamiento POS.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {allTerminals.map(term => {
+                      const active = draft.feedTerminales.includes(term.terminalId);
+                      return (
+                        <div key={term.id} className="flex items-center justify-between gap-3 rounded-md border p-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-mono font-semibold text-sm">{term.terminalId}</span>
+                              <Badge className={`${statusBadgeClass(term.status)} no-default-active-elevate text-xs`}>
+                                {term.status}
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground truncate mt-0.5">
+                              {term.model} · {term.location} ·{" "}
+                              {term.owner
+                                ? <span>Asignada a <span className="text-foreground font-medium">{ownerLabel(term.owner)}</span></span>
+                                : <span>Sin asignar</span>}
+                            </p>
+                          </div>
+                          <Switch
+                            checked={active}
+                            onCheckedChange={(v) => toggleFeedTerminal(term.terminalId, v)}
+                            data-testid={`switch-feed-terminal-${term.id}`}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <Separator className="my-4" />
+
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold">Terminales Activas en el Feed</h3>
+                  <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">IDs Manuales Adicionales</h4>
                   <Button variant="outline" size="sm" onClick={addTerminal} data-testid="button-add-terminal">
                     <Plus className="w-3.5 h-3.5 mr-1" />Agregar
                   </Button>
                 </div>
                 <div className="space-y-2">
-                  {draft.feedTerminales.map((t, i) => (
-                    <div key={i} className="flex gap-2 items-center">
+                  {customFeedEntries.map(({ value, idx }) => (
+                    <div key={idx} className="flex gap-2 items-center">
                       <Input
-                        value={t}
-                        onChange={e => updateTerminal(i, e.target.value)}
+                        value={value}
+                        onChange={e => updateTerminal(idx, e.target.value)}
                         placeholder="T1001"
                         className="font-mono"
-                        data-testid={`input-terminal-${i}`}
+                        data-testid={`input-terminal-${idx}`}
                       />
                       <Button
                         variant="outline"
                         size="icon"
-                        onClick={() => removeTerminal(i)}
-                        data-testid={`button-remove-terminal-${i}`}
+                        onClick={() => removeTerminal(idx)}
+                        data-testid={`button-remove-terminal-${idx}`}
                       >
                         <Trash2 className="w-4 h-4 text-destructive" />
                       </Button>
                     </div>
                   ))}
-                  {draft.feedTerminales.length === 0 && (
-                    <p className="text-sm text-muted-foreground">No hay terminales configuradas.</p>
+                  {customFeedEntries.length === 0 && (
+                    <p className="text-sm text-muted-foreground">No hay IDs manuales adicionales.</p>
                   )}
                 </div>
               </div>
