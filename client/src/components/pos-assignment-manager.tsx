@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Terminal, UserPlus, Loader2, MonitorSmartphone, User as UserIcon } from "lucide-react";
 
-interface UserRecord {
+export interface UserRecord {
   id: string;
   username: string;
   fullName: string;
@@ -18,7 +18,7 @@ interface UserRecord {
   suspended: boolean;
 }
 
-interface TerminalRecord {
+export interface TerminalRecord {
   id: string;
   terminalId: string;
   model: string;
@@ -29,7 +29,7 @@ interface TerminalRecord {
 
 const UNASSIGNED = "__unassigned__";
 
-function statusBadgeClass(status: string) {
+export function statusBadgeClass(status: string) {
   const s = status.toLowerCase();
   if (s === "online") return "bg-green-100 text-green-700 border-green-200";
   if (s === "offline") return "bg-red-100 text-red-700 border-red-200";
