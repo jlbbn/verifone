@@ -43,6 +43,23 @@ interface TerminalRecord {
   owner: string | null;
 }
 
+const CRYPTO_ASSETS = ["btc", "eth", "xrp", "ltc", "doge", "sol", "ada", "dot", "usdt"] as const;
+type CryptoAsset = typeof CRYPTO_ASSETS[number];
+
+const CRYPTO_SYMBOLS: Record<CryptoAsset, string> = {
+  btc: "BTC", eth: "ETH", xrp: "XRP", ltc: "LTC", doge: "DOGE",
+  sol: "SOL", ada: "ADA", dot: "DOT", usdt: "USDT",
+};
+
+interface AdminCryptoRecord {
+  user: { id: string; username: string; fullName: string };
+  balances: Record<CryptoAsset, number>;
+}
+
+function fmtCrypto(n: number) {
+  return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 8 });
+}
+
 function initials(name: string) {
   return name.split(" ").map(n => n[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
 }
@@ -74,12 +91,21 @@ export default function AdminUsuariosPage() {
   const [editingCajaId, setEditingCajaId] = useState<string | null>(null);
   const [cajaDraft, setCajaDraft] = useState("");
 
+  // Edición inline de saldos cripto por usuario
+  const [cryptoSearch, setCryptoSearch] = useState("");
+  const [editingCrypto, setEditingCrypto] = useState<{ userId: string; asset: CryptoAsset } | null>(null);
+  const [cryptoDraft, setCryptoDraft] = useState("");
+
   const { data: users = [], isLoading: usersLoading, refetch: refetchUsers } = useQuery<UserRecord[]>({
     queryKey: ["/api/users"],
   });
 
   const { data: terminals = [] } = useQuery<TerminalRecord[]>({
     queryKey: ["/api/terminals"],
+  });
+
+  const { data: cryptoRecords = [], isLoading: cryptoLoading } = useQuery<AdminCryptoRecord[]>({
+    queryKey: ["/api/admin/crypto-balances"],
   });
 
   const suspendMutation = useMutation({
@@ -120,6 +146,21 @@ export default function AdminUsuariosPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       setEditingCajaId(null);
       toast({ title: "Caja actualizada" });
+    },
+    onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const cryptoMutation = useMutation({
+    mutationFn: async ({ userId, asset, balance }: { userId: string; asset: CryptoAsset; balance: number }) => {
+      const res = await apiRequest("PATCH", `/api/admin/user-crypto/${userId}/${asset}`, { balance });
+      if (!res.ok) { const b = await res.json(); throw new Error(b.error ?? "Error"); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/crypto-balances"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crypto-balances"] });
+      setEditingCrypto(null);
+      toast({ title: "Saldo cripto actualizado" });
     },
     onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
@@ -198,6 +239,26 @@ export default function AdminUsuariosPage() {
     }
     cajaMutation.mutate({ id, cajaSaldoUSD: parsed });
   }
+
+  function startEditCrypto(userId: string, asset: CryptoAsset, current: number) {
+    setEditingCrypto({ userId, asset });
+    setCryptoDraft(current.toFixed(8));
+  }
+
+  function saveCrypto() {
+    if (!editingCrypto) return;
+    const parsed = parseFloat(cryptoDraft);
+    if (isNaN(parsed) || parsed < 0) {
+      toast({ title: "Monto inválido", description: "Ingresa un número válido mayor o igual a 0.", variant: "destructive" });
+      return;
+    }
+    cryptoMutation.mutate({ userId: editingCrypto.userId, asset: editingCrypto.asset, balance: parsed });
+  }
+
+  const filteredCryptoRecords = cryptoRecords.filter(r =>
+    r.user.fullName.toLowerCase().includes(cryptoSearch.toLowerCase()) ||
+    r.user.username.toLowerCase().includes(cryptoSearch.toLowerCase())
+  );
 
   return (
     <div className="p-4 md:p-6 space-y-5">
@@ -458,6 +519,117 @@ export default function AdminUsuariosPage() {
                   </div>
                 );
               })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Saldos de Criptomonedas por Usuario */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Wallet className="w-4.5 h-4.5 text-[#c8322b]" /> Cripto por Usuario
+          </CardTitle>
+          <CardDescription>
+            Edita manualmente el saldo de cada criptoactivo por usuario. Los cambios se aplican de inmediato.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="relative mb-4 max-w-sm">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <Input
+              placeholder="Buscar usuario..."
+              value={cryptoSearch}
+              onChange={e => setCryptoSearch(e.target.value)}
+              className="pl-8 h-9"
+              data-testid="input-search-crypto-users"
+            />
+          </div>
+
+          {cryptoLoading ? (
+            <div className="flex items-center justify-center py-10 text-muted-foreground">
+              <Loader2 className="w-5 h-5 animate-spin mr-2" /> Cargando saldos...
+            </div>
+          ) : filteredCryptoRecords.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">No se encontraron usuarios.</p>
+          ) : (
+            <div className="space-y-3">
+              {filteredCryptoRecords.map(rec => (
+                <div key={rec.user.id} className="rounded-md border p-3" data-testid={`row-crypto-user-${rec.user.id}`}>
+                  <div className="flex items-center gap-2 mb-2.5">
+                    <Avatar className="w-7 h-7">
+                      <AvatarFallback className="text-[10px] bg-[#c8322b]/10 text-[#c8322b] font-semibold">
+                        {initials(rec.user.fullName)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="text-sm font-semibold leading-tight" data-testid={`text-crypto-username-${rec.user.id}`}>
+                        {rec.user.fullName}
+                      </p>
+                      <p className="text-xs text-muted-foreground leading-tight">{rec.user.username}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {CRYPTO_ASSETS.map(asset => {
+                      const isEditing = editingCrypto?.userId === rec.user.id && editingCrypto?.asset === asset;
+                      const value = rec.balances?.[asset] ?? 0;
+                      return (
+                        <div
+                          key={asset}
+                          className="flex items-center gap-1 rounded-md border bg-muted/30 px-2 py-1"
+                          data-testid={`cell-crypto-${asset}-${rec.user.id}`}
+                        >
+                          <span className="text-[10px] font-bold text-muted-foreground w-10">{CRYPTO_SYMBOLS[asset]}</span>
+                          {isEditing ? (
+                            <div className="flex items-center gap-1">
+                              <Input
+                                value={cryptoDraft}
+                                onChange={e => setCryptoDraft(e.target.value)}
+                                type="number"
+                                step="0.00000001"
+                                className="h-6 w-28 text-xs font-mono px-1.5"
+                                autoFocus
+                                data-testid={`input-crypto-${asset}-${rec.user.id}`}
+                              />
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="h-6 w-6"
+                                disabled={cryptoMutation.isPending}
+                                onClick={saveCrypto}
+                                data-testid={`button-save-crypto-${asset}-${rec.user.id}`}
+                              >
+                                {cryptoMutation.isPending
+                                  ? <Loader2 className="w-3 h-3 animate-spin" />
+                                  : <Check className="w-3 h-3 text-green-600" />}
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="h-6 w-6"
+                                disabled={cryptoMutation.isPending}
+                                onClick={() => setEditingCrypto(null)}
+                                data-testid={`button-cancel-crypto-${asset}-${rec.user.id}`}
+                              >
+                                <X className="w-3 h-3 text-muted-foreground" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <button
+                              className="flex items-center gap-1 font-mono text-xs font-semibold hover-elevate rounded-md px-1 py-0.5"
+                              onClick={() => startEditCrypto(rec.user.id, asset, value)}
+                              data-testid={`button-edit-crypto-${asset}-${rec.user.id}`}
+                            >
+                              {fmtCrypto(value)}
+                              <Pencil className="w-2.5 h-2.5 text-muted-foreground" />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </CardContent>

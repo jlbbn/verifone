@@ -5,3 +5,4 @@
 - [Admin system settings architecture](admin-settings-arch.md) — settings are in-memory on server (reset on restart); useSystemSettings hook; TC/fmtMXN/liveSeed must be component-local (not module-level) to be reactive; hooks must be declared before useEffects that call their setters.
 - [Seed code changes don't clean a live Postgres DB](seed-vs-live-db.md) — editing idempotent seed blocks in storage.ts doesn't touch already-committed rows; must reconcile the live DB directly with psql.
 - [Per-user caja vs central caja](per-user-caja.md) — per-user cash balance is a flat persisted DB field on `users`, distinct from the in-memory central caja; admin-only edit, mirrors user-permissions endpoint pattern.
+- [Per-user multi-asset crypto balances architecture](crypto-balances-arch.md) — normalized `(userId, asset)` table, atomic swap/dispersion via `db.transaction`, admin flat-overwrite endpoints, no ledger.
