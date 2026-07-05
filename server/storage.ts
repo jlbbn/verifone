@@ -15,6 +15,7 @@ import {
   documents,
   supportTickets,
   paymentCharges,
+  userCryptoBalances,
   type User, type InsertUser,
   type Transaction, type InsertTransaction,
   type PaymentMethod, type InsertPaymentMethod,
@@ -27,6 +28,7 @@ import {
   type Document,
   type SupportTicket,
   type PaymentCharge,
+  type UserCryptoBalance, type CryptoAsset,
   type SystemSettings, DEFAULT_SYSTEM_SETTINGS,
 } from "@shared/schema";
 
@@ -84,6 +86,17 @@ export interface IStorage {
   getAllUsers(): Promise<User[]>;
   suspendUser(id: string, suspended: boolean): Promise<User | undefined>;
 
+  // Crypto Balances (saldos internos por usuario/activo — sin blockchain real)
+  getCryptoBalances(userId: string): Promise<UserCryptoBalance[]>;
+  getAllCryptoBalances(): Promise<UserCryptoBalance[]>;
+  setCryptoBalance(userId: string, asset: CryptoAsset, balance: number): Promise<UserCryptoBalance>;
+  creditCryptoBalance(userId: string, asset: CryptoAsset, amount: number): Promise<UserCryptoBalance>;
+  exchangeCrypto(
+    userId: string,
+    fromAsset: CryptoAsset, fromAmount: number,
+    toAsset: CryptoAsset, toAmount: number,
+  ): Promise<{ from: UserCryptoBalance; to: UserCryptoBalance }>;
+
   // Crypto Keys
   getCryptoKeys(username: string, isAdmin: boolean): Promise<CryptoKey[]>;
   createCryptoKey(data: Omit<CryptoKey, "id" | "createdAt">): Promise<CryptoKey>;
@@ -123,6 +136,18 @@ export class DatabaseStorage implements IStorage {
     // --- Migrate: add caja_saldo_usd column to users if missing ---
     await db.execute(sql`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS caja_saldo_usd DOUBLE PRECISION NOT NULL DEFAULT 0
+    `);
+
+    // --- Ensure user_crypto_balances table exists (saldos internos por usuario/activo) ---
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS user_crypto_balances (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id VARCHAR NOT NULL,
+        asset TEXT NOT NULL,
+        balance DOUBLE PRECISION NOT NULL DEFAULT 0,
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        CONSTRAINT user_crypto_balances_user_id_asset_unique UNIQUE (user_id, asset)
+      )
     `);
 
     // --- Ensure payment_charges table exists ---
@@ -826,6 +851,77 @@ export class DatabaseStorage implements IStorage {
   async suspendUser(id: string, suspended: boolean): Promise<User | undefined> {
     const [updated] = await db.update(users).set({ suspended }).where(eq(users.id, id)).returning();
     return updated;
+  }
+
+  // --- Crypto Balances ---
+  async getCryptoBalances(userId: string): Promise<UserCryptoBalance[]> {
+    return db.select().from(userCryptoBalances).where(eq(userCryptoBalances.userId, userId));
+  }
+
+  async getAllCryptoBalances(): Promise<UserCryptoBalance[]> {
+    return db.select().from(userCryptoBalances);
+  }
+
+  async setCryptoBalance(userId: string, asset: CryptoAsset, balance: number): Promise<UserCryptoBalance> {
+    const [row] = await db.insert(userCryptoBalances)
+      .values({ userId, asset, balance })
+      .onConflictDoUpdate({
+        target: [userCryptoBalances.userId, userCryptoBalances.asset],
+        set: { balance, updatedAt: new Date() },
+      })
+      .returning();
+    return row;
+  }
+
+  async creditCryptoBalance(userId: string, asset: CryptoAsset, amount: number): Promise<UserCryptoBalance> {
+    return db.transaction(async (tx) => {
+      const [existing] = await tx.select().from(userCryptoBalances)
+        .where(and(eq(userCryptoBalances.userId, userId), eq(userCryptoBalances.asset, asset)));
+      const nextBalance = (existing?.balance ?? 0) + amount;
+      const [row] = await tx.insert(userCryptoBalances)
+        .values({ userId, asset, balance: nextBalance })
+        .onConflictDoUpdate({
+          target: [userCryptoBalances.userId, userCryptoBalances.asset],
+          set: { balance: nextBalance, updatedAt: new Date() },
+        })
+        .returning();
+      return row;
+    });
+  }
+
+  async exchangeCrypto(
+    userId: string,
+    fromAsset: CryptoAsset, fromAmount: number,
+    toAsset: CryptoAsset, toAmount: number,
+  ): Promise<{ from: UserCryptoBalance; to: UserCryptoBalance }> {
+    return db.transaction(async (tx) => {
+      const [fromRow] = await tx.select().from(userCryptoBalances)
+        .where(and(eq(userCryptoBalances.userId, userId), eq(userCryptoBalances.asset, fromAsset)));
+      const currentFromBalance = fromRow?.balance ?? 0;
+      if (currentFromBalance < fromAmount) {
+        throw new Error("INSUFFICIENT_BALANCE");
+      }
+      const [updatedFrom] = await tx.insert(userCryptoBalances)
+        .values({ userId, asset: fromAsset, balance: currentFromBalance - fromAmount })
+        .onConflictDoUpdate({
+          target: [userCryptoBalances.userId, userCryptoBalances.asset],
+          set: { balance: currentFromBalance - fromAmount, updatedAt: new Date() },
+        })
+        .returning();
+
+      const [toRow] = await tx.select().from(userCryptoBalances)
+        .where(and(eq(userCryptoBalances.userId, userId), eq(userCryptoBalances.asset, toAsset)));
+      const currentToBalance = toRow?.balance ?? 0;
+      const [updatedTo] = await tx.insert(userCryptoBalances)
+        .values({ userId, asset: toAsset, balance: currentToBalance + toAmount })
+        .onConflictDoUpdate({
+          target: [userCryptoBalances.userId, userCryptoBalances.asset],
+          set: { balance: currentToBalance + toAmount, updatedAt: new Date() },
+        })
+        .returning();
+
+      return { from: updatedFrom, to: updatedTo };
+    });
   }
 
   // --- System Settings ---

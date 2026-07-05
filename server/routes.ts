@@ -8,7 +8,7 @@ import { transactions as txTable, users as usersTable } from "@shared/schema";
 import { randomBytes } from "crypto";
 import { z } from "zod";
 import { verifyPassword, maskCardNumber, hashPassword } from "./auth-utils";
-import { insertPaymentMethodSchema, insertTransactionSchema, type User, type Transaction } from "@shared/schema";
+import { insertPaymentMethodSchema, insertTransactionSchema, type User, type Transaction, CRYPTO_ASSETS, type CryptoAsset } from "@shared/schema";
 
 declare module "express-session" {
   interface SessionData {
@@ -593,6 +593,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ── Saldos cripto individuales de usuarios (editable por ADMIN) ──────────
+  app.get("/api/admin/crypto-balances", requireRole("ADMIN"), async (_req, res) => {
+    try {
+      const [rows, allUsers] = await Promise.all([storage.getAllCryptoBalances(), storage.getAllUsers()]);
+      const byUser = new Map<string, Record<string, number>>();
+      for (const u of allUsers) {
+        byUser.set(u.id, Object.fromEntries(CRYPTO_ASSETS.map(a => [a, 0])));
+      }
+      for (const row of rows) {
+        const bucket = byUser.get(row.userId);
+        if (bucket) bucket[row.asset] = row.balance;
+      }
+      const result = allUsers.map(u => ({
+        user: publicUser(u as User),
+        balances: byUser.get(u.id) ?? Object.fromEntries(CRYPTO_ASSETS.map(a => [a, 0])),
+      }));
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.patch("/api/admin/user-crypto/:userId/:asset", requireRole("ADMIN"), async (req, res) => {
+    const assetParam = req.params.asset as string;
+    if (!CRYPTO_ASSETS.includes(assetParam as CryptoAsset)) {
+      return res.status(400).json({ error: "Activo cripto inválido" });
+    }
+    const schema = z.object({ balance: z.number().finite().min(0) });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Datos inválidos" });
+    try {
+      const user = await storage.getUser(req.params.userId);
+      if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
+      const updated = await storage.setCryptoBalance(req.params.userId, assetParam as CryptoAsset, parsed.data.balance);
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── Permisos del usuario actual ──────────────────────────────────────────
   app.get("/api/user/permissions", requireSession, async (req, res) => {
     if (req.currentUser!.role === "ADMIN") {
@@ -753,6 +793,119 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
       res.status(502).json({ error: "No se pudieron obtener precios en tiempo real" });
+    }
+  });
+
+  // ====================================================================
+  // SALDOS CRIPTO INTERNOS (persistidos por usuario/activo — sin blockchain real)
+  // ====================================================================
+
+  app.get("/api/crypto-balances", async (req, res) => {
+    try {
+      const rows = await storage.getCryptoBalances(req.currentUser!.id);
+      const byAsset = new Map(rows.map(r => [r.asset, r.balance]));
+      const balances: Record<string, number> = {};
+      for (const asset of CRYPTO_ASSETS) balances[asset] = byAsset.get(asset) ?? 0;
+      res.json(balances);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  const exchangeSchema = z.object({
+    fromAsset: z.enum(CRYPTO_ASSETS),
+    toAsset: z.enum(CRYPTO_ASSETS),
+    fromAmount: z.number().positive(),
+    toAmount: z.number().positive(),
+    fromSymbol: z.string().optional(),
+    toSymbol: z.string().optional(),
+    rate: z.number().optional(),
+  });
+
+  app.post("/api/crypto/exchange", async (req, res) => {
+    const parsed = exchangeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: "Datos de intercambio inválidos", details: parsed.error.flatten() });
+    }
+    const { fromAsset, toAsset, fromAmount, toAmount, fromSymbol, toSymbol, rate } = parsed.data;
+    if (fromAsset === toAsset) {
+      return res.status(400).json({ error: "El activo de origen y destino deben ser diferentes" });
+    }
+    const user = req.currentUser!;
+    try {
+      const balances = await storage.exchangeCrypto(user.id, fromAsset, fromAmount, toAsset, toAmount);
+
+      const transactionId = `EXC-${Date.now()}-${randomBytes(4).toString('hex').toUpperCase()}`;
+      const transaction = await storage.createTransaction({
+        transactionId,
+        protocol: "201.3",
+        type: "exchange",
+        amount: fromAmount.toFixed(8),
+        currency: (fromSymbol ?? fromAsset).toUpperCase(),
+        status: "completed",
+        fromAccount: `EXCHANGE · ${(fromSymbol ?? fromAsset).toUpperCase()} · ${fromAmount}`,
+        toAccount: `${(toSymbol ?? toAsset).toUpperCase()} · ${toAmount}`,
+        description: `Exchange interno ${fromAmount} ${(fromSymbol ?? fromAsset).toUpperCase()} → ${toAmount} ${(toSymbol ?? toAsset).toUpperCase()}${rate ? ` (rate: ${rate})` : ""}`,
+        createdBy: user.username,
+      });
+      await storage.createTransactionLog({
+        transactionId: transaction.id,
+        action: "EXCHANGE",
+        status: "completed",
+        message: `Swap ejecutado: ${fromAmount} ${fromAsset.toUpperCase()} → ${toAmount} ${toAsset.toUpperCase()}`,
+      });
+
+      res.json({ balances, transaction });
+    } catch (err: any) {
+      if (err.message === "INSUFFICIENT_BALANCE") {
+        return res.status(400).json({ error: "Saldo insuficiente del activo de origen" });
+      }
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  const dispersionSchema = z.object({
+    cryptoAsset: z.enum(CRYPTO_ASSETS),
+    cryptoAmount: z.number().positive(),
+    cryptoSymbol: z.string().optional(),
+    fiatAmount: z.number().positive(),
+    fiatCurrency: z.enum(["USD", "EUR"]),
+    destWallet: z.string().min(1),
+  });
+
+  app.post("/api/crypto/dispersion", async (req, res) => {
+    const parsed = dispersionSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: "Datos de dispersión inválidos", details: parsed.error.flatten() });
+    }
+    const { cryptoAsset, cryptoAmount, cryptoSymbol, fiatAmount, fiatCurrency, destWallet } = parsed.data;
+    const user = req.currentUser!;
+    try {
+      const balance = await storage.creditCryptoBalance(user.id, cryptoAsset, cryptoAmount);
+
+      const transactionId = `DSP-${Date.now()}-${randomBytes(4).toString('hex').toUpperCase()}`;
+      const transaction = await storage.createTransaction({
+        transactionId,
+        protocol: "101.3",
+        type: "transfer",
+        amount: fiatAmount.toFixed(2),
+        currency: fiatCurrency,
+        status: "completed",
+        fromAccount: `EXCHANGE · POS VIRTUAL · ${fiatCurrency}`,
+        toAccount: destWallet,
+        description: `Dispersión y conversión ${fiatAmount.toFixed(2)} ${fiatCurrency} ≈ ${cryptoAmount.toFixed(8)} ${(cryptoSymbol ?? cryptoAsset).toUpperCase()} → Wallet ${destWallet.slice(0, 10)}…`,
+        createdBy: user.username,
+      });
+      await storage.createTransactionLog({
+        transactionId: transaction.id,
+        action: "DISPERSION",
+        status: "completed",
+        message: `Dispersión ejecutada: ${fiatAmount.toFixed(2)} ${fiatCurrency} → ${cryptoAmount.toFixed(8)} ${cryptoAsset.toUpperCase()}`,
+      });
+
+      res.json({ balance, transaction });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
     }
   });
 

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, decimal, integer, boolean, doublePrecision } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, decimal, integer, boolean, doublePrecision, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -139,6 +139,17 @@ export const cryptoKeys = pgTable("crypto_keys", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Saldos de cripto por usuario (interno — sin blockchain real), un renglón por activo
+export const userCryptoBalances = pgTable("user_crypto_balances", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  asset: text("asset").notNull(), // btc | eth | xrp | ltc | doge | sol | ada | dot | usdt
+  balance: doublePrecision("balance").notNull().default(0),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  userAssetUnique: unique().on(table.userId, table.asset),
+}));
+
 // Motor de pagos — cobros reales Stripe / Mercado Pago
 export const paymentCharges = pgTable("payment_charges", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -202,6 +213,7 @@ export const insertSecurityTokenSchema = createInsertSchema(securityTokens).omit
 export const insertTransactionLogSchema = createInsertSchema(transactionLogs).omit({ id: true, timestamp: true });
 export const insertBankingProtocolSchema = createInsertSchema(bankingProtocols).omit({ id: true });
 export const insertCryptoKeySchema = createInsertSchema(cryptoKeys).omit({ id: true, createdAt: true });
+export const insertUserCryptoBalanceSchema = createInsertSchema(userCryptoBalances).omit({ id: true, updatedAt: true });
 
 // Types
 export type User = typeof users.$inferSelect;
@@ -227,6 +239,13 @@ export type InsertBankingProtocol = z.infer<typeof insertBankingProtocolSchema>;
 
 export type CryptoKey = typeof cryptoKeys.$inferSelect;
 export type InsertCryptoKey = z.infer<typeof insertCryptoKeySchema>;
+
+export type UserCryptoBalance = typeof userCryptoBalances.$inferSelect;
+export type InsertUserCryptoBalance = z.infer<typeof insertUserCryptoBalanceSchema>;
+
+// Activos cripto soportados internamente (sin blockchain real)
+export const CRYPTO_ASSETS = ["btc", "eth", "xrp", "ltc", "doge", "sol", "ada", "dot", "usdt"] as const;
+export type CryptoAsset = typeof CRYPTO_ASSETS[number];
 
 export type Document = typeof documents.$inferSelect;
 export type InsertDocument = z.infer<typeof insertDocumentSchema>;
