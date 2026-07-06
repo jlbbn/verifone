@@ -1312,7 +1312,7 @@ export default function POSPage() {
 
               {formAdvanced && (
                 <div className="mt-3 space-y-3 pl-1 border-l-2 border-muted ml-1">
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <Label htmlFor="v-serial" className="flex items-center gap-1.5 text-xs">
                         <Hash className="w-3.5 h-3.5" /> Número de serie
@@ -1341,7 +1341,7 @@ export default function POSPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <Label htmlFor="v-ip" className="flex items-center gap-1.5 text-xs">
                         <Network className="w-3.5 h-3.5" /> Dirección IP

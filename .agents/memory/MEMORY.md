@@ -7,3 +7,4 @@
 - [Per-user caja vs central caja](per-user-caja.md) — per-user cash balance is a flat persisted DB field on `users`, distinct from the in-memory central caja; admin-only edit, mirrors user-permissions endpoint pattern.
 - [Per-user multi-asset crypto balances architecture](crypto-balances-arch.md) — normalized `(userId, asset)` table, atomic swap/dispersion via `db.transaction`, admin flat-overwrite endpoints, no ledger.
 - [Caja multi-currency ingestion](caja-multicurrency-ingestion.md) — decimal columns return strings (cast to Number); protocol field prefix ("201.3" vs "P201.3") is inconsistent across creation paths.
+- [Mobile dialog/modal viewport handling](mobile-dialog-viewport.md) — fix overflow/width once in base Dialog component instead of per-dialog; same pattern for custom fixed-width modals.

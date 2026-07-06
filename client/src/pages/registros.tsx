@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { Transaction } from "@shared/schema";
 import {
   FileText, Search, Download, Filter, ChevronLeft, ChevronRight,
@@ -410,6 +411,7 @@ const PAGE_SIZE = 8;
 export default function RegistrosPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const isAdmin = user?.role === "ADMIN";
   const [simRunning, setSimRunning] = useState(false);
   const [receiptTx, setReceiptTx] = useState<Transaction | null>(null);
@@ -523,8 +525,6 @@ export default function RegistrosPage() {
     if (sortKey !== col) return <ArrowUpDown className="w-3 h-3 opacity-40" />;
     return sortDir === "asc" ? <ArrowUp className="w-3 h-3 text-[#c8322b]" /> : <ArrowDown className="w-3 h-3 text-[#c8322b]" />;
   }
-
-  const colCount = isAdmin ? 9 : 8;
 
   return (
     <div className="p-4 md:p-6 space-y-5">
@@ -678,6 +678,59 @@ export default function RegistrosPage() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
+          {isLoading ? (
+            <div className="py-16 text-center text-muted-foreground">
+              <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-[#c8322b]" />
+              Cargando transacciones...
+            </div>
+          ) : paginated.length === 0 ? (
+            <div className="py-16 text-center text-muted-foreground" data-testid="empty-state">
+              <Inbox className="w-8 h-8 mx-auto mb-2 opacity-40" />
+              {rows.length === 0 ? "Aún no tienes transacciones registradas." : "No hay registros que coincidan con los filtros."}
+            </div>
+          ) : isMobile ? (
+            <div className="divide-y">
+              {paginated.map((r) => (
+                <div
+                  key={r.id}
+                  className="flex flex-col gap-2 px-4 py-3 hover-elevate active-elevate-2 cursor-pointer"
+                  onClick={() => openTx(r)}
+                  data-testid={`row-${r.id}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-mono text-xs font-bold truncate">{r.id}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">{r.dateLabel}</p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="font-bold text-sm whitespace-nowrap">
+                        ${r.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })} <span className="text-[10px] font-normal text-muted-foreground">{r.currency}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-md font-semibold ${TYPE_COLOR[r.type] || "bg-gray-100 text-gray-700"}`}>{r.type}</span>
+                      <span className="font-mono text-[10px] text-muted-foreground">{r.protocol}</span>
+                      {isAdmin && <span className="text-[10px] text-muted-foreground truncate max-w-[100px]">{r.owner}</span>}
+                    </div>
+                    <Badge className={`text-[10px] no-default-active-elevate ${STATUS_COLOR[r.status] ?? "bg-gray-100 text-gray-700"}`}>{r.status}</Badge>
+                  </div>
+                  {r.status === "Checking with Banking Host..." && (
+                    <span className="text-[9px] font-mono text-red-600 leading-tight">
+                      ⚠ BANK HOST MAINTENANCE · GLOBAL SERVER VISA ON MAINTENANCE
+                    </span>
+                  )}
+                  <div className="flex justify-end">
+                    <Button variant="ghost" size="sm" className="text-xs h-7" data-testid={`view-${r.id}`}
+                      onClick={(e) => { e.stopPropagation(); openTx(r); }}>
+                      <Eye className="w-3.5 h-3.5 mr-1" /> Ver detalle
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -706,17 +759,7 @@ export default function RegistrosPage() {
                 </tr>
               </thead>
               <tbody>
-                {isLoading ? (
-                  <tr><td colSpan={colCount} className="py-16 text-center text-muted-foreground">
-                    <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-[#c8322b]" />
-                    Cargando transacciones...
-                  </td></tr>
-                ) : paginated.length === 0 ? (
-                  <tr><td colSpan={colCount} className="py-16 text-center text-muted-foreground" data-testid="empty-state">
-                    <Inbox className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                    {rows.length === 0 ? "Aún no tienes transacciones registradas." : "No hay registros que coincidan con los filtros."}
-                  </td></tr>
-                ) : paginated.map((r) => (
+                {paginated.map((r) => (
                   <tr key={r.id} className="border-b hover:bg-muted/40 transition-colors cursor-pointer" onClick={() => openTx(r)} data-testid={`row-${r.id}`}>
                     <td className="py-3 px-4 font-mono text-xs font-bold">{r.id}</td>
                     <td className="py-3 px-4 text-xs text-muted-foreground whitespace-nowrap">{r.dateLabel}</td>
@@ -750,6 +793,7 @@ export default function RegistrosPage() {
               </tbody>
             </table>
           </div>
+          )}
 
           {/* Detail row */}
           {selected && (
