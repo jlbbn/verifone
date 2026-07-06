@@ -121,7 +121,7 @@ const HIGHLIGHT_PARAM_LABELS = new Set([
 function FuncionesModal({ onClose, onSelect }: { onClose: () => void; onSelect: (n: number) => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
-      <div className="w-72 rounded-xl overflow-hidden shadow-2xl border border-gray-600" style={{ background: "#1a2a3a" }}>
+      <div className="w-[calc(100%-2rem)] max-w-72 rounded-xl overflow-hidden shadow-2xl border border-gray-600" style={{ background: "#1a2a3a" }}>
         <div className="py-3 px-4 text-center" style={{ background: "#0d1b2a" }}>
           <p className="text-white font-bold tracking-widest text-sm">FUNCIONES</p>
         </div>
