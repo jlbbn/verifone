@@ -191,6 +191,18 @@ export const insertSupportTicketSchema = createInsertSchema(supportTickets).omit
 export type SupportTicket = typeof supportTickets.$inferSelect;
 export type InsertSupportTicket = z.infer<typeof insertSupportTicketSchema>;
 
+// Movimientos manuales de Caja (ingreso/egreso registrados por el operador)
+export const cajaMovements = pgTable("caja_movements", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  type: text("type").notNull(), // "ingreso" | "egreso"
+  amountUSD: doublePrecision("amount_usd").notNull(),
+  category: text("category").notNull(),
+  description: text("description").notNull(),
+  reference: text("reference"),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Documentos seguros
 export const documents = pgTable("documents", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -214,6 +226,7 @@ export const insertTransactionLogSchema = createInsertSchema(transactionLogs).om
 export const insertBankingProtocolSchema = createInsertSchema(bankingProtocols).omit({ id: true });
 export const insertCryptoKeySchema = createInsertSchema(cryptoKeys).omit({ id: true, createdAt: true });
 export const insertUserCryptoBalanceSchema = createInsertSchema(userCryptoBalances).omit({ id: true, updatedAt: true });
+export const insertCajaMovementSchema = createInsertSchema(cajaMovements).omit({ id: true, createdAt: true });
 
 // Types
 export type User = typeof users.$inferSelect;
@@ -242,6 +255,9 @@ export type InsertCryptoKey = z.infer<typeof insertCryptoKeySchema>;
 
 export type UserCryptoBalance = typeof userCryptoBalances.$inferSelect;
 export type InsertUserCryptoBalance = z.infer<typeof insertUserCryptoBalanceSchema>;
+
+export type CajaMovement = typeof cajaMovements.$inferSelect;
+export type InsertCajaMovement = z.infer<typeof insertCajaMovementSchema>;
 
 // Activos cripto soportados internamente (sin blockchain real)
 export const CRYPTO_ASSETS = ["btc", "eth", "xrp", "ltc", "doge", "sol", "ada", "dot", "usdt"] as const;
@@ -280,7 +296,9 @@ export interface SystemSettings {
   merchantName: string;
   merchantCity: string;
   afiliacion: string;
-  tipoCambio: number;
+  tipoCambio: number; // MXN por 1 USD
+  fxRateEUR: number;  // USD por 1 EUR
+  fxRateGBP: number;  // USD por 1 GBP
   // Mantenimiento global
   maintenanceMode: boolean;
   // Caja / Balances
@@ -304,6 +322,8 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   merchantCity: "CANCUN Q.ROO",
   afiliacion: "7705397",
   tipoCambio: 17.50,
+  fxRateEUR: 1.085,
+  fxRateGBP: 1.27,
   maintenanceMode: true,
   saldoAperturaUSD: 0,
   saldoSistemaUSD: 1250000,
@@ -368,3 +388,23 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
     { label: "ACTIVADO TLS",  value: "SI" },
   ],
 };
+
+// ─── Caja — clasificación y conversión de transacciones ───────────────────────
+// Solo estos "type" de transacción representan dinero entrando por POS/terminal.
+// Cualquier type no listado (exchange, transfer/dispersión cripto, etc.) queda
+// excluido de Caja por default — son movimientos internos, no bancarios.
+export const CAJA_INGRESO_TX_TYPES = ["payment", "sr-link"] as const;
+
+export function convertToUSD(
+  amount: number,
+  currency: string,
+  rates: Pick<SystemSettings, "tipoCambio" | "fxRateEUR" | "fxRateGBP">
+): number {
+  switch ((currency || "USD").toUpperCase()) {
+    case "USD": return amount;
+    case "MXN": return amount / rates.tipoCambio;
+    case "EUR": return amount * rates.fxRateEUR;
+    case "GBP": return amount * rates.fxRateGBP;
+    default: return amount; // moneda desconocida: se asume 1:1 con USD
+  }
+}

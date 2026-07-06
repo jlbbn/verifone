@@ -253,6 +253,42 @@ export default function AdminSettingsPage() {
                     Aparece en recibos USD+MXN del POS. Ej: {fmtUSD(1000)} USD → {fmtUSD(1000 * draft.tipoCambio)} MXN
                   </p>
                 </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="fxRateEUR">Tipo de Cambio EUR / USD</Label>
+                  <div className="relative">
+                    <Input
+                      id="fxRateEUR"
+                      type="number"
+                      step="0.001"
+                      min="0.01"
+                      value={draft.fxRateEUR}
+                      onChange={e => set("fxRateEUR", parseFloat(e.target.value) || DEFAULT_SYSTEM_SETTINGS.fxRateEUR)}
+                      data-testid="input-fx-eur"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">USD</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Usado para convertir transacciones en EUR a USD en Caja. Ej: €1.00 → ${draft.fxRateEUR.toFixed(3)} USD
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="fxRateGBP">Tipo de Cambio GBP / USD</Label>
+                  <div className="relative">
+                    <Input
+                      id="fxRateGBP"
+                      type="number"
+                      step="0.001"
+                      min="0.01"
+                      value={draft.fxRateGBP}
+                      onChange={e => set("fxRateGBP", parseFloat(e.target.value) || DEFAULT_SYSTEM_SETTINGS.fxRateGBP)}
+                      data-testid="input-fx-gbp"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">USD</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Usado para convertir transacciones en GBP a USD en Caja. Ej: £1.00 → ${draft.fxRateGBP.toFixed(3)} USD
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>
