@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useSystemSettings, useUpdateSettings } from "@/hooks/use-system-settings";
+import { useCajaSummary, useCreateCajaMovement, type CajaMovementRow } from "@/hooks/use-caja";
 import { DEFAULT_SYSTEM_SETTINGS } from "@shared/schema";
 import {
   Wallet, TrendingUp, TrendingDown, DollarSign, Plus, Minus,
@@ -34,13 +35,6 @@ const movSchema = z.object({
   reference: z.string().optional(),
 });
 type MovForm = z.infer<typeof movSchema>;
-
-interface Movement {
-  id: string; type: "ingreso" | "egreso";
-  amountUSD: number; category: string; description: string;
-  reference?: string; time: string; user: string;
-  protocol?: string; cardType?: string; authCode?: string;
-}
 
 type TxProtocol = "pos" | "1643" | "101.1";
 
@@ -85,10 +79,8 @@ const LIVE_POOL: Omit<LiveTx, "id" | "date" | "time" | "isNew">[] = [
 
 function randFrom<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
 
-// ─── Admin initial movements (settings-driven) ────────────────────────────────
-function buildAdminMovements(s: typeof DEFAULT_SYSTEM_SETTINGS): Movement[] {
-  // Caja central en cero: no hay movimientos activos por el momento.
-  return [];
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -99,12 +91,14 @@ export default function CajaPage() {
   const showLiveView = !isAdmin;
   const { data: settings } = useSystemSettings();
   const { mutate: saveSettings, isPending: isSavingSettings } = useUpdateSettings();
+  const { data: cajaSummary, isLoading: isCajaLoading } = useCajaSummary();
+  const { mutate: createMovement, isPending: isCreatingMovement } = useCreateCajaMovement();
   const TC = settings?.tipoCambio ?? DEFAULT_SYSTEM_SETTINGS.tipoCambio;
   const fmtMXN = (usd: number) => (usd * TC).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const settingsRef = useRef(settings);
   const movementsInitialized = useRef(false);
 
-  const [movements, setMovements] = useState<Movement[]>(() => buildAdminMovements(DEFAULT_SYSTEM_SETTINGS));
+  const movements: CajaMovementRow[] = cajaSummary?.movements ?? [];
   const [showForm, setShowForm] = useState<"ingreso" | "egreso" | null>(null);
   const [filterType, setFilterType] = useState<"all" | "ingreso" | "egreso">("all");
 
@@ -127,11 +121,10 @@ export default function CajaPage() {
 
   useEffect(() => { settingsRef.current = settings; }, [settings]);
 
-  // rebuild movements once real settings arrive (only on first load)
+  // sync "Configurar Montos" draft once real settings arrive (only on first load)
   useEffect(() => {
     if (settings && !movementsInitialized.current) {
       movementsInitialized.current = true;
-      setMovements(buildAdminMovements(settings));
       setDraftMontos({
         saldoAperturaUSD:  settings.saldoAperturaUSD,
         feedPosRegularUSD: settings.feedPosRegularUSD,
@@ -178,9 +171,9 @@ export default function CajaPage() {
     return () => clearInterval(interval);
   }, [showLiveView]);
 
-  const ingresosUSD = movements.filter(m => m.type === "ingreso").reduce((s, m) => s + m.amountUSD, 0);
-  const egresosUSD  = movements.filter(m => m.type === "egreso").reduce((s, m) => s + m.amountUSD, 0);
-  const saldoUSD    = (settings?.saldoAperturaUSD ?? DEFAULT_SYSTEM_SETTINGS.saldoAperturaUSD) + ingresosUSD - egresosUSD;
+  const ingresosUSD = cajaSummary?.ingresosUSD ?? 0;
+  const egresosUSD  = cajaSummary?.egresosUSD ?? 0;
+  const saldoUSD    = cajaSummary?.saldoUSD ?? (settings?.saldoAperturaUSD ?? DEFAULT_SYSTEM_SETTINGS.saldoAperturaUSD);
 
   function openForm(type: "ingreso" | "egreso") {
     form.reset({ type, amount: "", category: "", description: "", reference: "" });
@@ -188,18 +181,22 @@ export default function CajaPage() {
   }
 
   function onSubmit(data: MovForm) {
-    const newMov: Movement = {
-      id: `MOV-${String(movements.length + 1).padStart(3, "0")}`,
-      type: data.type, amountUSD: parseFloat(data.amount),
-      category: data.category, description: data.description,
+    createMovement({
+      type: data.type,
+      amountUSD: parseFloat(data.amount),
+      category: data.category,
+      description: data.description,
       reference: data.reference || undefined,
-      time: new Date().toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" }),
-      user: user?.fullName ?? "Sistema",
-    };
-    setMovements(prev => [newMov, ...prev]);
-    setShowForm(null);
-    toast({ title: data.type === "ingreso" ? "Ingreso registrado" : "Egreso registrado",
-      description: `$${fmtUSD(parseFloat(data.amount))} USD — ${data.description}` });
+    }, {
+      onSuccess: () => {
+        setShowForm(null);
+        toast({ title: data.type === "ingreso" ? "Ingreso registrado" : "Egreso registrado",
+          description: `$${fmtUSD(parseFloat(data.amount))} USD — ${data.description}` });
+      },
+      onError: (e) => {
+        toast({ title: "Error al registrar movimiento", description: e.message, variant: "destructive" });
+      },
+    });
   }
 
   function download(filename: string, content: string, mime = "text/plain;charset=utf-8") {
@@ -211,11 +208,11 @@ export default function CajaPage() {
 
   function handleReporteDiario() {
     const fecha = new Date().toLocaleDateString("es-MX");
-    const header = "ID,Tipo,Categoría,Descripción,Referencia,USD,MXN,Hora,Protocolo,Tarjeta,Auth";
+    const header = "ID,Origen,Tipo,Categoría,Descripción,Referencia,Monto Original,Moneda Original,USD,MXN,Hora,Usuario";
     const rows = movements.map(m =>
-      [m.id, m.type, m.category, `"${m.description.replace(/"/g,'""')}"`,
-       m.reference||"", fmtUSD(m.amountUSD), fmtUSD(m.amountUSD * TC),
-       m.time, m.protocol||"", m.cardType||"", m.authCode||""].join(",")
+      [m.id, m.source, m.type, m.category, `"${m.description.replace(/"/g,'""')}"`,
+       m.reference||"", m.originalAmount, m.originalCurrency, fmtUSD(m.amountUSD), fmtUSD(m.amountUSD * TC),
+       fmtTime(m.createdAt), m.createdBy].join(",")
     );
     download(`reporte-caja-${fecha.replace(/\//g,"-")}.csv`, [header, ...rows].join("\n"), "text/csv;charset=utf-8");
     toast({ title: "Reporte generado", description: `${movements.length} movimientos exportados.` });
@@ -265,9 +262,6 @@ export default function CajaPage() {
     const updated = { ...settings, ...draftMontos };
     saveSettings(updated, {
       onSuccess: () => {
-        movementsInitialized.current = false;
-        setMovements(buildAdminMovements(updated));
-        movementsInitialized.current = true;
         setShowMontos(false);
         toast({ title: "Montos actualizados", description: "Los saldos y montos de caja ya están activos." });
       },
@@ -277,13 +271,24 @@ export default function CajaPage() {
     });
   }
 
-  function protocolBadge(p?: string) {
-    if (!p) return null;
-    if (p === "101.1")
-      return <Badge className="bg-[#1A1F71]/10 text-[#1A1F71] border-[#1A1F71]/20 no-default-active-elevate text-[10px] font-mono">Visa Net 101.1</Badge>;
-    if (p === "1643")
-      return <Badge className="bg-amber-100 text-amber-700 border-amber-200 no-default-active-elevate text-[10px] font-mono">1643 Manual</Badge>;
-    return <Badge className="bg-blue-100 text-blue-700 border-blue-200 no-default-active-elevate text-[10px] font-mono">{p}</Badge>;
+  function sourceBadge(m: CajaMovementRow) {
+    if (m.source === "transaction") {
+      return (
+        <Badge className="bg-blue-100 text-blue-700 border-blue-200 no-default-active-elevate text-[10px] font-mono">
+          <MonitorSmartphone className="w-2.5 h-2.5 mr-0.5" /> Terminal
+        </Badge>
+      );
+    }
+    return <Badge className="bg-gray-100 text-gray-600 border-gray-200 no-default-active-elevate text-[10px]">Manual</Badge>;
+  }
+
+  function currencyBadge(m: CajaMovementRow) {
+    if (m.originalCurrency === "USD") return null;
+    return (
+      <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded">
+        {m.originalAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {m.originalCurrency}
+      </span>
+    );
   }
 
   // ─── LIVE VIEW (non-admin) ─────────────────────────────────────────────────
@@ -601,8 +606,8 @@ export default function CajaPage() {
                   )} />
                 </div>
                 <div className="flex gap-3">
-                  <Button type="submit" className={showForm === "ingreso" ? "bg-green-600 text-white" : "bg-red-600 text-white"} data-testid="button-guardar-mov">
-                    <Check className="w-4 h-4 mr-1" /> Guardar
+                  <Button type="submit" disabled={isCreatingMovement} className={showForm === "ingreso" ? "bg-green-600 text-white" : "bg-red-600 text-white"} data-testid="button-guardar-mov">
+                    {isCreatingMovement ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Check className="w-4 h-4 mr-1" />} Guardar
                   </Button>
                   <Button type="button" variant="outline" onClick={() => setShowForm(null)}>Cancelar</Button>
                 </div>
@@ -633,12 +638,21 @@ export default function CajaPage() {
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y">
+              {isCajaLoading && (
+                <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+                  <Loader2 className="w-4 h-4 mr-1.5 inline animate-spin" /> Cargando movimientos...
+                </div>
+              )}
+              {!isCajaLoading && allFiltered.length === 0 && (
+                <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+                  Sin movimientos registrados.
+                </div>
+              )}
               {allFiltered.map(mov => {
-                const is101 = mov.protocol === "101.1";
-                const is1643 = mov.protocol === "1643";
+                const isTx = mov.source === "transaction";
                 return (
                   <div key={mov.id}
-                    className={`flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/30 ${is101 ? "bg-blue-50/30" : is1643 ? "bg-amber-50/30" : ""}`}
+                    className={`flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/30 ${isTx ? "bg-blue-50/30" : ""}`}
                     data-testid={`row-mov-${mov.id}`}>
                     <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${mov.type==="ingreso" ? "bg-green-100" : "bg-red-100"}`}>
                       {mov.type==="ingreso" ? <ArrowUpRight className="w-4 h-4 text-green-600" /> : <ArrowDownRight className="w-4 h-4 text-red-600" />}
@@ -647,12 +661,8 @@ export default function CajaPage() {
                       <p className="text-sm font-semibold truncate">{mov.description}</p>
                       <div className="flex items-center gap-2 flex-wrap mt-0.5">
                         <span className="text-xs text-muted-foreground">{mov.category}</span>
-                        {protocolBadge(mov.protocol)}
-                        {mov.cardType && (
-                          <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                            <CreditCard className="w-3 h-3" /> {mov.cardType}
-                          </span>
-                        )}
+                        {sourceBadge(mov)}
+                        {currencyBadge(mov)}
                         {mov.reference && <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded">{mov.reference}</span>}
                       </div>
                     </div>
@@ -663,7 +673,7 @@ export default function CajaPage() {
                       <p className="text-[10px] text-muted-foreground font-mono">
                         ≈ ${fmtMXN(mov.amountUSD)} MXN
                       </p>
-                      <p className="text-[10px] text-muted-foreground">{mov.time} · {mov.id}</p>
+                      <p className="text-[10px] text-muted-foreground">{fmtTime(mov.createdAt)} · {mov.createdBy}</p>
                     </div>
                   </div>
                 );

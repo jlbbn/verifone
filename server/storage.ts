@@ -16,6 +16,8 @@ import {
   supportTickets,
   paymentCharges,
   userCryptoBalances,
+  cajaMovements,
+  type CajaMovement, type InsertCajaMovement,
   type User, type InsertUser,
   type Transaction, type InsertTransaction,
   type PaymentMethod, type InsertPaymentMethod,
@@ -41,6 +43,10 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+
+  // Caja — movimientos manuales
+  getCajaMovements(): Promise<CajaMovement[]>;
+  createCajaMovement(data: InsertCajaMovement): Promise<CajaMovement>;
 
   // Transactions
   createTransaction(transaction: InsertTransaction): Promise<Transaction>;
@@ -599,6 +605,16 @@ export class DatabaseStorage implements IStorage {
       password: hashPassword(insertUser.password),
     }).returning();
     return user;
+  }
+
+  // --- Caja — movimientos manuales ---
+  async getCajaMovements(): Promise<CajaMovement[]> {
+    return db.select().from(cajaMovements).orderBy(desc(cajaMovements.createdAt));
+  }
+
+  async createCajaMovement(data: InsertCajaMovement): Promise<CajaMovement> {
+    const [mov] = await db.insert(cajaMovements).values(data).returning();
+    return mov;
   }
 
   // --- Transactions ---

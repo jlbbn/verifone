@@ -8,7 +8,7 @@ import { transactions as txTable, users as usersTable } from "@shared/schema";
 import { randomBytes } from "crypto";
 import { z } from "zod";
 import { verifyPassword, maskCardNumber, hashPassword } from "./auth-utils";
-import { insertPaymentMethodSchema, insertTransactionSchema, type User, type Transaction, CRYPTO_ASSETS, type CryptoAsset } from "@shared/schema";
+import { insertPaymentMethodSchema, insertTransactionSchema, type User, type Transaction, CRYPTO_ASSETS, type CryptoAsset, insertCajaMovementSchema, convertToUSD, CAJA_INGRESO_TX_TYPES } from "@shared/schema";
 
 declare module "express-session" {
   interface SessionData {
@@ -1697,6 +1697,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(updated);
     } catch {
       res.status(500).json({ error: "Error al guardar configuración" });
+    }
+  });
+
+  // ── Caja — resumen real (transacciones + movimientos manuales) ──────────────
+  app.get("/api/caja/summary", requireSession, async (_req, res) => {
+    try {
+      const [settings, allTransactions, movements] = await Promise.all([
+        storage.getSettings(),
+        storage.getAllTransactions(),
+        storage.getCajaMovements(),
+      ]);
+
+      const rates = { tipoCambio: settings.tipoCambio, fxRateEUR: settings.fxRateEUR, fxRateGBP: settings.fxRateGBP };
+
+      const txIngresos = allTransactions.filter(
+        (tx) => tx.status === "completed" && (CAJA_INGRESO_TX_TYPES as readonly string[]).includes(tx.type)
+      );
+
+      const transactionMovements = txIngresos.map((tx) => ({
+        id: tx.id,
+        source: "transaction" as const,
+        type: "ingreso" as const,
+        amountUSD: convertToUSD(Number(tx.amount), tx.currency, rates),
+        originalAmount: Number(tx.amount),
+        originalCurrency: tx.currency,
+        category: tx.protocol?.replace(/^\D+/, "").startsWith("201") ? "pos" : "transferencia",
+        description: tx.description || `Transacción ${tx.transactionId}`,
+        reference: tx.transactionId,
+        createdBy: tx.createdBy,
+        createdAt: tx.createdAt,
+      }));
+
+      const manualMovements = movements.map((m) => ({
+        id: m.id,
+        source: "manual" as const,
+        type: m.type as "ingreso" | "egreso",
+        amountUSD: m.amountUSD,
+        originalAmount: m.amountUSD,
+        originalCurrency: "USD",
+        category: m.category,
+        description: m.description,
+        reference: m.reference ?? undefined,
+        createdBy: m.createdBy,
+        createdAt: m.createdAt,
+      }));
+
+      const all = [...transactionMovements, ...manualMovements].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+
+      const ingresosUSD = all.filter((m) => m.type === "ingreso").reduce((sum, m) => sum + m.amountUSD, 0);
+      const egresosUSD = all.filter((m) => m.type === "egreso").reduce((sum, m) => sum + m.amountUSD, 0);
+      const saldoUSD = settings.saldoAperturaUSD + ingresosUSD - egresosUSD;
+
+      res.json({
+        movements: all,
+        ingresosUSD,
+        egresosUSD,
+        saldoUSD,
+        saldoAperturaUSD: settings.saldoAperturaUSD,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Error al obtener resumen de caja" });
+    }
+  });
+
+  app.post("/api/caja/movements", requireSession, requireRole("ADMIN"), async (req, res) => {
+    try {
+      const parsed = insertCajaMovementSchema.safeParse({
+        ...req.body,
+        createdBy: req.currentUser!.username,
+      });
+      if (!parsed.success) {
+        res.status(400).json({ error: "Datos inválidos", details: parsed.error.flatten() });
+        return;
+      }
+      const movement = await storage.createCajaMovement(parsed.data);
+      res.status(201).json(movement);
+    } catch (error) {
+      res.status(500).json({ error: "Error al registrar movimiento de caja" });
     }
   });
 
