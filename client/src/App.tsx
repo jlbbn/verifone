@@ -28,6 +28,7 @@ import SupportPage from "@/pages/support";
 import POSIntelligencePage from "@/pages/pos-intelligence";
 import SubscriptionPage from "@/pages/subscription";
 import SubscriptionPaymentPage from "@/pages/subscription-payment";
+import CompliancePage from "@/pages/compliance";
 import NotFound from "@/pages/not-found";
 
 function AppLayout({ children }: { children: React.ReactNode }) {
@@ -165,6 +166,10 @@ function Router() {
       
       <Route path="/claves">
         <AppLayout><ClavesPage /></AppLayout>
+      </Route>
+
+      <Route path="/cumplimiento">
+        <AppLayout><CompliancePage /></AppLayout>
       </Route>
 
       <Route path="/pos-intelligence">

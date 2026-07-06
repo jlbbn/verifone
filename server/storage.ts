@@ -63,6 +63,7 @@ export interface IStorage {
   // Security Tokens
   createSecurityToken(token: InsertSecurityToken): Promise<SecurityToken>;
   getSecurityToken(tokenId: string): Promise<SecurityToken | undefined>;
+  listSecurityTokens(): Promise<SecurityToken[]>;
 
   // Transaction Logs
   createTransactionLog(log: InsertTransactionLog): Promise<TransactionLog>;
@@ -684,6 +685,10 @@ export class DatabaseStorage implements IStorage {
   async getSecurityToken(tokenId: string): Promise<SecurityToken | undefined> {
     const [token] = await db.select().from(securityTokens).where(eq(securityTokens.tokenId, tokenId));
     return token;
+  }
+
+  async listSecurityTokens(): Promise<SecurityToken[]> {
+    return db.select().from(securityTokens).orderBy(desc(securityTokens.issuedAt));
   }
 
   // --- Transaction Logs ---

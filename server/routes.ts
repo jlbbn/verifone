@@ -1114,6 +1114,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/security-tokens", async (req, res) => {
+    try {
+      const user = req.currentUser!;
+      const allTokens = await storage.listSecurityTokens();
+      if (user.role === "ADMIN") {
+        res.json(allTokens);
+        return;
+      }
+      const userTxs = await storage.getTransactionsByUser(user.username);
+      const ownedIds = new Set(userTxs.map((tx) => tx.id));
+      res.json(allTokens.filter((token) => ownedIds.has(token.transactionId)));
+    } catch (error) {
+      res.status(500).json({ error: "Error al obtener tokens de seguridad" });
+    }
+  });
+
   app.get("/api/security-tokens/:tokenId", async (req, res) => {
     try {
       const token = await storage.getSecurityToken(req.params.tokenId);

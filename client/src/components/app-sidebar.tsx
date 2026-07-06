@@ -21,6 +21,7 @@ import {
   Coins,
   FolderOpen,
   AlertTriangle,
+  ShieldCheck,
 } from "lucide-react";
 import {
   Sidebar,
@@ -63,6 +64,7 @@ const menuItems = [
   { title: "Registros",           url: "/registros",        icon: FileText },
   { title: "Exchange Crypto",     url: "/exchange",         icon: Bitcoin },
   { title: "Claves Encriptadas",  url: "/claves",           icon: Lock },
+  { title: "Cumplimiento Bancario", url: "/cumplimiento",   icon: ShieldCheck },
   { title: "Documentos",          url: "/documentos",       icon: FolderOpen },
   { title: "Payment Discrepancies", url: "/support",         icon: AlertTriangle },
 ];
