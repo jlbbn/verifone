@@ -1,4 +1,4 @@
-import React, { Activity, useState } from "react";
+import { useState } from "react";
 import { 
   LayoutDashboard, 
   ArrowRightLeft, 
@@ -11,7 +11,7 @@ import {
   TrendingDown,
   Bell,
   Search,
-  Menu,
+  Activity,
   ChevronDown,
   MoreVertical,
   ArrowUpRight,
