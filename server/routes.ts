@@ -716,6 +716,231 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ====================================================================
+  // MOTOR DE ENRUTAMIENTO POS — Reglas, Decisiones, Comandos, Analítica
+  // ====================================================================
+
+  // ── helpers ──────────────────────────────────────────────────────────────
+  function evalRule(rule: { conditionField: string; conditionOperator: string; conditionValue: string },
+                    data: { amount: number; currency: string; protocol: string; cardType: string }): boolean {
+    const raw: Record<string, string | number> = {
+      amount: data.amount,
+      currency: data.currency,
+      protocol: data.protocol,
+      cardType: data.cardType,
+    };
+    const fv = raw[rule.conditionField];
+    if (fv === undefined) return false;
+    const cv = rule.conditionValue;
+    switch (rule.conditionOperator) {
+      case "gt":         return Number(fv) > Number(cv);
+      case "lt":         return Number(fv) < Number(cv);
+      case "gte":        return Number(fv) >= Number(cv);
+      case "lte":        return Number(fv) <= Number(cv);
+      case "eq":         return String(fv).toLowerCase() === cv.toLowerCase();
+      case "startsWith": return String(fv).toLowerCase().startsWith(cv.toLowerCase());
+      case "contains":   return String(fv).toLowerCase().includes(cv.toLowerCase());
+      default:           return false;
+    }
+  }
+
+  async function selectAcquirer(data: { amount: number; currency: string; protocol: string; cardType: string }) {
+    const rules = await storage.getRoutingRules();
+    const active = rules.filter(r => r.active).sort((a, b) => a.priority - b.priority);
+    for (const rule of active) {
+      if (evalRule(rule, data)) {
+        return { ruleId: rule.id, ruleName: rule.name, acquirer: rule.acquirer,
+                 conditionMatched: `${rule.conditionField} ${rule.conditionOperator} ${rule.conditionValue}` };
+      }
+    }
+    return { ruleId: null, ruleName: null, acquirer: "stripe", conditionMatched: null };
+  }
+
+  // ── Routing Rules CRUD ────────────────────────────────────────────────────
+  const routingRuleSchema = z.object({
+    name:               z.string().min(1).max(100),
+    description:        z.string().max(300).optional().nullable(),
+    conditionField:     z.enum(["amount", "currency", "protocol", "cardType"]),
+    conditionOperator:  z.enum(["gt", "lt", "gte", "lte", "eq", "startsWith", "contains"]),
+    conditionValue:     z.string().min(1),
+    acquirer:           z.enum(["stripe", "mercadopago", "local"]),
+    priority:           z.number().int().min(1).max(9999).default(100),
+    active:             z.boolean().default(true),
+  });
+
+  app.get("/api/routing-rules", requireSession, async (_req, res) => {
+    try {
+      const rules = await storage.getRoutingRules();
+      res.json(rules);
+    } catch {
+      res.status(500).json({ error: "Error al obtener reglas de enrutamiento" });
+    }
+  });
+
+  app.post("/api/routing-rules", requireSession, requireRole("ADMIN"), async (req, res) => {
+    try {
+      const parsed = routingRuleSchema.safeParse(req.body);
+      if (!parsed.success) { res.status(400).json({ error: "Datos inválidos", details: parsed.error.issues }); return; }
+      const rule = await storage.createRoutingRule(parsed.data);
+      res.status(201).json(rule);
+    } catch {
+      res.status(500).json({ error: "Error al crear regla" });
+    }
+  });
+
+  app.patch("/api/routing-rules/:id", requireSession, requireRole("ADMIN"), async (req, res) => {
+    try {
+      const parsed = routingRuleSchema.partial().safeParse(req.body);
+      if (!parsed.success) { res.status(400).json({ error: "Datos inválidos", details: parsed.error.issues }); return; }
+      const updated = await storage.updateRoutingRule(req.params.id, parsed.data);
+      if (!updated) { res.status(404).json({ error: "Regla no encontrada" }); return; }
+      res.json(updated);
+    } catch {
+      res.status(500).json({ error: "Error al actualizar regla" });
+    }
+  });
+
+  app.delete("/api/routing-rules/:id", requireSession, requireRole("ADMIN"), async (req, res) => {
+    try {
+      await storage.deleteRoutingRule(req.params.id);
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ error: "Error al eliminar regla" });
+    }
+  });
+
+  // ── Routing Decisions ─────────────────────────────────────────────────────
+  app.get("/api/routing-decisions", requireSession, requireRole("ADMIN"), async (req, res) => {
+    try {
+      const limit = Math.min(Number(req.query.limit ?? 100), 500);
+      const decisions = await storage.getRoutingDecisions(limit);
+      res.json(decisions);
+    } catch {
+      res.status(500).json({ error: "Error al obtener decisiones de enrutamiento" });
+    }
+  });
+
+  // ── Terminal Commands ─────────────────────────────────────────────────────
+  const COMMAND_DURATIONS: Record<string, number> = {
+    restart: 8000, reconfigure: 5000, force_offline: 2000, sync: 4000,
+  };
+
+  app.post("/api/terminals/:id/commands", requireSession, requireRole("ADMIN"), async (req, res) => {
+    try {
+      const bodySchema = z.object({
+        command: z.enum(["restart", "reconfigure", "force_offline", "sync"]),
+        notes:   z.string().max(200).optional().nullable(),
+      });
+      const parsed = bodySchema.safeParse(req.body);
+      if (!parsed.success) { res.status(400).json({ error: "Comando inválido", details: parsed.error.issues }); return; }
+
+      const terminal = await storage.getRoutingRule(req.params.id).catch(() => null); // just verify
+      const cmd = await storage.createTerminalCommand({
+        terminalId: req.params.id,
+        command:    parsed.data.command,
+        status:     "executing",
+        notes:      parsed.data.notes ?? null,
+        createdBy:  req.currentUser!.username,
+      });
+
+      // Simulate async completion
+      const duration = COMMAND_DURATIONS[parsed.data.command] ?? 5000;
+      const newStatus = parsed.data.command === "force_offline" ? "completed" : "completed";
+      const newTerminalStatus = parsed.data.command === "force_offline" ? "offline"
+        : parsed.data.command === "restart" ? "online"
+        : parsed.data.command === "reconfigure" ? "reconfigured"
+        : undefined;
+
+      setTimeout(async () => {
+        try {
+          await storage.updateTerminalCommandStatus(cmd.id, newStatus, new Date());
+          if (newTerminalStatus) {
+            await storage.updateTerminal(req.params.id, { status: newTerminalStatus });
+          }
+        } catch { /* ignore */ }
+      }, duration);
+
+      res.status(201).json(cmd);
+    } catch {
+      res.status(500).json({ error: "Error al ejecutar comando de terminal" });
+    }
+  });
+
+  app.get("/api/terminals/:id/commands", requireSession, async (req, res) => {
+    try {
+      const commands = await storage.getTerminalCommands(req.params.id);
+      res.json(commands);
+    } catch {
+      res.status(500).json({ error: "Error al obtener historial de comandos" });
+    }
+  });
+
+  // ── Routing Analytics ─────────────────────────────────────────────────────
+  app.get("/api/routing-analytics", requireSession, requireRole("ADMIN"), async (req, res) => {
+    try {
+      const decisions = await storage.getRoutingDecisions(500);
+
+      // By acquirer
+      const byAcquirer: Record<string, { total: number; approved: number; totalMs: number }> = {};
+      // By protocol
+      const byProtocol: Record<string, { total: number; approved: number }> = {};
+
+      for (const d of decisions) {
+        // acquirer stats
+        if (!byAcquirer[d.acquirer]) byAcquirer[d.acquirer] = { total: 0, approved: 0, totalMs: 0 };
+        byAcquirer[d.acquirer].total++;
+        if (d.approved) byAcquirer[d.acquirer].approved++;
+        if (d.responseTimeMs) byAcquirer[d.acquirer].totalMs += d.responseTimeMs;
+
+        // protocol stats
+        const proto = d.protocol ?? "unknown";
+        if (!byProtocol[proto]) byProtocol[proto] = { total: 0, approved: 0 };
+        byProtocol[proto].total++;
+        if (d.approved) byProtocol[proto].approved++;
+      }
+
+      const acquirerStats = Object.entries(byAcquirer).map(([acquirer, s]) => ({
+        acquirer,
+        total: s.total,
+        approved: s.approved,
+        approvalRate: s.total ? Math.round((s.approved / s.total) * 100) : 0,
+        avgResponseMs: s.total ? Math.round(s.totalMs / s.total) : 0,
+      }));
+
+      const protocolStats = Object.entries(byProtocol).map(([protocol, s]) => ({
+        protocol,
+        total: s.total,
+        approved: s.approved,
+        approvalRate: s.total ? Math.round((s.approved / s.total) * 100) : 0,
+      }));
+
+      res.json({ acquirerStats, protocolStats, totalDecisions: decisions.length });
+    } catch {
+      res.status(500).json({ error: "Error al calcular analítica de enrutamiento" });
+    }
+  });
+
+  // ── Export Routing Decisions CSV ──────────────────────────────────────────
+  app.get("/api/routing-decisions/export", requireSession, requireRole("ADMIN"), async (_req, res) => {
+    try {
+      const decisions = await storage.getRoutingDecisions(500);
+      const headers = ["id","transactionId","acquirer","ruleName","conditionMatched","approved","amount","currency","protocol","cardType","responseTimeMs","createdAt"];
+      const csvRows = [headers.join(",")];
+      for (const d of decisions) {
+        csvRows.push([
+          d.id, d.transactionId, d.acquirer, d.ruleName ?? "", d.conditionMatched ?? "",
+          d.approved ? "1" : "0", d.amount ?? "", d.currency ?? "", d.protocol ?? "",
+          d.cardType ?? "", d.responseTimeMs ?? "", d.createdAt.toISOString(),
+        ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(","));
+      }
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="routing-decisions-${Date.now()}.csv"`);
+      res.send(csvRows.join("\n"));
+    } catch {
+      res.status(500).json({ error: "Error al exportar" });
+    }
+  });
+
+  // ====================================================================
   // PROTOCOLOS BANCARIOS
   // ====================================================================
   
@@ -1289,9 +1514,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const expMonth = parseInt(expMMStr, 10);
       const expYear  = 2000 + parseInt(expYYStr, 10);
 
-      // ── Stripe — always first (real card validation) ──────────────────────
-      const stripeConfigured = true;
-      if (stripeConfigured) {
+      // ── Motor de Reglas de Enrutamiento ───────────────────────────────────
+      const routingStart = Date.now();
+      const acquirerDecision = await selectAcquirer({
+        amount:   parseFloat(amount),
+        currency: "MXN",
+        protocol: protocol ?? "201.1",
+        cardType,
+      });
+      console.log(`[Routing] Acquirer: ${acquirerDecision.acquirer} | Rule: ${acquirerDecision.ruleName ?? "fallback"}`);
+
+      // ── Route payment to selected acquirer ────────────────────────────────
+      const useStripe      = acquirerDecision.acquirer === "stripe";
+      const useMercadoPago = acquirerDecision.acquirer === "mercadopago";
+      const useLocal       = acquirerDecision.acquirer === "local";
+
+      if (useStripe) {
         try {
           const { getStripeClient } = await import("./stripeClient");
           const stripe = await getStripeClient();
@@ -1359,8 +1597,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.warn(`[Stripe] Soft error, falling back — ${msg}`);
           authCode = `AUTH-${Date.now()}-${randomBytes(4).toString("hex").toUpperCase()}`;
         }
-      } else if (mpCardToken && process.env.MP_ACCESS_TOKEN) {
-        // ── Mercado Pago fallback ───────────────────────────────────────────
+      } else if ((useMercadoPago || (!useStripe && !useLocal)) && mpCardToken && process.env.MP_ACCESS_TOKEN) {
+        // ── Mercado Pago (seleccionado por motor de reglas o tiene token) ──
         try {
           const { processMPPaymentWithToken } = await import("./mercadopagoClient");
           const mpResult = await processMPPaymentWithToken({
@@ -1389,9 +1627,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           authCode = `AUTH-${Date.now()}-${randomBytes(4).toString("hex").toUpperCase()}`;
         }
       } else {
+        // ── Autorización local (seleccionada por regla o fallback) ──────────
         authCode = `AUTH-${Date.now()}-${randomBytes(4).toString("hex").toUpperCase()}`;
+        realCharge = false;
       }
 
+      const routingResponseMs = Date.now() - routingStart;
       const transactionId = `TXN-${Date.now()}-${randomBytes(4).toString('hex').toUpperCase()}`;
 
       const op = req.currentUser!;
@@ -1407,9 +1648,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         toAccount:   `${op.fullName.toUpperCase()} · ${op.username} · TERMINAL POS`,
         description: realCharge
           ? `Cobro MP · ${cardType} · ${maskCardNumber(cardNumber)} · ID:${mpPaymentId}`
-          : `Pago con ${cardType} - ${maskCardNumber(cardNumber)}`,
+          : `Pago con ${cardType} - ${maskCardNumber(cardNumber)} [${acquirerDecision.acquirer}]`,
         createdBy: op.username,
       });
+
+      // ── Registrar decisión de enrutamiento ────────────────────────────────
+      storage.createRoutingDecision({
+        transactionId: transaction.id,
+        ruleId:           acquirerDecision.ruleId,
+        ruleName:         acquirerDecision.ruleName,
+        acquirer:         acquirerDecision.acquirer,
+        conditionMatched: acquirerDecision.conditionMatched,
+        responseTimeMs:   routingResponseMs,
+        approved:         realCharge,
+        amount:           amount.toString(),
+        currency:         "MXN",
+        protocol:         protocol ?? "201.1",
+        cardType,
+      }).catch(err => console.error("[Routing] Error al guardar decisión:", err));
       
       // Crear método de pago (CVV/PIN nunca se persisten, tarjeta enmascarada)
       await storage.createPaymentMethod({

@@ -22,6 +22,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
+type RoutingRule = {
+  id: string; name: string; description: string | null;
+  conditionField: string; conditionOperator: string; conditionValue: string;
+  acquirer: string; priority: number; active: boolean; createdAt: string;
+};
+type RoutingDecision = {
+  id: string; transactionId: string; ruleId: string | null; ruleName: string | null;
+  acquirer: string; conditionMatched: string | null; responseTimeMs: number | null;
+  approved: boolean; amount: string | null; currency: string | null;
+  protocol: string | null; cardType: string | null; createdAt: string;
+};
+type TerminalCommand = {
+  id: string; terminalId: string; command: string; status: string;
+  notes: string | null; createdBy: string; createdAt: string; completedAt: string | null;
+};
+
 function getSubscriptionInfo(startIso: string | null | undefined) {
   if (!startIso) return null;
   const start = new Date(startIso);
@@ -199,6 +215,21 @@ export default function POSPage() {
   const [editSystemMessage, setEditSystemMessage] = useState("");
   const [editAmount, setEditAmount] = useState("");
 
+  // Routing Rules dialog
+  const [ruleDialogOpen, setRuleDialogOpen] = useState(false);
+  const [editingRule, setEditingRule] = useState<RoutingRule | null>(null);
+  const [ruleFormName, setRuleFormName] = useState("");
+  const [ruleFormDesc, setRuleFormDesc] = useState("");
+  const [ruleFormField, setRuleFormField] = useState("amount");
+  const [ruleFormOp, setRuleFormOp] = useState("gt");
+  const [ruleFormValue, setRuleFormValue] = useState("");
+  const [ruleFormAcquirer, setRuleFormAcquirer] = useState("stripe");
+  const [ruleFormPriority, setRuleFormPriority] = useState("100");
+  const [ruleFormActive, setRuleFormActive] = useState(true);
+
+  // Terminal for commands panel
+  const [cmdTerminalId, setCmdTerminalId] = useState<string | null>(null);
+
   // Suscripción — bloqueo de enrutamiento si no ha pagado
   const { data: subData } = useQuery<{ routingLocked?: boolean; paymentWarning?: string }>({
     queryKey: ["/api/subscription"],
@@ -226,6 +257,30 @@ export default function POSPage() {
   const { data: allUsers = [] } = useQuery<{ username: string; fullName: string; email: string; role: string }[]>({
     queryKey: ["/api/users"],
     enabled: isAdmin,
+  });
+
+  // Routing rules + decisions + analytics (solo admin)
+  const { data: routingRulesData = [], refetch: refetchRules } = useQuery<RoutingRule[]>({
+    queryKey: ["/api/routing-rules"],
+    enabled: isAdmin,
+  });
+  const { data: routingDecisionsData = [] } = useQuery<RoutingDecision[]>({
+    queryKey: ["/api/routing-decisions"],
+    enabled: isAdmin,
+    refetchInterval: 15000,
+  });
+  const { data: routingAnalytics } = useQuery<{
+    acquirerStats: { acquirer: string; total: number; approved: number; approvalRate: number; avgResponseMs: number }[];
+    protocolStats: { protocol: string; total: number; approved: number; approvalRate: number }[];
+    totalDecisions: number;
+  }>({ queryKey: ["/api/routing-analytics"], enabled: isAdmin, refetchInterval: 30000 });
+
+  // Terminal commands for selected terminal
+  const { data: terminalCmds = [] } = useQuery<TerminalCommand[]>({
+    queryKey: ["/api/terminals", cmdTerminalId, "commands"],
+    queryFn: () => apiRequest("GET", `/api/terminals/${cmdTerminalId}/commands`).then(r => r.json()),
+    enabled: isAdmin && !!cmdTerminalId,
+    refetchInterval: 3000,
   });
 
   // Notificaciones
@@ -401,6 +456,87 @@ export default function POSPage() {
     setFormEmv(true); setFormNfc(true); setFormPinpad(true);
     setFormConfigNote(""); setFormAdvanced(false);
     setVinculateOpen(true);
+  }
+
+  // Routing Rules mutations
+  const createRuleMutation = useMutation({
+    mutationFn: async (data: object) => {
+      const res = await apiRequest("POST", "/api/routing-rules", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/routing-rules"] });
+      setRuleDialogOpen(false);
+      toast({ title: "Regla creada", description: "La regla de enrutamiento fue agregada." });
+    },
+    onError: () => toast({ title: "Error", description: "No se pudo crear la regla.", variant: "destructive" }),
+  });
+
+  const updateRuleMutation = useMutation({
+    mutationFn: async ({ id, ...data }: { id: string; [k: string]: unknown }) => {
+      const res = await apiRequest("PATCH", `/api/routing-rules/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/routing-rules"] });
+      setRuleDialogOpen(false);
+      toast({ title: "Regla actualizada" });
+    },
+    onError: () => toast({ title: "Error", description: "No se pudo actualizar la regla.", variant: "destructive" }),
+  });
+
+  const deleteRuleMutation = useMutation({
+    mutationFn: async (id: string) => { await apiRequest("DELETE", `/api/routing-rules/${id}`); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/routing-rules"] });
+      toast({ title: "Regla eliminada" });
+    },
+    onError: () => toast({ title: "Error", description: "No se pudo eliminar la regla.", variant: "destructive" }),
+  });
+
+  const sendCommandMutation = useMutation({
+    mutationFn: async ({ terminalId, command, notes }: { terminalId: string; command: string; notes?: string }) => {
+      const res = await apiRequest("POST", `/api/terminals/${terminalId}/commands`, { command, notes });
+      return res.json();
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/terminals"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/terminals", vars.terminalId, "commands"] });
+      toast({ title: "Comando enviado", description: "El comando fue enviado a la terminal." });
+    },
+    onError: () => toast({ title: "Error", description: "No se pudo enviar el comando.", variant: "destructive" }),
+  });
+
+  function openRuleDialog(rule?: RoutingRule) {
+    if (rule) {
+      setEditingRule(rule);
+      setRuleFormName(rule.name);
+      setRuleFormDesc(rule.description ?? "");
+      setRuleFormField(rule.conditionField);
+      setRuleFormOp(rule.conditionOperator);
+      setRuleFormValue(rule.conditionValue);
+      setRuleFormAcquirer(rule.acquirer);
+      setRuleFormPriority(String(rule.priority));
+      setRuleFormActive(rule.active);
+    } else {
+      setEditingRule(null);
+      setRuleFormName(""); setRuleFormDesc("");
+      setRuleFormField("amount"); setRuleFormOp("gt");
+      setRuleFormValue(""); setRuleFormAcquirer("stripe");
+      setRuleFormPriority("100"); setRuleFormActive(true);
+    }
+    setRuleDialogOpen(true);
+  }
+
+  function submitRuleForm() {
+    const payload = {
+      name: ruleFormName.trim(), description: ruleFormDesc.trim() || null,
+      conditionField: ruleFormField, conditionOperator: ruleFormOp,
+      conditionValue: ruleFormValue.trim(), acquirer: ruleFormAcquirer,
+      priority: Number(ruleFormPriority) || 100, active: ruleFormActive,
+    };
+    if (editingRule) updateRuleMutation.mutate({ id: editingRule.id, ...payload });
+    else createRuleMutation.mutate(payload);
   }
 
   // ─── NON-ADMIN VIEW ───────────────────────────────────────────────────────
@@ -1167,6 +1303,75 @@ export default function POSPage() {
                 </span>
               </div>
 
+              {/* Remote Terminal Commands */}
+              {isAdmin && (
+                <div className="space-y-3 border-t border-border pt-5">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <h4 className="text-sm font-semibold flex items-center gap-2">
+                      <Power className="w-4 h-4 text-[#c8322b]" /> Comandos Remotos
+                    </h4>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {(["restart", "reconfigure", "force_offline", "sync"] as const).map(cmd => {
+                        const labels: Record<string, string> = { restart: "Reiniciar", reconfigure: "Reconfigurar", force_offline: "Forzar Offline", sync: "Sincronizar" };
+                        const isPending = sendCommandMutation.isPending;
+                        return (
+                          <Button
+                            key={cmd}
+                            size="sm"
+                            variant="outline"
+                            disabled={isPending}
+                            onClick={() => {
+                              setCmdTerminalId(selectedTerminal.id);
+                              sendCommandMutation.mutate({ terminalId: selectedTerminal.id, command: cmd });
+                            }}
+                            data-testid={`button-cmd-${cmd}`}
+                          >
+                            {isPending && sendCommandMutation.variables?.command === cmd
+                              ? <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                              : null
+                            }
+                            {labels[cmd]}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  {cmdTerminalId === selectedTerminal.id && terminalCmds.length > 0 && (
+                    <div className="rounded-md border border-border overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="hover:bg-transparent border-b border-border">
+                            <TableHead className="text-xs h-8">Comando</TableHead>
+                            <TableHead className="text-xs h-8">Estado</TableHead>
+                            <TableHead className="text-xs h-8">Por</TableHead>
+                            <TableHead className="text-xs h-8 text-right">Hora</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {terminalCmds.slice(0, 8).map(c => (
+                            <TableRow key={c.id} className="border-b border-border/50 last:border-0">
+                              <TableCell className="text-xs py-2 font-mono">{c.command}</TableCell>
+                              <TableCell className="text-xs py-2">
+                                <span className={`font-semibold ${c.status === "completed" ? "text-green-500" : c.status === "failed" ? "text-red-500" : "text-amber-500"}`}>
+                                  {c.status}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-xs py-2 text-muted-foreground">{c.createdBy}</TableCell>
+                              <TableCell className="text-xs py-2 text-right text-muted-foreground">
+                                {new Date(c.createdAt).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                  {cmdTerminalId !== selectedTerminal.id && (
+                    <p className="text-xs text-muted-foreground">Ejecuta un comando para ver el historial de esta terminal.</p>
+                  )}
+                </div>
+              )}
+
               {/* Actions */}
               <div className="flex items-center gap-3 pt-1">
                 <Button
@@ -1245,6 +1450,224 @@ export default function POSPage() {
           </Card>
         </div>
 
+        {/* ═══ ROUTING RULES ADMIN PANEL ═══════════════════════════════════════ */}
+        {isAdmin && (
+          <Card className="hover-elevate">
+            <CardHeader className="pb-3 border-b border-border">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Network className="w-4 h-4 text-[#c8322b]" /> Reglas de Enrutamiento POS
+                  </CardTitle>
+                  <CardDescription>Administra las reglas que determinan el adquirente para cada transacción.</CardDescription>
+                </div>
+                <Button size="sm" className="bg-[#c8322b] text-white" onClick={() => openRuleDialog()} data-testid="button-add-rule">
+                  <PlusCircle className="w-4 h-4 mr-1" /> Nueva Regla
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {routingRulesData.length === 0 ? (
+                <p className="text-sm text-muted-foreground px-4 py-6 text-center">No hay reglas configuradas. Las transacciones se enrutan a Stripe por defecto.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent border-b border-border">
+                      <TableHead className="text-xs h-9 w-10">P.</TableHead>
+                      <TableHead className="text-xs h-9">Nombre</TableHead>
+                      <TableHead className="text-xs h-9 hidden md:table-cell">Condición</TableHead>
+                      <TableHead className="text-xs h-9">Adquirente</TableHead>
+                      <TableHead className="text-xs h-9">Estado</TableHead>
+                      <TableHead className="text-xs h-9 text-right">Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {routingRulesData.map(rule => (
+                      <TableRow key={rule.id} className="border-b border-border/50 last:border-0" data-testid={`row-rule-${rule.id}`}>
+                        <TableCell className="text-xs py-2.5 font-mono font-bold text-muted-foreground">{rule.priority}</TableCell>
+                        <TableCell className="text-sm py-2.5">
+                          <p className="font-semibold">{rule.name}</p>
+                          {rule.description && <p className="text-xs text-muted-foreground mt-0.5 hidden lg:block">{rule.description}</p>}
+                        </TableCell>
+                        <TableCell className="text-xs py-2.5 font-mono text-muted-foreground hidden md:table-cell">
+                          {rule.conditionField} {rule.conditionOperator} <span className="text-foreground font-semibold">{rule.conditionValue}</span>
+                        </TableCell>
+                        <TableCell className="text-xs py-2.5">
+                          <Badge className={`no-default-active-elevate text-xs ${rule.acquirer === "stripe" ? "bg-blue-100 text-blue-700 border-blue-200" : rule.acquirer === "mercadopago" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-gray-100 text-gray-700 border-gray-200"}`}>
+                            {rule.acquirer === "stripe" ? "Stripe" : rule.acquirer === "mercadopago" ? "Mercado Pago" : "Local"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs py-2.5">
+                          <Button
+                            size="sm" variant="ghost"
+                            className={`h-6 px-2 text-xs font-semibold ${rule.active ? "text-green-600" : "text-muted-foreground"}`}
+                            onClick={() => updateRuleMutation.mutate({ id: rule.id, active: !rule.active })}
+                            data-testid={`button-toggle-rule-${rule.id}`}
+                          >
+                            {rule.active ? "Activa" : "Inactiva"}
+                          </Button>
+                        </TableCell>
+                        <TableCell className="py-2.5 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button size="sm" variant="ghost" onClick={() => openRuleDialog(rule)} data-testid={`button-edit-rule-${rule.id}`}>
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button size="sm" variant="ghost" className="text-red-500"
+                              onClick={() => { if (confirm("¿Eliminar esta regla?")) deleteRuleMutation.mutate(rule.id); }}
+                              data-testid={`button-delete-rule-${rule.id}`}
+                            >
+                              <XCircle className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ═══ ROUTING DECISIONS REAL-TIME PANEL ════════════════════════════════ */}
+        {isAdmin && (
+          <Card className="hover-elevate">
+            <CardHeader className="pb-3 border-b border-border">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Activity className="w-4 h-4 text-[#c8322b]" /> Decisiones de Enrutamiento
+                  </CardTitle>
+                  <CardDescription>Historial en tiempo real de qué regla y adquirente se usaron por transacción.</CardDescription>
+                </div>
+                <a href="/api/routing-decisions/export" target="_blank" rel="noreferrer">
+                  <Button size="sm" variant="outline" data-testid="button-export-decisions">
+                    <Hash className="w-4 h-4 mr-1" /> Exportar CSV
+                  </Button>
+                </a>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {routingDecisionsData.length === 0 ? (
+                <p className="text-sm text-muted-foreground px-4 py-6 text-center">No hay decisiones de enrutamiento registradas. Procesa un pago POS para ver la trazabilidad.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent border-b border-border">
+                      <TableHead className="text-xs h-9">Transacción</TableHead>
+                      <TableHead className="text-xs h-9 hidden md:table-cell">Regla aplicada</TableHead>
+                      <TableHead className="text-xs h-9">Adquirente</TableHead>
+                      <TableHead className="text-xs h-9 hidden lg:table-cell">Protocolo</TableHead>
+                      <TableHead className="text-xs h-9 text-right">Estado</TableHead>
+                      <TableHead className="text-xs h-9 text-right hidden lg:table-cell">Resp. ms</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {routingDecisionsData.slice(0, 20).map(d => (
+                      <TableRow key={d.id} className="border-b border-border/50 last:border-0" data-testid={`row-decision-${d.id}`}>
+                        <TableCell className="text-xs py-2.5 font-mono">{d.transactionId.slice(0, 22)}&hellip;</TableCell>
+                        <TableCell className="text-xs py-2.5 hidden md:table-cell text-muted-foreground">
+                          {d.ruleName ? (
+                            <span className="text-foreground font-medium">{d.ruleName}</span>
+                          ) : (
+                            <span className="italic">Fallback</span>
+                          )}
+                          {d.conditionMatched && <span className="ml-1 font-mono text-muted-foreground">({d.conditionMatched})</span>}
+                        </TableCell>
+                        <TableCell className="text-xs py-2.5">
+                          <Badge className={`no-default-active-elevate text-xs ${d.acquirer === "stripe" ? "bg-blue-100 text-blue-700 border-blue-200" : d.acquirer === "mercadopago" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-gray-100 text-gray-700 border-gray-200"}`}>
+                            {d.acquirer}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs py-2.5 text-muted-foreground hidden lg:table-cell">{d.protocol ?? "—"}</TableCell>
+                        <TableCell className="text-xs py-2.5 text-right font-semibold">
+                          <span className={d.approved ? "text-green-500" : "text-red-500"}>{d.approved ? "Aprobada" : "Rechazada"}</span>
+                        </TableCell>
+                        <TableCell className="text-xs py-2.5 text-right font-mono text-muted-foreground hidden lg:table-cell">
+                          {d.responseTimeMs ?? "—"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ═══ ROUTING ANALYTICS ════════════════════════════════════════════════ */}
+        {isAdmin && routingAnalytics && routingAnalytics.totalDecisions > 0 && (
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card className="hover-elevate">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2"><TrendingUp className="w-4 h-4 text-[#c8322b]" /> Analítica por Adquirente</CardTitle>
+                <CardDescription>Tasa de aprobación y tiempo de respuesta promedio</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent border-b border-border">
+                      <TableHead className="text-xs h-8">Adquirente</TableHead>
+                      <TableHead className="text-xs h-8 text-right">Total</TableHead>
+                      <TableHead className="text-xs h-8 text-right">Aprobadas</TableHead>
+                      <TableHead className="text-xs h-8 text-right">Tasa</TableHead>
+                      <TableHead className="text-xs h-8 text-right">Resp. prom.</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {routingAnalytics.acquirerStats.map(a => (
+                      <TableRow key={a.acquirer} className="border-b border-border/50 last:border-0">
+                        <TableCell className="text-sm py-2.5 font-semibold capitalize">{a.acquirer}</TableCell>
+                        <TableCell className="text-sm py-2.5 text-right font-mono">{a.total}</TableCell>
+                        <TableCell className="text-sm py-2.5 text-right font-mono">{a.approved}</TableCell>
+                        <TableCell className="text-sm py-2.5 text-right">
+                          <span className={`font-bold ${a.approvalRate >= 80 ? "text-green-500" : a.approvalRate >= 50 ? "text-amber-500" : "text-red-500"}`}>
+                            {a.approvalRate}%
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-sm py-2.5 text-right font-mono text-muted-foreground">{a.avgResponseMs}ms</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            <Card className="hover-elevate">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2"><Zap className="w-4 h-4 text-[#c8322b]" /> Analítica por Protocolo</CardTitle>
+                <CardDescription>Distribución y tasa de aprobación por protocolo bancario</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent border-b border-border">
+                      <TableHead className="text-xs h-8">Protocolo</TableHead>
+                      <TableHead className="text-xs h-8 text-right">Total</TableHead>
+                      <TableHead className="text-xs h-8 text-right">Aprobadas</TableHead>
+                      <TableHead className="text-xs h-8 text-right">Tasa</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {routingAnalytics.protocolStats.map(p => (
+                      <TableRow key={p.protocol} className="border-b border-border/50 last:border-0">
+                        <TableCell className="text-sm py-2.5 font-mono font-semibold">{p.protocol}</TableCell>
+                        <TableCell className="text-sm py-2.5 text-right font-mono">{p.total}</TableCell>
+                        <TableCell className="text-sm py-2.5 text-right font-mono">{p.approved}</TableCell>
+                        <TableCell className="text-sm py-2.5 text-right">
+                          <span className={`font-bold ${p.approvalRate >= 80 ? "text-green-500" : p.approvalRate >= 50 ? "text-amber-500" : "text-red-500"}`}>
+                            {p.approvalRate}%
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
         {/* Footer */}
         <div className="pt-3 border-t border-border">
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -1257,6 +1680,102 @@ export default function POSPage() {
           </div>
         </div>
       </div>
+
+      {/* Dialog: Routing Rule Create/Edit */}
+      <Dialog open={ruleDialogOpen} onOpenChange={setRuleDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Network className="w-5 h-5 text-[#c8322b]" />
+              {editingRule ? "Editar Regla de Enrutamiento" : "Nueva Regla de Enrutamiento"}
+            </DialogTitle>
+            <DialogDescription>Define la condición y el adquirente destino para esta regla.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-1">
+            <div className="space-y-1.5">
+              <Label htmlFor="r-name">Nombre de la regla</Label>
+              <Input id="r-name" value={ruleFormName} onChange={e => setRuleFormName(e.target.value)} placeholder="Ej. Alta denominación → Stripe" data-testid="input-rule-name" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="r-desc">Descripción (opcional)</Label>
+              <Input id="r-desc" value={ruleFormDesc} onChange={e => setRuleFormDesc(e.target.value)} placeholder="Descripción breve de la regla" data-testid="input-rule-desc" />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label>Campo</Label>
+                <Select value={ruleFormField} onValueChange={setRuleFormField}>
+                  <SelectTrigger data-testid="select-rule-field"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="amount">Monto</SelectItem>
+                    <SelectItem value="protocol">Protocolo</SelectItem>
+                    <SelectItem value="cardType">Tipo tarjeta</SelectItem>
+                    <SelectItem value="currency">Moneda</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Operador</Label>
+                <Select value={ruleFormOp} onValueChange={setRuleFormOp}>
+                  <SelectTrigger data-testid="select-rule-op"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="eq">= (igual)</SelectItem>
+                    <SelectItem value="neq">≠ (distinto)</SelectItem>
+                    <SelectItem value="gt">&gt; (mayor)</SelectItem>
+                    <SelectItem value="gte">&gt;= (mayor o igual)</SelectItem>
+                    <SelectItem value="lt">&lt; (menor)</SelectItem>
+                    <SelectItem value="lte">&lt;= (menor o igual)</SelectItem>
+                    <SelectItem value="contains">contiene</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="r-val">Valor</Label>
+                <Input id="r-val" value={ruleFormValue} onChange={e => setRuleFormValue(e.target.value)} placeholder="Ej. 5000" data-testid="input-rule-value" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Adquirente destino</Label>
+                <Select value={ruleFormAcquirer} onValueChange={setRuleFormAcquirer}>
+                  <SelectTrigger data-testid="select-rule-acquirer"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="stripe">Stripe</SelectItem>
+                    <SelectItem value="mercadopago">Mercado Pago</SelectItem>
+                    <SelectItem value="local">Local / Interno</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="r-priority">Prioridad (menor = primero)</Label>
+                <Input id="r-priority" type="number" min="1" value={ruleFormPriority} onChange={e => setRuleFormPriority(e.target.value)} data-testid="input-rule-priority" />
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Checkbox
+                id="r-active"
+                checked={ruleFormActive}
+                onCheckedChange={v => setRuleFormActive(!!v)}
+                data-testid="checkbox-rule-active"
+              />
+              <Label htmlFor="r-active" className="cursor-pointer">Regla activa</Label>
+            </div>
+          </div>
+          <DialogFooter className="mt-4 gap-2">
+            <Button variant="outline" onClick={() => setRuleDialogOpen(false)}>Cancelar</Button>
+            <Button
+              className="bg-[#c8322b] text-white"
+              disabled={!ruleFormName.trim() || !ruleFormValue.trim() || createRuleMutation.isPending || updateRuleMutation.isPending}
+              onClick={submitRuleForm}
+              data-testid="button-rule-submit"
+            >
+              {(createRuleMutation.isPending || updateRuleMutation.isPending)
+                ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Guardando...</>
+                : editingRule ? "Actualizar Regla" : "Crear Regla"
+              }
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog: Editar Terminal */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>

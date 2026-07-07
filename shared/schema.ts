@@ -405,6 +405,61 @@ export function convertToUSD(
     case "MXN": return amount / rates.tipoCambio;
     case "EUR": return amount * rates.fxRateEUR;
     case "GBP": return amount * rates.fxRateGBP;
-    default: return amount; // moneda desconocida: se asume 1:1 con USD
+    default: return amount;
   }
 }
+
+// ─── Reglas de Enrutamiento POS ───────────────────────────────────────────────
+// conditionField: "amount" | "currency" | "protocol" | "cardType"
+// conditionOperator: "gt" | "lt" | "gte" | "lte" | "eq" | "startsWith" | "contains"
+// acquirer: "stripe" | "mercadopago" | "local"
+export const routingRules = pgTable("routing_rules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  conditionField: text("condition_field").notNull(),
+  conditionOperator: text("condition_operator").notNull(),
+  conditionValue: text("condition_value").notNull(),
+  acquirer: text("acquirer").notNull(),
+  priority: integer("priority").notNull().default(100),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ─── Historial de Decisiones de Enrutamiento ─────────────────────────────────
+export const routingDecisions = pgTable("routing_decisions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  transactionId: text("transaction_id").notNull(),
+  ruleId: text("rule_id"),
+  ruleName: text("rule_name"),
+  acquirer: text("acquirer").notNull(),
+  conditionMatched: text("condition_matched"),
+  responseTimeMs: integer("response_time_ms"),
+  approved: boolean("approved").notNull().default(false),
+  amount: text("amount"),
+  currency: text("currency"),
+  protocol: text("protocol"),
+  cardType: text("card_type"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ─── Comandos Remotos de Terminales ──────────────────────────────────────────
+// command: "restart" | "reconfigure" | "force_offline" | "sync"
+// status: "pending" | "executing" | "completed" | "failed"
+export const terminalCommands = pgTable("terminal_commands", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  terminalId: text("terminal_id").notNull(),
+  command: text("command").notNull(),
+  status: text("status").notNull().default("pending"),
+  notes: text("notes"),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+});
+
+export const insertRoutingRuleSchema = createInsertSchema(routingRules).omit({ id: true, createdAt: true });
+export type RoutingRule = typeof routingRules.$inferSelect;
+export type InsertRoutingRule = z.infer<typeof insertRoutingRuleSchema>;
+
+export type RoutingDecision = typeof routingDecisions.$inferSelect;
+export type TerminalCommand = typeof terminalCommands.$inferSelect;
