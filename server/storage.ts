@@ -17,6 +17,9 @@ import {
   paymentCharges,
   userCryptoBalances,
   cajaMovements,
+  routingRules,
+  routingDecisions,
+  terminalCommands,
   type CajaMovement, type InsertCajaMovement,
   type User, type InsertUser,
   type Transaction, type InsertTransaction,
@@ -32,6 +35,9 @@ import {
   type PaymentCharge,
   type UserCryptoBalance, type CryptoAsset,
   type SystemSettings, DEFAULT_SYSTEM_SETTINGS,
+  type RoutingRule, type InsertRoutingRule,
+  type RoutingDecision,
+  type TerminalCommand,
 } from "@shared/schema";
 
 // In-memory system settings (shared across all sessions, resets on restart)
@@ -130,6 +136,23 @@ export interface IStorage {
   // Payment Charges (motor real)
   createPaymentCharge(data: Omit<PaymentCharge, "id" | "createdAt">): Promise<PaymentCharge>;
   getPaymentCharges(username: string, isAdmin: boolean): Promise<PaymentCharge[]>;
+
+  // Routing Rules
+  getRoutingRules(): Promise<RoutingRule[]>;
+  getRoutingRule(id: string): Promise<RoutingRule | undefined>;
+  createRoutingRule(data: InsertRoutingRule): Promise<RoutingRule>;
+  updateRoutingRule(id: string, patch: Partial<InsertRoutingRule>): Promise<RoutingRule | undefined>;
+  deleteRoutingRule(id: string): Promise<void>;
+
+  // Routing Decisions
+  createRoutingDecision(data: Omit<RoutingDecision, "id" | "createdAt">): Promise<RoutingDecision>;
+  getRoutingDecisions(limit?: number): Promise<RoutingDecision[]>;
+  getRoutingDecisionByTx(transactionId: string): Promise<RoutingDecision | undefined>;
+
+  // Terminal Commands
+  createTerminalCommand(data: Omit<TerminalCommand, "id" | "createdAt" | "completedAt">): Promise<TerminalCommand>;
+  getTerminalCommands(terminalId: string): Promise<TerminalCommand[]>;
+  updateTerminalCommandStatus(id: string, status: string, completedAt?: Date): Promise<TerminalCommand | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -196,6 +219,70 @@ export class DatabaseStorage implements IStorage {
         updated_at TIMESTAMP
       )
     `);
+
+    // --- Ensure routing_rules table exists ---
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS routing_rules (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        name TEXT NOT NULL,
+        description TEXT,
+        condition_field TEXT NOT NULL,
+        condition_operator TEXT NOT NULL,
+        condition_value TEXT NOT NULL,
+        acquirer TEXT NOT NULL,
+        priority INTEGER NOT NULL DEFAULT 100,
+        active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    // --- Ensure routing_decisions table exists ---
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS routing_decisions (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        transaction_id TEXT NOT NULL,
+        rule_id TEXT,
+        rule_name TEXT,
+        acquirer TEXT NOT NULL,
+        condition_matched TEXT,
+        response_time_ms INTEGER,
+        approved BOOLEAN NOT NULL DEFAULT FALSE,
+        amount TEXT,
+        currency TEXT,
+        protocol TEXT,
+        card_type TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    // --- Ensure terminal_commands table exists ---
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS terminal_commands (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        terminal_id TEXT NOT NULL,
+        command TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        notes TEXT,
+        created_by TEXT NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        completed_at TIMESTAMP
+      )
+    `);
+
+    // --- Seed default routing rules (idempotente: solo si tabla vacía) ---
+    const existingRules = await db.execute(sql`SELECT COUNT(*) as cnt FROM routing_rules`);
+    const ruleCount = Number((existingRules.rows[0] as any)?.cnt ?? 0);
+    if (ruleCount === 0) {
+      await db.execute(sql`
+        INSERT INTO routing_rules (name, description, condition_field, condition_operator, condition_value, acquirer, priority, active)
+        VALUES
+          ('Montos altos → Stripe', 'Transacciones mayores a $1000 USD se enrutan a Stripe por mayor confiabilidad', 'amount', 'gt', '1000', 'stripe', 10, TRUE),
+          ('Pago Internacional → Stripe', 'Protocolos internacionales (201.2) se procesan en Stripe', 'protocol', 'eq', '201.2', 'stripe', 20, TRUE),
+          ('Pago Express → Mercado Pago', 'Protocolos express (201.3) se enrutan a Mercado Pago', 'protocol', 'eq', '201.3', 'mercadopago', 30, TRUE),
+          ('MXN → Mercado Pago', 'Pagos en pesos mexicanos se procesan localmente via Mercado Pago', 'currency', 'eq', 'MXN', 'mercadopago', 40, TRUE),
+          ('Montos bajos → Local', 'Transacciones menores a $5 USD se autorizan localmente', 'amount', 'lt', '5', 'local', 50, TRUE)
+      `);
+    }
 
     // --- Ensure documents table exists ---
     await db.execute(sql`
@@ -1024,6 +1111,66 @@ export class DatabaseStorage implements IStorage {
     const rows = await db.select().from(paymentCharges).orderBy(desc(paymentCharges.createdAt));
     if (isAdmin) return rows;
     return rows.filter(r => r.createdBy === username);
+  }
+
+  // --- Routing Rules ---
+  async getRoutingRules(): Promise<RoutingRule[]> {
+    return db.select().from(routingRules).orderBy(routingRules.priority);
+  }
+
+  async getRoutingRule(id: string): Promise<RoutingRule | undefined> {
+    const [rule] = await db.select().from(routingRules).where(eq(routingRules.id, id));
+    return rule;
+  }
+
+  async createRoutingRule(data: InsertRoutingRule): Promise<RoutingRule> {
+    const [rule] = await db.insert(routingRules).values(data).returning();
+    return rule;
+  }
+
+  async updateRoutingRule(id: string, patch: Partial<InsertRoutingRule>): Promise<RoutingRule | undefined> {
+    const [updated] = await db.update(routingRules).set(patch).where(eq(routingRules.id, id)).returning();
+    return updated;
+  }
+
+  async deleteRoutingRule(id: string): Promise<void> {
+    await db.delete(routingRules).where(eq(routingRules.id, id));
+  }
+
+  // --- Routing Decisions ---
+  async createRoutingDecision(data: Omit<RoutingDecision, "id" | "createdAt">): Promise<RoutingDecision> {
+    const [decision] = await db.insert(routingDecisions).values(data).returning();
+    return decision;
+  }
+
+  async getRoutingDecisions(limit = 100): Promise<RoutingDecision[]> {
+    return db.select().from(routingDecisions).orderBy(desc(routingDecisions.createdAt)).limit(limit);
+  }
+
+  async getRoutingDecisionByTx(transactionId: string): Promise<RoutingDecision | undefined> {
+    const [decision] = await db.select().from(routingDecisions).where(eq(routingDecisions.transactionId, transactionId));
+    return decision;
+  }
+
+  // --- Terminal Commands ---
+  async createTerminalCommand(data: Omit<TerminalCommand, "id" | "createdAt" | "completedAt">): Promise<TerminalCommand> {
+    const [cmd] = await db.insert(terminalCommands).values(data).returning();
+    return cmd;
+  }
+
+  async getTerminalCommands(terminalId: string): Promise<TerminalCommand[]> {
+    return db.select().from(terminalCommands)
+      .where(eq(terminalCommands.terminalId, terminalId))
+      .orderBy(desc(terminalCommands.createdAt))
+      .limit(50);
+  }
+
+  async updateTerminalCommandStatus(id: string, status: string, completedAt?: Date): Promise<TerminalCommand | undefined> {
+    const [updated] = await db.update(terminalCommands)
+      .set({ status, ...(completedAt ? { completedAt } : {}) })
+      .where(eq(terminalCommands.id, id))
+      .returning();
+    return updated;
   }
 }
 
