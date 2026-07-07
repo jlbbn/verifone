@@ -115,22 +115,22 @@ export default function Dashboard() {
     {
       title: "Transacciones", value: stats.total.toString(),
       sub: `${stats.completed} completadas`, icon: <ArrowRightLeft className="w-4 h-4" />,
-      iconBg: "bg-blue-100", iconColor: "text-blue-600", valueColor: "",
+      iconBg: "bg-blue-500/20", iconColor: "text-blue-400", valueColor: "",
     },
     {
       title: "Volumen Total", value: fmtMoney(stats.volume),
       sub: "USD acumulado", icon: <DollarSign className="w-4 h-4" />,
-      iconBg: "bg-emerald-100", iconColor: "text-emerald-600", valueColor: "text-emerald-600",
+      iconBg: "bg-emerald-500/20", iconColor: "text-emerald-400", valueColor: "text-emerald-400",
     },
     {
       title: "Completadas", value: stats.completed.toString(),
       sub: `${stats.completedPct}% del total`, icon: <CheckCircle className="w-4 h-4" />,
-      iconBg: "bg-green-100", iconColor: "text-green-600", valueColor: "text-green-600",
+      iconBg: "bg-green-500/20", iconColor: "text-green-400", valueColor: "text-green-400",
     },
     {
       title: "Pendientes", value: stats.pending.toString(),
       sub: stats.pending > 0 ? "requieren revisión" : "todo al día", icon: <Clock className="w-4 h-4" />,
-      iconBg: "bg-yellow-100", iconColor: "text-yellow-600", valueColor: stats.pending > 0 ? "text-yellow-600" : "",
+      iconBg: "bg-yellow-500/20", iconColor: "text-yellow-400", valueColor: stats.pending > 0 ? "text-yellow-400" : "",
     },
   ];
 
@@ -273,7 +273,7 @@ export default function Dashboard() {
                   <span className="font-semibold">{p.prefix}.x — {p.label}</span>
                   <span className="text-muted-foreground">{p.count}</span>
                 </div>
-                <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
                   <div className={`h-full rounded-full ${p.color}`} style={{ width: `${p.pct}%` }} />
                 </div>
                 <p className="text-[10px] text-muted-foreground mt-0.5">{p.pct}% del total</p>
@@ -407,9 +407,9 @@ export default function Dashboard() {
       </div>
 
       {/* Alerts */}
-      <Card className="hover-elevate border-yellow-200 bg-yellow-50/50">
+      <Card className="hover-elevate border-yellow-500/20 bg-yellow-500/5">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm flex items-center gap-2 text-yellow-700">
+          <CardTitle className="text-sm flex items-center gap-2 text-yellow-400">
             <AlertTriangle className="w-4 h-4" /> Alertas y Notificaciones
           </CardTitle>
         </CardHeader>
@@ -426,7 +426,7 @@ export default function Dashboard() {
                 ? { msg: `${healthData.failedLast24h} transacción${healthData.failedLast24h > 1 ? "es" : ""} rechazada${healthData.failedLast24h > 1 ? "s" : ""} en las últimas 24 h — revisa los registros`, type: "warn" }
                 : { msg: `Sistema estable · ${healthData?.activeTerminals ?? "—"} terminal${(healthData?.activeTerminals ?? 0) !== 1 ? "es" : ""} activa${(healthData?.activeTerminals ?? 0) !== 1 ? "s" : ""}`, type: "info" },
             ].map((alert, i) => (
-              <div key={i} className={`flex items-start gap-2 p-2.5 rounded-md text-xs ${alert.type === "error" ? "bg-red-100 text-red-700" : alert.type === "warn" ? "bg-yellow-100 text-yellow-700" : "bg-blue-100 text-blue-700"}`}>
+              <div key={i} className={`flex items-start gap-2 p-2.5 rounded-md text-xs ${alert.type === "error" ? "bg-red-500/15 text-red-400" : alert.type === "warn" ? "bg-yellow-500/15 text-yellow-400" : "bg-blue-500/15 text-blue-400"}`}>
                 {alert.type === "error" ? <XCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" /> : alert.type === "warn" ? <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" /> : <Bell className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />}
                 <span>{alert.msg}</span>
               </div>

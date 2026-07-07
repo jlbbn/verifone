@@ -1,12 +1,13 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Store, CheckCircle, XCircle, Clock, Activity, DollarSign,
   AlertTriangle, Wifi, WifiOff, RefreshCw, Settings, Zap,
   MapPin, Signal, ShieldCheck, Terminal, Eye, Power,
   TrendingUp, TrendingDown, Search, Pencil, Cpu, Network, Hash,
-  ChevronDown, ChevronUp
+  ChevronDown, ChevronUp, Info, TriangleAlert
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useEffect, useRef, useMemo } from "react";
@@ -691,18 +692,18 @@ export default function POSPage() {
           <Card className="hover-elevate">
             <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Terminales Activas</CardTitle>
-              <div className="w-8 h-8 rounded-md bg-green-100 flex items-center justify-center">
-                <Store className="h-4 w-4 text-green-600" />
+              <div className="w-8 h-8 rounded-md bg-green-500/20 flex items-center justify-center">
+                <Store className="h-4 w-4 text-green-400" />
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-green-600">{onlineCount}</div>
+              <div className="text-3xl font-bold text-green-400">{onlineCount}</div>
               <p className="text-xs text-muted-foreground mt-0.5">de {terminals.length} terminales</p>
               <div className="mt-2 flex items-center gap-2">
-                <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                   <div className="h-full bg-green-500 rounded-full" style={{ width: terminals.length ? `${(onlineCount / terminals.length) * 100}%` : "0%" }} />
                 </div>
-                <span className="text-xs font-bold text-green-600">{terminals.length ? Math.round((onlineCount / terminals.length) * 100) : 0}%</span>
+                <span className="text-xs font-bold text-green-400">{terminals.length ? Math.round((onlineCount / terminals.length) * 100) : 0}%</span>
               </div>
             </CardContent>
           </Card>
@@ -710,15 +711,15 @@ export default function POSPage() {
           <Card className="hover-elevate">
             <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Transacciones Hoy</CardTitle>
-              <div className="w-8 h-8 rounded-md bg-blue-100 flex items-center justify-center">
-                <Activity className="h-4 w-4 text-blue-600" />
+              <div className="w-8 h-8 rounded-md bg-blue-500/20 flex items-center justify-center">
+                <Activity className="h-4 w-4 text-blue-400" />
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-blue-600">1,847</div>
+              <div className="text-3xl font-bold text-blue-400">1,847</div>
               <div className="flex items-center gap-1 mt-0.5">
-                <TrendingUp className="w-3 h-3 text-green-600" />
-                <p className="text-xs text-green-600 font-medium">+12.5% vs ayer</p>
+                <TrendingUp className="w-3 h-3 text-green-400" />
+                <p className="text-xs text-green-400 font-medium">+12.5% vs ayer</p>
               </div>
               <p className="text-xs text-muted-foreground">Promedio: 154 por hora</p>
             </CardContent>
@@ -727,16 +728,16 @@ export default function POSPage() {
           <Card className="hover-elevate">
             <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Volumen Procesado</CardTitle>
-              <div className="w-8 h-8 rounded-md bg-emerald-100 flex items-center justify-center">
-                <DollarSign className="h-4 w-4 text-emerald-600" />
+              <div className="w-8 h-8 rounded-md bg-emerald-500/20 flex items-center justify-center">
+                <DollarSign className="h-4 w-4 text-emerald-400" />
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-emerald-600">$542,890</div>
+              <div className="text-2xl font-bold text-emerald-400">$542,890</div>
               <p className="text-xs text-muted-foreground mt-0.5">USD procesados hoy</p>
               <div className="flex items-center gap-1 mt-0.5">
-                <TrendingUp className="w-3 h-3 text-green-600" />
-                <p className="text-xs text-green-600 font-medium">+8.3% vs ayer</p>
+                <TrendingUp className="w-3 h-3 text-green-400" />
+                <p className="text-xs text-green-400 font-medium">+8.3% vs ayer</p>
               </div>
             </CardContent>
           </Card>
@@ -744,15 +745,15 @@ export default function POSPage() {
           <Card className="hover-elevate">
             <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Tasa de Rechazo</CardTitle>
-              <div className="w-8 h-8 rounded-md bg-red-100 flex items-center justify-center">
-                <XCircle className="h-4 w-4 text-red-600" />
+              <div className="w-8 h-8 rounded-md bg-red-500/20 flex items-center justify-center">
+                <XCircle className="h-4 w-4 text-red-400" />
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-red-600">1.2%</div>
+              <div className="text-3xl font-bold text-red-400">1.2%</div>
               <div className="flex items-center gap-1 mt-0.5">
-                <TrendingDown className="w-3 h-3 text-green-600" />
-                <p className="text-xs text-green-600 font-medium">-0.3% vs ayer</p>
+                <TrendingDown className="w-3 h-3 text-green-400" />
+                <p className="text-xs text-green-400 font-medium">-0.3% vs ayer</p>
               </div>
               <p className="text-xs text-muted-foreground">23 rechazadas hoy</p>
             </CardContent>
@@ -977,16 +978,32 @@ export default function POSPage() {
           </CardContent>
         </Card>
 
-        {/* Terminal Detail Panel */}
-        {selectedTerminal && (
-          <Card className="border-[#c8322b] border-2 hover-elevate">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2 text-[#c8322b]">
-                  <Terminal className="w-5 h-5" />
-                  Detalle: {selectedTerminal.terminalId} — {selectedTerminal.model}
-                </CardTitle>
-                <div className="flex items-center gap-2">
+        {/* Terminal Status Detail Panel */}
+        {selectedTerminal && (() => {
+          const amtUSD = selectedTerminal.amount || 57000;
+          const rateEUR = 0.87420;
+          const rateMXN = 17.53614;
+          const rateEURMXN = 20.05231;
+          const amtEUR = amtUSD * rateEUR;
+          const amtMXN = amtUSD * rateMXN;
+          const amtEURtoMXN = amtEUR * rateEURMXN;
+          const today = new Date().toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+          const fmt = (n: number, decimals = 2) => n.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+          const isISO = selectedTerminal.emv && selectedTerminal.nfc;
+          return (
+          <Card className="border border-border hover-elevate">
+            <CardHeader className="pb-4 border-b border-border">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <div className="w-8 h-8 rounded-md bg-[#c8322b]/15 flex items-center justify-center">
+                      <Terminal className="w-4 h-4 text-[#c8322b]" />
+                    </div>
+                    Status Terminal {selectedTerminal.terminalId}
+                  </CardTitle>
+                  <CardDescription className="mt-1">Consulta y actualiza el estado y configuración de la terminal POS seleccionada.</CardDescription>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
                   <Button variant="outline" size="sm" onClick={() => openEdit(selectedTerminal)} data-testid="button-edit-detail">
                     <Pencil className="w-3.5 h-3.5 mr-1" /> Editar
                   </Button>
@@ -996,39 +1013,178 @@ export default function POSPage() {
                 </div>
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {[
-                  { label: "ID Terminal",       value: selectedTerminal.terminalId,                                                                          icon: <Terminal className="w-4 h-4" /> },
-                  { label: "Número de Serie",    value: selectedTerminal.serial,                                                                              icon: <Terminal className="w-4 h-4" /> },
-                  { label: "Firmware",           value: selectedTerminal.firmware,                                                                            icon: <Settings className="w-4 h-4" /> },
-                  { label: "Dirección IP",       value: selectedTerminal.ip,                                                                                  icon: <Wifi className="w-4 h-4" /> },
-                  { label: "Uptime",             value: selectedTerminal.uptime,                                                                              icon: <Activity className="w-4 h-4" /> },
-                  { label: "Última Transacción", value: selectedTerminal.lastTx,                                                                              icon: <Clock className="w-4 h-4" /> },
-                  { label: "Eficiencia",         value: `${selectedTerminal.efficiency}%`,                                                                    icon: <Zap className="w-4 h-4" /> },
-                  { label: "Transacciones",      value: selectedTerminal.transactions.toString(),                                                             icon: <CheckCircle className="w-4 h-4" /> },
-                  { label: "Volumen Total",       value: `$${selectedTerminal.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}`,                 icon: <DollarSign className="w-4 h-4" /> },
-                  { label: "Propietario",        value: selectedTerminal.owner ?? "Sistema",                                                                  icon: <Store className="w-4 h-4" /> },
-                  { label: "Ubicación",          value: selectedTerminal.location,                                                                            icon: <MapPin className="w-4 h-4" /> },
-                  { label: "Señal",              value: `${selectedTerminal.signalStrength}%`,                                                                icon: <Signal className="w-4 h-4" /> },
-                ].map((item, i) => (
-                  <div key={i} className="bg-muted/40 rounded-md p-3">
-                    <div className="flex items-center gap-1.5 text-muted-foreground mb-1">{item.icon}<span className="text-xs">{item.label}</span></div>
-                    <p className="font-bold text-sm break-all">{item.value}</p>
+            <CardContent className="pt-5 space-y-6">
+
+              {/* Form Fields — 2-column grid */}
+              <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
+                {/* Modelo */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Modelo</Label>
+                  <div className="flex items-center h-9 px-3 rounded-md border border-border bg-muted/30 text-sm font-medium">
+                    {selectedTerminal.model}
                   </div>
-                ))}
+                </div>
+                {/* Ubicación */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Ubicación</Label>
+                  <div className="flex items-center h-9 px-3 rounded-md border border-border bg-muted/30 text-sm font-medium font-mono truncate" title={selectedTerminal.location}>
+                    {selectedTerminal.location}
+                  </div>
+                </div>
+                {/* Estado */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Estado</Label>
+                  <div className="flex items-center h-9 px-3 rounded-md border border-border bg-muted/30 text-sm font-medium gap-2">
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${getStatusColor(selectedTerminal.status)}`} />
+                    {selectedTerminal.status === "Online" ? "Online" : selectedTerminal.status === "Offline" ? "Offline" : selectedTerminal.status === "Idle" ? "Inactivo" : "Re-configurado"}
+                  </div>
+                </div>
+                {/* Moneda base */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Moneda base</Label>
+                  <div className="flex items-center h-9 px-3 rounded-md border border-border bg-muted/30 text-sm font-medium">
+                    USD — DÓLARES ESTADOUNIDENSES
+                  </div>
+                </div>
+                {/* Monto procesado */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Monto procesado (USD)</Label>
+                  <div className="flex items-center h-9 px-3 rounded-md border border-border bg-muted/30 text-sm font-bold font-mono">
+                    ${fmt(amtUSD)} USD
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">El monto total procesado que ve el usuario en su terminal.</p>
+                </div>
+                {/* Monto en MXN */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Monto en MXN (Tipo de cambio aplicado)</Label>
+                  <div className="flex items-center h-9 px-3 rounded-md border border-border bg-muted/30 text-sm font-bold font-mono text-emerald-500">
+                    {fmt(amtMXN)} MXN
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">Equivalente en pesos mexicanos según el tipo de cambio aplicado.</p>
+                </div>
               </div>
-              <div className="mt-4 flex items-center gap-3 flex-wrap">
-                <div className="flex items-center gap-1.5"><ShieldCheck className="w-4 h-4 text-green-600" /><span className="text-sm font-medium text-green-700">EMV Certificada</span></div>
-                <div className="flex items-center gap-1.5"><ShieldCheck className="w-4 h-4 text-blue-600" /><span className="text-sm font-medium text-blue-700">PCI DSS Compliant</span></div>
-                {selectedTerminal.nfc && <div className="flex items-center gap-1.5"><Wifi className="w-4 h-4 text-purple-600" /><span className="text-sm font-medium text-purple-700">NFC Habilitado</span></div>}
-                {selectedTerminal.status === "Reconfigured" && (
-                  <div className="flex items-center gap-1.5 ml-auto"><Zap className="w-4 h-4 text-blue-600" /><span className="text-sm font-bold text-blue-700">Terminal Re-configurada — Lista para Operar</span></div>
-                )}
+
+              {/* Mensaje del sistema */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Mensaje del sistema</Label>
+                <div className="px-3 py-2.5 rounded-md border border-border bg-muted/30 text-sm font-mono font-medium min-h-[44px]">
+                  {selectedTerminal.systemMessage || "WAITING TO RECEIVE SERVER ROUTE"}
+                </div>
+                <p className="text-[11px] text-muted-foreground">Este mensaje aparece como aviso destacado en la vista del usuario.</p>
               </div>
+
+              {/* Nota de configuración */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Nota de configuración interna (opcional)</Label>
+                <div className="px-3 py-2.5 rounded-md border border-border bg-muted/30 text-sm min-h-[44px] text-muted-foreground italic">
+                  {selectedTerminal.configNote || "Ej. Actualización de firmware programada..."}
+                </div>
+                <p className="text-[11px] text-muted-foreground">Nota interna visible solo para el equipo administrador.</p>
+              </div>
+
+              {/* Tablas de Cambio */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold">Tablas de Cambio</h3>
+
+                {/* Resumen de Conversión */}
+                <div className="rounded-md border border-border overflow-hidden">
+                  <div className="px-4 py-2.5 bg-muted/40 border-b border-border">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Resumen de Conversión</p>
+                  </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent border-b border-border">
+                        <TableHead className="text-xs h-9 font-semibold">Moneda</TableHead>
+                        <TableHead className="text-xs h-9 font-semibold">Tasa de Cambio</TableHead>
+                        <TableHead className="text-xs h-9 font-semibold text-right">Valor Convertido</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      <TableRow className="border-b border-border/50">
+                        <TableCell className="text-sm py-2.5 font-semibold">USD (Base)</TableCell>
+                        <TableCell className="text-sm py-2.5 font-mono">1.0000</TableCell>
+                        <TableCell className="text-sm py-2.5 text-right font-mono font-semibold">${fmt(amtUSD)} USD</TableCell>
+                      </TableRow>
+                      <TableRow className="border-b border-border/50">
+                        <TableCell className="text-sm py-2.5 font-semibold">EUR</TableCell>
+                        <TableCell className="text-sm py-2.5 font-mono">{rateEUR.toFixed(5)} USD/EUR</TableCell>
+                        <TableCell className="text-sm py-2.5 text-right font-mono font-semibold">${fmt(amtEUR)} EUR</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="text-sm py-2.5 font-semibold">MXN</TableCell>
+                        <TableCell className="text-sm py-2.5 font-mono">{rateMXN.toFixed(5)} MXN/USD</TableCell>
+                        <TableCell className="text-sm py-2.5 text-right font-mono font-semibold text-emerald-500">${fmt(amtMXN)} MXN</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Detalle de tasas */}
+                <div className="rounded-md border border-border overflow-hidden">
+                  <div className="px-4 py-2.5 bg-muted/40 border-b border-border">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Detalle de Tasas de Cambio Utilizadas</p>
+                  </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent border-b border-border">
+                        <TableHead className="text-xs h-9 font-semibold">Conversión</TableHead>
+                        <TableHead className="text-xs h-9 font-semibold">Tasa ({today} a.m.)</TableHead>
+                        <TableHead className="text-xs h-9 font-semibold text-right">Valor convertido desde ${fmt(amtUSD)} USD</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      <TableRow className="border-b border-border/50">
+                        <TableCell className="text-sm py-2.5 font-mono">USD → EUR</TableCell>
+                        <TableCell className="text-sm py-2.5 font-mono">{rateEUR.toFixed(5)}</TableCell>
+                        <TableCell className="text-sm py-2.5 text-right font-mono">${fmt(amtEUR)} EUR</TableCell>
+                      </TableRow>
+                      <TableRow className="border-b border-border/50">
+                        <TableCell className="text-sm py-2.5 font-mono">USD → MXN</TableCell>
+                        <TableCell className="text-sm py-2.5 font-mono">{rateMXN.toFixed(5)}</TableCell>
+                        <TableCell className="text-sm py-2.5 text-right font-mono">${fmt(amtMXN)} MXN</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="text-sm py-2.5 font-mono">EUR → MXN</TableCell>
+                        <TableCell className="text-sm py-2.5 font-mono">{rateEURMXN.toFixed(5)}</TableCell>
+                        <TableCell className="text-sm py-2.5 text-right font-mono">${fmt(amtEURtoMXN)} MXN*</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                  <div className="px-4 py-2 border-t border-border/50 bg-muted/20">
+                    <p className="text-[11px] text-muted-foreground">*Nota: Existe una pequeña diferencia debido al redondeo de las tasas cruzadas entre las tres monedas.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* ISO-8583 Warning */}
+              <div className={`flex items-center gap-3 rounded-md border px-4 py-3 ${isISO ? "border-green-500/30 bg-green-500/10" : "border-amber-500/30 bg-amber-500/10"}`}>
+                {isISO
+                  ? <ShieldCheck className="w-4 h-4 text-green-500 flex-shrink-0" />
+                  : <TriangleAlert className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                }
+                <span className={`text-sm font-semibold ${isISO ? "text-green-500" : "text-amber-500"}`}>
+                  {isISO ? "ISO-8583 certified" : "ISO-8583 not certified"}
+                </span>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-3 pt-1">
+                <Button
+                  className="bg-[#c8322b] hover:bg-[#a62822] text-white"
+                  onClick={() => openEdit(selectedTerminal)}
+                  data-testid="button-save-terminal"
+                >
+                  <CheckCircle className="w-4 h-4 mr-2" /> Guardar Cambios
+                </Button>
+                <Button variant="outline" onClick={() => setSelectedTerminal(null)} data-testid="button-cancel-detail">
+                  Cancelar
+                </Button>
+              </div>
+
             </CardContent>
           </Card>
-        )}
+          );
+        })()}
 
         {/* Bottom grid */}
         <div className="grid gap-4 lg:grid-cols-2">
@@ -1074,7 +1230,7 @@ export default function POSPage() {
                       <span className="text-xs text-muted-foreground w-20 hidden sm:block">{t.model.split(" ").slice(-1)[0]}</span>
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                             <div className={`h-full rounded-full ${color === "green" ? "bg-green-500" : color === "yellow" ? "bg-yellow-500" : "bg-red-500"}`} style={{ width: `${t.efficiency}%` }} />
                           </div>
                           <span className="text-xs font-bold w-8 text-right">{t.efficiency}%</span>
