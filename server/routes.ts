@@ -737,6 +737,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       case "gte":        return Number(fv) >= Number(cv);
       case "lte":        return Number(fv) <= Number(cv);
       case "eq":         return String(fv).toLowerCase() === cv.toLowerCase();
+      case "neq":        return String(fv).toLowerCase() !== cv.toLowerCase();
       case "startsWith": return String(fv).toLowerCase().startsWith(cv.toLowerCase());
       case "contains":   return String(fv).toLowerCase().includes(cv.toLowerCase());
       default:           return false;
@@ -760,7 +761,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     name:               z.string().min(1).max(100),
     description:        z.string().max(300).optional().nullable(),
     conditionField:     z.enum(["amount", "currency", "protocol", "cardType"]),
-    conditionOperator:  z.enum(["gt", "lt", "gte", "lte", "eq", "startsWith", "contains"]),
+    conditionOperator:  z.enum(["gt", "lt", "gte", "lte", "eq", "neq", "startsWith", "contains"]),
     conditionValue:     z.string().min(1),
     acquirer:           z.enum(["stripe", "mercadopago", "local"]),
     priority:           z.number().int().min(1).max(9999).default(100),
@@ -833,7 +834,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const parsed = bodySchema.safeParse(req.body);
       if (!parsed.success) { res.status(400).json({ error: "Comando inválido", details: parsed.error.issues }); return; }
 
-      const terminal = await storage.getRoutingRule(req.params.id).catch(() => null); // just verify
+      const terminal = await storage.getTerminalById(req.params.id);
+      if (!terminal) { res.status(404).json({ error: "Terminal no encontrada" }); return; }
       const cmd = await storage.createTerminalCommand({
         terminalId: req.params.id,
         command:    parsed.data.command,
@@ -1508,6 +1510,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let authCode: string;
       let mpPaymentId: number | null = null;
       let realCharge = false;
+      // txApproved tracks the business outcome (real charge OR intentional local auth)
+      let txApproved = false;
 
       // ── Parse expiry MM/YY ────────────────────────────────────────────────
       const [expMMStr = "12", expYYStr = "27"] = (expiryDate ?? "12/27").trim().split("/");
@@ -1563,6 +1567,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           if (intent.status === "succeeded") {
             realCharge = true;
+            txApproved = true;
             authCode = `STR-${intent.id.slice(-12).toUpperCase()}`;
             console.log(`[Stripe] OK | id:${intent.id} | $${parseFloat(amount)} USD`);
           } else {
@@ -1580,7 +1585,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const msg     = stripeErr?.message ?? "Error al procesar tarjeta";
           console.error(`[Stripe] ERROR — code:${code} decline:${decline} — ${msg}`);
 
-          // Hard declines → reject immediately
+          // Hard declines → reject immediately, no fallback
           const hardDeclines = ["card_declined","incorrect_cvc","expired_card","incorrect_number",
                                 "insufficient_funds","lost_card","stolen_card","do_not_honor",
                                 "transaction_not_allowed","invalid_expiry_year","invalid_expiry_month"];
@@ -1593,12 +1598,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return;
           }
 
-          // Soft error (network/config) → fall through to MP or local auth
-          console.warn(`[Stripe] Soft error, falling back — ${msg}`);
-          authCode = `AUTH-${Date.now()}-${randomBytes(4).toString("hex").toUpperCase()}`;
+          // Soft error (network/config) → try Mercado Pago as secondary acquirer
+          console.warn(`[Stripe] Soft error, attempting MP fallback — ${msg}`);
+          if (mpCardToken && process.env.MP_ACCESS_TOKEN) {
+            try {
+              const { processMPPaymentWithToken } = await import("./mercadopagoClient");
+              const mpResult = await processMPPaymentWithToken({
+                cardToken: mpCardToken,
+                cardType,
+                holderEmail: "josbar93@gmail.com",
+                amount: Math.max(parseFloat(amount), 5),
+                description: `Banxico Plus POS MP-Fallback · ${cardType} · ${protocol ?? "201.1"}`,
+              });
+              mpPaymentId = mpResult.id;
+              realCharge  = mpResult.status === "approved";
+              txApproved  = realCharge;
+              authCode    = mpResult.authorization_code ? `MP-${mpResult.authorization_code}` : `MP-${mpResult.id}`;
+              console.log(`[MP-Fallback] ID:${mpResult.id} | Estado:${mpResult.status}`);
+              if (mpResult.status === "rejected") {
+                res.status(402).json({
+                  error: `Tarjeta rechazada (fallback MP): ${mpResult.status_detail}`,
+                  declineCode: mpResult.status_detail,
+                  stripeStatus: "declined",
+                });
+                return;
+              }
+            } catch (_mpErr: any) {
+              console.error(`[MP-Fallback] ERROR — ${(_mpErr as any)?.message}`);
+              // Both Stripe and MP failed → local simulation (not approved)
+              authCode   = `AUTH-${Date.now()}-${randomBytes(4).toString("hex").toUpperCase()}`;
+              txApproved = false;
+            }
+          } else {
+            // No MP credentials → local simulation fallback (not a real charge)
+            authCode   = `AUTH-${Date.now()}-${randomBytes(4).toString("hex").toUpperCase()}`;
+            txApproved = false;
+          }
         }
       } else if ((useMercadoPago || (!useStripe && !useLocal)) && mpCardToken && process.env.MP_ACCESS_TOKEN) {
-        // ── Mercado Pago (seleccionado por motor de reglas o tiene token) ──
+        // ── Mercado Pago (seleccionado explícitamente por motor de reglas) ──
         try {
           const { processMPPaymentWithToken } = await import("./mercadopagoClient");
           const mpResult = await processMPPaymentWithToken({
@@ -1609,8 +1647,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             description: `Banxico Plus POS · ${cardType} · ${protocol ?? "201.1"}`,
           });
           mpPaymentId = mpResult.id;
-          realCharge = mpResult.status === "approved";
-          authCode = mpResult.authorization_code
+          realCharge  = mpResult.status === "approved";
+          txApproved  = realCharge;
+          authCode    = mpResult.authorization_code
             ? `MP-${mpResult.authorization_code}`
             : `MP-${mpResult.id}`;
           console.log(`[MP] Pago | ID:${mpResult.id} | Estado:${mpResult.status} | ${mpResult.status_detail}`);
@@ -1624,12 +1663,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         } catch (_mpErr: any) {
           console.error(`[MP] ERROR — ${(_mpErr as any)?.message}`);
-          authCode = `AUTH-${Date.now()}-${randomBytes(4).toString("hex").toUpperCase()}`;
+          authCode   = `AUTH-${Date.now()}-${randomBytes(4).toString("hex").toUpperCase()}`;
+          txApproved = false;
         }
       } else {
-        // ── Autorización local (seleccionada por regla o fallback) ──────────
-        authCode = `AUTH-${Date.now()}-${randomBytes(4).toString("hex").toUpperCase()}`;
+        // ── Autorización local (seleccionada explícitamente por regla de enrutamiento) ──
+        authCode   = `AUTH-${Date.now()}-${randomBytes(4).toString("hex").toUpperCase()}`;
         realCharge = false;
+        txApproved = true; // intentional local route is considered approved
       }
 
       const routingResponseMs = Date.now() - routingStart;
@@ -1654,13 +1695,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // ── Registrar decisión de enrutamiento ────────────────────────────────
       storage.createRoutingDecision({
-        transactionId: transaction.id,
+        transactionId:    transaction.transactionId,   // use business ID for traceability
         ruleId:           acquirerDecision.ruleId,
         ruleName:         acquirerDecision.ruleName,
         acquirer:         acquirerDecision.acquirer,
         conditionMatched: acquirerDecision.conditionMatched,
         responseTimeMs:   routingResponseMs,
-        approved:         realCharge,
+        approved:         txApproved,                 // aligned with actual business outcome
         amount:           amount.toString(),
         currency:         "MXN",
         protocol:         protocol ?? "201.1",
@@ -1689,12 +1730,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
       });
       
-      // Simular aprobación
+      // Actualizar estado final: "completed" solo si la transacción fue aprobada,
+      // "failed" si Stripe soft-errored y no hubo fallback exitoso a MP
       setTimeout(async () => {
         try {
-          await storage.updateTransactionStatus(transaction.id, "completed", authCode);
+          const finalStatus = txApproved ? "completed" : "failed";
+          await storage.updateTransactionStatus(transaction.id, finalStatus, authCode);
         } catch (err) {
-          console.error("Error al completar transacción POS:", err);
+          console.error("Error al actualizar estado final de transacción POS:", err);
         }
       }, 2000);
       
