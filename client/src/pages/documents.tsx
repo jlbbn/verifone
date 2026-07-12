@@ -147,7 +147,7 @@ export default function DocumentsPage() {
 
   async function handleDownload(doc: DocMeta) {
     try {
-      const full: DocWithContent = await apiRequest("GET", `/api/documents/${doc.id}/download`);
+      const full: DocWithContent = await apiRequest("GET", `/api/documents/${doc.id}/download`).then(r => r.json());
       const byteChars = atob(full.content);
       const byteArr = new Uint8Array(byteChars.length);
       for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
