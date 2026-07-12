@@ -2785,7 +2785,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Datos inválidos", details: parsed.error.flatten() });
-    const ticket = await storage.createSupportTicket({ ...parsed.data, submittedBy: user.username, status: "open", adminNote: null });
+    const ticket = await storage.createSupportTicket({
+      ...parsed.data,
+      attachmentName:     parsed.data.attachmentName     ?? null,
+      attachmentMimeType: parsed.data.attachmentMimeType ?? null,
+      attachmentContent:  parsed.data.attachmentContent  ?? null,
+      submittedBy: user.username,
+      status: "open",
+      adminNote: null,
+    });
     res.status(201).json(ticket);
   });
 
