@@ -31,10 +31,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: TypeScript check
         run: npx tsc --noEmit
@@ -45,18 +44,17 @@ jobs:
           NODE_ENV: production
 
       - name: Run DB migrations
+        if: env.DATABASE_URL != ''
         run: npx drizzle-kit push
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
-      - name: Notify deploy success
+      - name: Deploy success
         if: success()
         run: |
           echo "✅ Deploy completado — $(date '+%Y-%m-%d %H:%M:%S UTC')"
           echo "Commit: ${{ github.sha }}"
-          echo "Branch: ${{ github.ref_name }}"
 
-      - name: Notify deploy failure
+      - name: Deploy failure
         if: failure()
-        run: |
-          echo "❌ Deploy fallido — commit ${{ github.sha }}"
+        run: echo "❌ Deploy fallido — ${{ github.sha }}"
