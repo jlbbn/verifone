@@ -7,9 +7,24 @@ import { storage } from "./storage";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 
+// ── Global safety net ─────────────────────────────────────────────────────────
+process.on("unhandledRejection", (reason) => {
+  console.error("UNHANDLED REJECTION:", reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("UNCAUGHT EXCEPTION:", err);
+});
+
+/** Wraps a promise with a timeout so startup never hangs forever */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  const timeout = new Promise<T>((_, reject) =>
+    setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+  );
+  return Promise.race([promise, timeout]);
+}
+
 const app = express();
 
-// Cabeceras de seguridad. CSP/COEP deshabilitados para no romper Vite/HMR.
 app.use(
   helmet({
     contentSecurityPolicy: false,
@@ -17,8 +32,7 @@ app.use(
   }),
 );
 
-// ── Mercado Pago IPN — registrado ANTES de cualquier middleware de auth ───────
-// MP envía GET ?topic=payment&id=XXX sin sesión (server-to-server).
+// ── Mercado Pago IPN — before auth middleware ─────────────────────────────────
 app.get("/api/mp/ipn", async (req: Request, res: Response) => {
   const { topic, id } = req.query as { topic?: string; id?: string };
   log(`[MP-IPN] GET topic=${topic} id=${id}`);
@@ -36,7 +50,7 @@ app.get("/api/mp/ipn", async (req: Request, res: Response) => {
   res.sendStatus(200);
 });
 
-app.post("/api/mp/ipn", (req: Request, res: Response) => {
+app.post("/api/mp/ipn", (_req: Request, res: Response) => {
   log(`[MP-IPN] POST recibido`);
   res.sendStatus(200);
 });
@@ -45,7 +59,6 @@ app.post("/api/mp/ipn", (req: Request, res: Response) => {
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: false, limit: "1mb" }));
 
-// Rutas cuyos cuerpos de respuesta nunca deben registrarse (datos sensibles).
 const SENSITIVE_PATHS = ["/api/login", "/api/pos/process-payment", "/api/payment-methods"];
 
 app.use((req, res, next) => {
@@ -67,11 +80,7 @@ app.use((req, res, next) => {
       if (capturedJsonResponse && !isSensitive) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
-
-      if (logLine.length > 120) {
-        logLine = logLine.slice(0, 119) + "…";
-      }
-
+      if (logLine.length > 120) logLine = logLine.slice(0, 119) + "…";
       log(logLine);
     }
   });
@@ -80,54 +89,67 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // ── DB migration: add permission columns before seed ─────────────────────
+  // ── DB migrations ──────────────────────────────────────────────────────────
   try {
     await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS payment_engine_access boolean NOT NULL DEFAULT false`);
     await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS pos_full_access boolean NOT NULL DEFAULT false`);
-  } catch (_) { /* ignore */ }
+  } catch (_) { /* columns likely already exist */ }
 
-  await storage.initialize();
-  await setupAuth(app);
-  registerAuthRoutes(app);
+  // ── Storage init ───────────────────────────────────────────────────────────
+  try {
+    await withTimeout(storage.initialize(), 20_000, "storage.initialize");
+  } catch (e: any) {
+    log(`Storage init warning: ${e.message} — continuing startup`);
+  }
+
+  // ── Replit Auth (OIDC discovery can hang in some production envs) ──────────
+  try {
+    await withTimeout(setupAuth(app), 10_000, "setupAuth");
+    registerAuthRoutes(app);
+  } catch (e: any) {
+    log(`Auth setup warning: ${e.message} — Replit OAuth disabled, admin login still works`);
+  }
 
   const server = await registerRoutes(app);
 
+  // ── Global Express error handler ───────────────────────────────────────────
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
-
     console.error("Unhandled error:", message);
     if (!res.headersSent) {
       res.status(status).json({ message });
     }
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
+  // ── Static files / Vite dev ────────────────────────────────────────────────
   if (app.get("env") === "development") {
     await setupVite(app, server);
   } else {
-    serveStatic(app);
+    try {
+      serveStatic(app);
+    } catch (e: any) {
+      log(`Static files warning: ${e.message}`);
+      app.use("*", (_req: Request, res: Response) => {
+        res.status(503).send("Frontend build not found — run npm run build");
+      });
+    }
   }
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
+  // ── Start listening ────────────────────────────────────────────────────────
   const port = parseInt(process.env.PORT || "5000", 10);
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
+  server.listen({ port, host: "0.0.0.0", reusePort: true }, () => {
     log(`serving on port ${port}`);
     import("./stripeClient").then(({ getStripeClient }) =>
       getStripeClient().then(client =>
         client.balance.retrieve().then(() =>
-          log("Stripe: conexión verificada ✅ — listo para procesar pagos")
+          log("Stripe: conexión verificada ✅")
         ).catch(err => log(`Stripe key inválida: ${err.message}`))
       ).catch(err => log(`Stripe init error: ${err.message}`))
     ).catch(() => {});
   });
-})();
+
+})().catch(err => {
+  console.error("FATAL STARTUP ERROR — server could not start:", err);
+  process.exit(1);
+});
