@@ -22,7 +22,11 @@ import {
   FolderOpen,
   AlertTriangle,
   ShieldCheck,
+  Github,
+  HardDrive,
+  ArrowUpCircle,
 } from "lucide-react";
+import { SiDropbox, SiReplit } from "react-icons/si";
 import {
   Sidebar,
   SidebarContent,
