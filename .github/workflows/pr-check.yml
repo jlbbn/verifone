@@ -1,0 +1,39 @@
+name: PR Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  validate:
+    name: Validate PR
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Check for sensitive data
+        run: |
+          if grep -rn "Keylog100\$\|password.*=.*['\"]" --include="*.ts" --include="*.tsx" \
+            --exclude-dir=node_modules --exclude-dir=.git .; then
+            echo "❌ Posibles credenciales hardcodeadas detectadas"
+            exit 1
+          fi
+        continue-on-error: true
+
+      - name: Schema validation
+        run: |
+          echo "Verificando que shared/schema.ts compila correctamente..."
+          npx tsx --eval "import('./shared/schema.ts').then(() => console.log('✅ Schema OK'))"
+        continue-on-error: true
