@@ -1,0 +1,20 @@
+# Propietarios de código — Banxico Plus
+# Estos usuarios son requeridos como reviewers en PRs que toquen estas rutas.
+
+# Global — todo el repositorio
+* @barrientosjo798-byte
+
+# Seguridad y autenticación
+/server/auth-utils.ts @barrientosjo798-byte
+/server/replit_integrations/ @barrientosjo798-byte
+
+# Schema de base de datos
+/shared/schema.ts @barrientosjo798-byte
+/drizzle.config.ts @barrientosjo798-byte
+
+# POS y enrutamiento
+/client/src/pages/pos.tsx @barrientosjo798-byte
+/server/routes.ts @barrientosjo798-byte
+
+# CI/CD
+/.github/ @barrientosjo798-byte
