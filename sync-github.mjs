@@ -102,13 +102,16 @@ const rootConfigs = [
   'tailwind.config.ts', 'postcss.config.js', 'drizzle.config.ts', 'components.json',
 ];
 
+// client root files that vite needs as entry point
+const clientRootFiles = ['client/index.html'];
+
 const githubFiles = [
   '.github/workflows/ci.yml',
   '.github/workflows/deploy.yml',
   '.github/workflows/pr-check.yml',
 ];
 
-const all = [...srcFiles, ...rootConfigs, ...githubFiles];
+const all = [...srcFiles, ...rootConfigs, ...clientRootFiles, ...githubFiles];
 
 console.log(`\n🔄 Banxico Plus — Sync → ${REPO}`);
 console.log(`   Archivos a revisar: ${all.length}\n`);

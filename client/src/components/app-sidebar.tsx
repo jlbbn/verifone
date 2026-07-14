@@ -22,11 +22,10 @@ import {
   FolderOpen,
   AlertTriangle,
   ShieldCheck,
-  Github,
   HardDrive,
-  ArrowUpCircle,
+  TrendingUp,
 } from "lucide-react";
-import { SiDropbox, SiReplit } from "react-icons/si";
+import { SiDropbox, SiReplit, SiGithub } from "react-icons/si";
 import {
   Sidebar,
   SidebarContent,
@@ -300,7 +299,42 @@ export function AppSidebar() {
         )}
       </SidebarContent>
 
-      <SidebarFooter className="px-3 py-3 border-t border-sidebar-border">
+      <SidebarFooter className="px-3 py-3 border-t border-sidebar-border space-y-2">
+        {/* ── GitHub Sync Plan banner ── */}
+        <div className="rounded-md border border-[#c8322b]/30 bg-[#c8322b]/5 p-2.5 space-y-2">
+          <div className="flex items-center gap-1.5">
+            <SiGithub className="w-3.5 h-3.5 text-[#c8322b] flex-shrink-0" />
+            <span className="text-[11px] font-semibold text-sidebar-foreground leading-tight">
+              Actualizar Plan GitHub
+            </span>
+          </div>
+          <p className="text-[10px] text-sidebar-foreground/70 leading-snug">
+            Sincronización de datos total <span className="font-semibold text-sidebar-foreground">1,082 GB</span> a través de:
+          </p>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <span className="flex items-center gap-1 text-[10px] text-sidebar-foreground/60">
+              <SiReplit className="w-3 h-3 text-[#f26207]" /> Replit
+            </span>
+            <span className="flex items-center gap-1 text-[10px] text-sidebar-foreground/60">
+              <SiDropbox className="w-3 h-3 text-[#0061ff]" /> Dropbox
+            </span>
+            <span className="flex items-center gap-1 text-[10px] text-sidebar-foreground/60">
+              <HardDrive className="w-3 h-3 text-sidebar-foreground/50" /> Server
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-2 pt-0.5">
+            <span className="text-[11px] font-bold text-sidebar-foreground">$780.00 <span className="font-normal text-[10px] text-sidebar-foreground/50">USD</span></span>
+            <button
+              className="flex items-center gap-1 text-[10px] font-semibold text-[#c8322b] hover-elevate px-2 py-1 rounded-md"
+              data-testid="button-github-plan-upgrade"
+            >
+              <TrendingUp className="w-3 h-3" />
+              Activar
+            </button>
+          </div>
+        </div>
+
+        {/* ── Logout ── */}
         <button
           className="flex items-center gap-2 w-full px-3 py-2 rounded-md text-sidebar-foreground/60 hover-elevate text-xs transition-colors"
           onClick={() => logout()}
@@ -310,7 +344,7 @@ export function AppSidebar() {
           <LogOut className="w-3.5 h-3.5 flex-shrink-0" />
           <span>{isLoggingOut ? "Cerrando sesión..." : "Cerrar Sesión"}</span>
         </button>
-        <p className="text-[10px] text-sidebar-foreground/25 font-mono text-center mt-1 tracking-wider">
+        <p className="text-[10px] text-sidebar-foreground/25 font-mono text-center tracking-wider">
           Banxico Plus · v3.1.0
         </p>
       </SidebarFooter>
