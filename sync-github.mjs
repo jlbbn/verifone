@@ -97,6 +97,10 @@ const srcDirs = ['client/src', 'server', 'shared'].map(d => join(ROOT, d));
 const srcFiles = [];
 for (const d of srcDirs) srcFiles.push(...walk(d));
 
+// NOTE: package-lock.json is intentionally excluded — it contains 362+
+// Replit-internal registry URLs (package-firewall.replit.local) that are
+// unreachable from GitHub Actions CI, causing npm install to silently skip
+// packages and breaking the TypeScript / build jobs.
 const rootConfigs = [
   'package.json', 'tsconfig.json', 'vite.config.ts',
   'tailwind.config.ts', 'postcss.config.js', 'drizzle.config.ts', 'components.json',
