@@ -2095,6 +2095,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ── EUR → Caja formal (accessible to any authenticated user) ───────────────
+  // Optima QRH (and any user) can forward a verified EUR POS transaction to the
+  // formal caja. The server converts EUR→USD using the current fx rate.
+  app.post("/api/caja/eur-ingreso", requireSession, async (req, res) => {
+    try {
+      const schema = z.object({
+        amountEUR:     z.number().positive(),
+        authCode:      z.string().min(1),
+        cardType:      z.string().optional(),
+        protocol:      z.string().optional(),
+        transactionId: z.string().optional(),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: "Datos inválidos", details: parsed.error.flatten() });
+        return;
+      }
+      const { amountEUR, authCode, cardType, protocol, transactionId } = parsed.data;
+      const settings = await storage.getSettings();
+      const amountUSD = amountEUR * settings.fxRateEUR;
+      const desc = [
+        "POS EUR",
+        cardType ? `· ${cardType}` : "",
+        `· Auth ${authCode}`,
+        protocol ? `· Protocolo ${protocol}` : "",
+      ].filter(Boolean).join(" ");
+
+      const movement = await storage.createCajaMovement({
+        type:        "ingreso",
+        amountUSD,
+        category:    "Venta tarjeta internacional",
+        description: desc,
+        reference:   transactionId ?? authCode,
+        createdBy:   req.currentUser!.username,
+      });
+      res.status(201).json({
+        ...movement,
+        originalAmount:   amountEUR,
+        originalCurrency: "EUR",
+        amountUSD,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Error al registrar ingreso EUR en caja" });
+    }
+  });
+
   // ── Host-Failure Simulation ─────────────────────────────────────────────────
   // Inyecta la transacción ALUSH CECO como "pending" y la marca "failed"
   // automáticamente en ~10 s (sin conexión directa con host bancario).
