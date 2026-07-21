@@ -12,10 +12,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useSystemSettings } from "@/hooks/use-system-settings";
+import { DEFAULT_SYSTEM_SETTINGS } from "@shared/schema";
 import {
   CreditCard, Check, ArrowRightLeft, ShieldCheck, Lock,
   Cpu, Clock, Copy, RefreshCw, ChevronRight, Zap,
-  DollarSign, Hash, User, Calendar, Key, FileText, AlertCircle
+  DollarSign, Hash, User, Calendar, Key, FileText, AlertCircle,
+  Euro, ArrowDownToLine, CheckCircle2, XCircle, Wallet
 } from "lucide-react";
 
 const transactionSchema = z.object({
@@ -77,11 +80,32 @@ function maskCardNumber(num: string) {
 
 export default function NewTransactionPage() {
   const { toast } = useToast();
-  const [step, setStep] = useState<"form" | "processing" | "result">("form");
+  const [step, setStep] = useState<"form" | "match" | "processing" | "result">("form");
   const [result, setResult] = useState<TransactionResult | null>(null);
+  const [pendingFormData, setPendingFormData] = useState<TransactionForm | null>(null);
+  const [isEurTx, setIsEurTx] = useState(false);
+  const [sentToCaja, setSentToCaja] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
 
   const { data: protocols = [] } = useQuery<any[]>({ queryKey: ["/api/protocols"] });
+  const { data: settings } = useSystemSettings();
+
+  const eurIngressMutation = useMutation({
+    mutationFn: async (payload: {
+      amountEUR: number; authCode: string;
+      cardType?: string; protocol?: string; transactionId?: string;
+    }) => {
+      const res = await apiRequest("POST", "/api/caja/eur-ingreso", payload);
+      if (!res.ok) throw new Error("Error al registrar en caja");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/caja/summary"] });
+    },
+  });
+
+  const fxEUR = settings?.fxRateEUR ?? DEFAULT_SYSTEM_SETTINGS.fxRateEUR;
+  const tc    = settings?.tipoCambio  ?? DEFAULT_SYSTEM_SETTINGS.tipoCambio;
 
   const form = useForm<TransactionForm>({
     resolver: zodResolver(transactionSchema),
@@ -131,19 +155,60 @@ export default function NewTransactionPage() {
       };
       setResult(txResult);
       setStep("result");
-      // Refrescar listados (Dashboard/Registros) tras una nueva transacción.
       queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
       toast({ title: "Transacción Autorizada", description: `Auth Code: ${data.authCode}` });
     },
     onError: () => {
-      setStep("form");
+      setStep(isEurTx ? "match" : "form");
       toast({ title: "Error en la transacción", description: "No se pudo procesar. Intente de nuevo.", variant: "destructive" });
     },
   });
 
   async function onSubmit(data: TransactionForm) {
+    if (data.currency === "EUR") {
+      setPendingFormData(data);
+      setIsEurTx(true);
+      setSentToCaja(false);
+      setStep("match");
+    } else {
+      setIsEurTx(false);
+      setSentToCaja(false);
+      setStep("processing");
+      processMutation.mutate(data);
+    }
+  }
+
+  function handleConfirmMatch() {
+    if (!pendingFormData) return;
     setStep("processing");
-    processMutation.mutate(data);
+    processMutation.mutate(pendingFormData);
+  }
+
+  function handlePasarACaja() {
+    if (!result) return;
+    const eurAmount = pendingFormData ? parseFloat(pendingFormData.amount) : parseFloat(result.amount);
+
+    eurIngressMutation.mutate(
+      {
+        amountEUR:     eurAmount,
+        authCode:      result.authCode,
+        cardType:      result.cardType,
+        protocol:      result.protocol,
+        transactionId: result.transactionId,
+      },
+      {
+        onSuccess: () => {
+          setSentToCaja(true);
+          toast({
+            title: "Registrado en Caja Formal",
+            description: `€${eurAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })} EUR ingresado correctamente.`,
+          });
+        },
+        onError: () => {
+          toast({ title: "Error al registrar", description: "No se pudo pasar a caja. Intente de nuevo.", variant: "destructive" });
+        },
+      }
+    );
   }
 
   function handleCopy(value: string, key: string) {
@@ -155,6 +220,9 @@ export default function NewTransactionPage() {
   function handleReset() {
     setStep("form");
     setResult(null);
+    setPendingFormData(null);
+    setIsEurTx(false);
+    setSentToCaja(false);
     form.reset();
   }
 
@@ -208,6 +276,19 @@ export default function NewTransactionPage() {
 
   const selectedProtocol = protocols.find((p: any) => p.code === form.watch("protocol"));
 
+  // ── Step indicator config ─────────────────────────────────────────────────
+  const eurSteps = ["Formulario", "Verificación EUR", "Procesando", "Resultado"];
+  const stdSteps = ["Formulario", "Procesando", "Resultado"];
+  const stepLabels = isEurTx ? eurSteps : stdSteps;
+  const stepKeys   = isEurTx
+    ? (["form", "match", "processing", "result"] as const)
+    : (["form", "processing", "result"] as const);
+
+  // ─── EUR amount values for the match panel ───────────────────────────────
+  const eurAmtRaw = pendingFormData ? parseFloat(pendingFormData.amount) : 0;
+  const eurInUSD  = eurAmtRaw * fxEUR;
+  const eurInMXN  = eurAmtRaw * fxEUR * tc;
+
   return (
     <div className="p-4 md:p-6 space-y-5">
       {/* Header */}
@@ -221,23 +302,24 @@ export default function NewTransactionPage() {
         </div>
         {/* Step indicator */}
         <div className="flex items-center gap-1 text-sm">
-          {["Formulario", "Procesando", "Resultado"].map((s, i) => {
-            const stepKey = ["form", "processing", "result"][i] as typeof step;
-            const isActive = step === stepKey;
-            const isDone = (step === "processing" && i === 0) || (step === "result" && i < 2);
+          {stepLabels.map((s, i) => {
+            const currentIdx = stepKeys.indexOf(step as any);
+            const isActive = i === currentIdx;
+            const isDone   = i < currentIdx;
             return (
               <div key={s} className="flex items-center gap-1">
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${isDone ? "bg-green-500 text-white" : isActive ? "bg-[#c8322b] text-white" : "bg-muted text-muted-foreground"}`}>
                   {isDone ? <Check className="w-3 h-3" /> : i + 1}
                 </div>
                 <span className={`hidden sm:inline text-xs font-medium ${isActive ? "text-[#c8322b]" : "text-muted-foreground"}`}>{s}</span>
-                {i < 2 && <ChevronRight className="w-3 h-3 text-muted-foreground" />}
+                {i < stepLabels.length - 1 && <ChevronRight className="w-3 h-3 text-muted-foreground" />}
               </div>
             );
           })}
         </div>
       </div>
 
+      {/* ── FORM step ─────────────────────────────────────────────────────── */}
       {step === "form" && (
         <div className="grid gap-5 xl:grid-cols-3">
           {/* Form */}
@@ -546,7 +628,111 @@ export default function NewTransactionPage() {
         </div>
       )}
 
-      {/* Processing State */}
+      {/* ── EUR MATCH step ───────────────────────────────────────────────────── */}
+      {step === "match" && pendingFormData && (
+        <div className="max-w-2xl mx-auto space-y-5">
+          {/* Terminal display */}
+          <Card className="bg-slate-950 text-white border-slate-700 hover-elevate overflow-hidden">
+            <CardHeader className="pb-3 border-b border-slate-700">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <CardTitle className="text-sm text-slate-300 flex items-center gap-2">
+                  <Euro className="w-4 h-4 text-yellow-400" />
+                  Terminal — Verificación de Monto EUR
+                </CardTitle>
+                <div className="flex items-center gap-1.5 text-xs text-yellow-400 font-mono">
+                  <div className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" />
+                  AGUARDANDO CONFIRMACIÓN
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6 pb-6 space-y-6">
+              {/* Big EUR amount */}
+              <div className="text-center space-y-1">
+                <p className="text-xs text-slate-500 font-mono uppercase tracking-widest">Monto en terminal</p>
+                <div className="flex items-baseline justify-center gap-2">
+                  <span className="text-5xl font-bold font-mono text-white tracking-tight">
+                    {eurAmtRaw.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                  <span className="text-2xl font-bold text-yellow-400 font-mono">EUR</span>
+                </div>
+              </div>
+
+              {/* Divider */}
+              <div className="border-t border-slate-700" />
+
+              {/* Conversions */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-slate-800 rounded-md px-4 py-3 text-center">
+                  <p className="text-[10px] text-slate-500 font-mono uppercase tracking-widest mb-1">Equivalente USD</p>
+                  <p className="text-xl font-bold font-mono text-green-400">
+                    ${eurInUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">T/C: 1 EUR = {fxEUR} USD</p>
+                </div>
+                <div className="bg-slate-800 rounded-md px-4 py-3 text-center">
+                  <p className="text-[10px] text-slate-500 font-mono uppercase tracking-widest mb-1">Equivalente MXN</p>
+                  <p className="text-xl font-bold font-mono text-blue-400">
+                    ${eurInMXN.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">T/C: 1 EUR = {(fxEUR * tc).toFixed(4)} MXN</p>
+                </div>
+              </div>
+
+              {/* Card info row */}
+              <div className="flex flex-wrap items-center gap-3 bg-slate-800 rounded-md px-4 py-3">
+                <CreditCard className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                <span className="text-sm font-mono text-slate-300">
+                  {pendingFormData.cardType} — {maskCardNumber(pendingFormData.cardNumber)}
+                </span>
+                <Badge className="bg-yellow-900/40 text-yellow-400 border-yellow-700 no-default-active-elevate text-[10px] font-mono">
+                  Protocolo {pendingFormData.protocol}
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Instruction card */}
+          <Card className="border-yellow-200 bg-yellow-50 hover-elevate">
+            <CardContent className="pt-5 pb-5">
+              <div className="flex gap-3">
+                <div className="w-9 h-9 rounded-full bg-yellow-100 border border-yellow-300 flex items-center justify-center flex-shrink-0">
+                  <Clock className="w-4 h-4 text-yellow-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-yellow-900">Verificación de emparejamiento de montos</p>
+                  <p className="text-xs text-yellow-700 mt-1 leading-relaxed">
+                    Confirme que el monto mostrado en la terminal física coincide exactamente con el monto registrado en el sistema.
+                    Una vez verificado, la transacción será procesada y podrá ser registrada en la <strong>caja formal</strong>.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Action buttons */}
+          <div className="flex gap-3">
+            <Button
+              className="flex-1 h-12 bg-green-600 hover:bg-green-700 font-bold text-base"
+              onClick={handleConfirmMatch}
+              data-testid="button-confirm-match"
+            >
+              <CheckCircle2 className="w-5 h-5 mr-2" />
+              Los montos coinciden — Continuar
+            </Button>
+            <Button
+              variant="outline"
+              className="h-12"
+              onClick={() => { setStep("form"); setIsEurTx(false); setPendingFormData(null); }}
+              data-testid="button-cancel-match"
+            >
+              <XCircle className="w-4 h-4 mr-2" />
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Processing step ───────────────────────────────────────────────────── */}
       {step === "processing" && (
         <Card className="max-w-lg mx-auto hover-elevate">
           <CardContent className="pt-12 pb-12 text-center space-y-6">
@@ -578,7 +764,7 @@ export default function NewTransactionPage() {
         </Card>
       )}
 
-      {/* Result State */}
+      {/* ── Result step ───────────────────────────────────────────────────────── */}
       {step === "result" && result && (
         <div className="space-y-4 max-w-3xl">
           {/* Auth Code Banner */}
@@ -600,6 +786,55 @@ export default function NewTransactionPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* EUR → Caja banner (only for EUR transactions) */}
+          {isEurTx && (
+            <Card className={`border-2 hover-elevate transition-all ${sentToCaja ? "border-emerald-500 bg-emerald-50" : "border-blue-300 bg-blue-50"}`}>
+              <CardContent className="pt-5 pb-5">
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${sentToCaja ? "bg-emerald-100" : "bg-blue-100"}`}>
+                    {sentToCaja
+                      ? <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+                      : <Wallet className="w-6 h-6 text-blue-600" />
+                    }
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    {sentToCaja ? (
+                      <>
+                        <p className="text-sm font-bold text-emerald-800">Registrado en Caja Formal</p>
+                        <p className="text-xs text-emerald-700 mt-0.5">
+                          €{eurAmtRaw.toLocaleString("en-US", { minimumFractionDigits: 2 })} EUR —{" "}
+                          ${eurInUSD.toLocaleString("en-US", { minimumFractionDigits: 2 })} USD ingresado · categoría: Venta tarjeta internacional
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm font-bold text-blue-800">Transacción EUR lista para caja formal</p>
+                        <p className="text-xs text-blue-700 mt-0.5">
+                          Montos verificados. Puede registrar €{eurAmtRaw.toLocaleString("en-US", { minimumFractionDigits: 2 })} EUR
+                          (≈ ${eurInUSD.toLocaleString("en-US", { minimumFractionDigits: 2 })} USD) como ingreso en la caja.
+                        </p>
+                      </>
+                    )}
+                  </div>
+                  {!sentToCaja && (
+                    <Button
+                      className="bg-blue-600 hover:bg-blue-700 font-semibold flex-shrink-0"
+                      onClick={handlePasarACaja}
+                      disabled={eurIngressMutation.isPending}
+                      data-testid="button-pasar-caja"
+                    >
+                      {eurIngressMutation.isPending
+                        ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                        : <ArrowDownToLine className="w-4 h-4 mr-2" />
+                      }
+                      {eurIngressMutation.isPending ? "Registrando..." : "Pasar a Caja Formal"}
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             {/* Transaction Details */}
@@ -680,7 +915,7 @@ export default function NewTransactionPage() {
             </div>
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <Button onClick={handleReset} className="bg-[#c8322b] hover:bg-[#a62822]" data-testid="button-new-transaction">
               <Zap className="w-4 h-4 mr-2" /> Nueva Transacción
             </Button>
