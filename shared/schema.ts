@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, decimal, integer, boolean, doublePrecision, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, decimal, integer, boolean, doublePrecision, unique, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -324,7 +324,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   tipoCambio: 17.50,
   fxRateEUR: 1.085,
   fxRateGBP: 1.27,
-  maintenanceMode: true,
+  maintenanceMode: false,
   saldoAperturaUSD: 0,
   saldoSistemaUSD: 1250000,
   feedMerchant1: "GRUPO ASGE VENADO 69",
@@ -463,3 +463,11 @@ export type InsertRoutingRule = z.infer<typeof insertRoutingRuleSchema>;
 
 export type RoutingDecision = typeof routingDecisions.$inferSelect;
 export type TerminalCommand = typeof terminalCommands.$inferSelect;
+
+// ─── Persistencia de configuración del sistema ───────────────────────────────
+// Tabla de fila única: id siempre = 1
+export const systemSettingsTable = pgTable("system_settings_store", {
+  id: integer("id").primaryKey().default(1),
+  data: jsonb("data").$type<SystemSettings>().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});

@@ -5,7 +5,8 @@ import { type SystemSettings, DEFAULT_SYSTEM_SETTINGS } from "@shared/schema";
 export function useSystemSettings() {
   return useQuery<SystemSettings>({
     queryKey: ["/api/settings"],
-    staleTime: 15000,
+    staleTime: 5000,
+    refetchInterval: 8000,
     placeholderData: DEFAULT_SYSTEM_SETTINGS,
   });
 }
@@ -19,6 +20,7 @@ export function useUpdateSettings() {
     },
     onSuccess: (data) => {
       queryClient.setQueryData(["/api/settings"], data);
+      queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
     },
   });
 }

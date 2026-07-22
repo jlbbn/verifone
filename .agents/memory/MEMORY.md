@@ -2,7 +2,7 @@
 - [Testing secure-cookie sessions on localhost](local-secure-cookie-testing.md) — curl needs `X-Forwarded-Proto: https` + a cookie jar or the Secure session cookie is dropped.
 - [Express.User type collision with passport](express-user-type-collision.md) — inside `namespace Express`, bare `User` resolves to passport's empty type; use `import("@shared/schema").User`.
 - [Version pinning constraints](version-pinning.md) — express@4, react@18, vite@5, tailwind@3 pinned; pages use recharts directly; always run `tsc --noEmit` after dep changes.
-- [Admin system settings architecture](admin-settings-arch.md) — settings are in-memory on server (reset on restart); useSystemSettings hook; TC/fmtMXN/liveSeed must be component-local (not module-level) to be reactive; hooks must be declared before useEffects that call their setters.
+- [Admin system settings architecture](admin-settings-arch.md) — settings persisted to `system_settings_store` DB table (upsert id=1); in-memory cache with refetchInterval:8s; TC/fmtMXN/liveSeed must be component-local to be reactive; hooks before useEffects.
 - [Seed code changes don't clean a live Postgres DB](seed-vs-live-db.md) — editing idempotent seed blocks in storage.ts doesn't touch already-committed rows; must reconcile the live DB directly with psql.
 - [Per-user caja vs central caja](per-user-caja.md) — per-user cash balance is a flat persisted DB field on `users`, distinct from the in-memory central caja; admin-only edit, mirrors user-permissions endpoint pattern.
 - [Per-user multi-asset crypto balances architecture](crypto-balances-arch.md) — normalized `(userId, asset)` table, atomic swap/dispersion via `db.transaction`, admin flat-overwrite endpoints, no ledger.

@@ -20,6 +20,7 @@ import {
   routingRules,
   routingDecisions,
   terminalCommands,
+  systemSettingsTable,
   type CajaMovement, type InsertCajaMovement,
   type User, type InsertUser,
   type Transaction, type InsertTransaction,
@@ -40,8 +41,8 @@ import {
   type TerminalCommand,
 } from "@shared/schema";
 
-// In-memory system settings (shared across all sessions, resets on restart)
-let _systemSettings: SystemSettings = JSON.parse(JSON.stringify(DEFAULT_SYSTEM_SETTINGS));
+// In-memory cache for system settings (populated on first read, kept in sync on updates)
+let _systemSettings: SystemSettings | null = null;
 
 export interface IStorage {
   // Users
@@ -1040,12 +1041,37 @@ export class DatabaseStorage implements IStorage {
 
   // --- System Settings ---
   async getSettings(): Promise<SystemSettings> {
+    if (_systemSettings !== null) return JSON.parse(JSON.stringify(_systemSettings));
+    // Load from DB on first access; fall back to DEFAULT if no row exists yet
+    try {
+      const [row] = await db.select().from(systemSettingsTable).where(eq(systemSettingsTable.id, 1)).limit(1);
+      const loaded: SystemSettings = row
+        ? { ...DEFAULT_SYSTEM_SETTINGS, ...(row.data as SystemSettings) }
+        : { ...DEFAULT_SYSTEM_SETTINGS };
+      _systemSettings = loaded;
+    } catch {
+      _systemSettings = { ...DEFAULT_SYSTEM_SETTINGS };
+    }
     return JSON.parse(JSON.stringify(_systemSettings));
   }
 
   async updateSettings(patch: Partial<SystemSettings>): Promise<SystemSettings> {
-    _systemSettings = { ..._systemSettings, ...patch };
-    return JSON.parse(JSON.stringify(_systemSettings));
+    const current = await this.getSettings();
+    const updated: SystemSettings = { ...current, ...patch };
+    _systemSettings = updated;
+    // Persist to DB (upsert on id=1)
+    try {
+      await db
+        .insert(systemSettingsTable)
+        .values({ id: 1, data: updated, updatedAt: new Date() })
+        .onConflictDoUpdate({
+          target: systemSettingsTable.id,
+          set: { data: updated, updatedAt: new Date() },
+        });
+    } catch (err) {
+      console.error("[settings] Failed to persist settings to DB:", err);
+    }
+    return JSON.parse(JSON.stringify(updated));
   }
 
   // --- Documents ---
