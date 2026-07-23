@@ -290,6 +290,7 @@ function VisaNetworkReceiptModal({ data, onClose }: { data: VisaNetData; onClose
           <div className="space-y-0">
             {row("Redirecting to Visa Network", "OK")}
             {row("Connecting to Database", "CONNECTED")}
+            {row("Connecting to Verifone 660P", "VERIFIED")}
             {row("Account Verification", "OK")}
             {row("Approval Code", "LINKED CVV2")}
             {row("Account Type", "ONLINE SALE")}
