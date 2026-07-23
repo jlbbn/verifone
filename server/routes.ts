@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import rateLimit from "express-rate-limit";
 import { storage } from "./storage";
 import { db } from "./db";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql, or } from "drizzle-orm";
 import { transactions as txTable, users as usersTable } from "@shared/schema";
 import { randomBytes } from "crypto";
 import { z } from "zod";
@@ -639,16 +639,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json({ paymentEngineAccess: true, posFullAccess: true });
     }
     try {
+      const u = req.currentUser!;
       const [perms] = await db
         .select({ paymentEngineAccess: usersTable.paymentEngineAccess, posFullAccess: usersTable.posFullAccess })
         .from(usersTable)
-        .where(eq(usersTable.username, req.currentUser!.username))
+        .where(or(eq(usersTable.username, u.username), eq(usersTable.email, u.email)))
         .limit(1);
       return res.json({
         paymentEngineAccess: perms?.paymentEngineAccess ?? false,
         posFullAccess:       perms?.posFullAccess       ?? false,
       });
-    } catch {
+    } catch (err: any) {
+      console.error("[permissions] error:", err?.message);
       return res.json({ paymentEngineAccess: false, posFullAccess: false });
     }
   });
