@@ -835,6 +835,12 @@ export default function POSVirtualPage() {
   const [infoModal, setInfoModal] = useState<{ title: string; content: string } | null>(null);
   const [showSRLink, setShowSRLink] = useState(false);
 
+  const { data: userPerms } = useQuery<{ paymentEngineAccess: boolean; posFullAccess: boolean }>({
+    queryKey: ["/api/user/permissions"],
+    enabled: !!user,
+  });
+  const posFullAccess = user?.role === "ADMIN" ? true : !!(userPerms?.posFullAccess);
+
   const { data: myTerminals } = useQuery<{ status: string }[]>({
     queryKey: ["/api/terminals/mine"],
     enabled: !!user && user.role !== "ADMIN",
@@ -848,12 +854,6 @@ export default function POSVirtualPage() {
   const posLocked = !!(subData?.posLocked);
   const paymentWarning = subData?.paymentWarning;
   const [showSubAlert, setShowSubAlert] = useState(true);
-
-  const { data: userPerms } = useQuery<{ paymentEngineAccess: boolean; posFullAccess: boolean }>({
-    queryKey: ["/api/user/permissions"],
-    enabled: !!user,
-  });
-  const posFullAccess = user?.role === "ADMIN" ? true : !!(userPerms?.posFullAccess);
   // Reset alert every time the page mounts so Patricio sees it on every visit
   useEffect(() => { setShowSubAlert(true); }, []);
 
