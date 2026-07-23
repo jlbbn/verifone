@@ -2472,7 +2472,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const MARGIN_PARTICIPANTS = [
     { name: "JM Open Door",    username: "jmdoorsopen@gmail.com", pct: 44, wallet: null,                                         network: null,               token: null   },
     { name: "Dany León Pinto", username: "danyleonpinto",          pct: 3,  wallet: "TApbzNzmVxNE1SZLkMDcARuDEjYFEUpex2",      network: "TRON (TRC-20)",    token: "USDT" },
-    { name: "Mónica",          username: null,                     pct: 3,  wallet: "0xc1ad2A381aE511427a2F83A422f4510c9Fc098a2", network: "ETHEREUM (ERC-20)", token: "USDT" },
     { name: "Banxico Plus LLC",username: null,                     pct: 50, wallet: null,                                         network: "Platform",         token: null   },
     { name: "Socemro",            username: "socemro2@gmail.com",     pct: 50,   wallet: "TGnjTT2TU8RCZgBiYLJkardukPoiwtpvii", network: "TRON (TRC-20)", token: "USDT" },
     { name: "Emiliano Maldonado", username: null,                     pct: 11.5, wallet: "TUZ4MGYkec7LYSJJEy6iJDr2Ko6gxmDzvj",  network: "TRON (TRC-20)", token: "USDT" },
