@@ -839,7 +839,7 @@ export default function POSVirtualPage() {
     queryKey: ["/api/terminals/mine"],
     enabled: !!user && user.role !== "ADMIN",
   });
-  const canSRLink = user?.role === "ADMIN" || (myTerminals ?? []).some(t => t.status === "active");
+  const canSRLink = user?.role === "ADMIN" || posFullAccess || (myTerminals ?? []).some(t => t.status === "active");
 
   const { data: subData } = useQuery<{ posLocked: boolean; restricted?: boolean; paymentWarning?: string }>({
     queryKey: ["/api/subscription"],
@@ -1067,7 +1067,7 @@ export default function POSVirtualPage() {
               <Link2 className="w-3.5 h-3.5" /> VINCULAR S/R
             </button>
           )}
-          {user?.role === "ADMIN" && (
+          {(user?.role === "ADMIN" || posFullAccess) && (
             <Link href="/admin/settings">
               <button data-testid="button-admin-settings"
                 className="flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold border border-[#c8322b] text-[#c8322b] bg-red-50 transition-all">
