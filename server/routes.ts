@@ -2201,6 +2201,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const isDanyLeon  = user.username === "danyleonpinto";
     const isJETC76    = user.email === "jetc76@hotmail.com";
     const isOptima    = user.email === "optimaqrh@gmail.com";
+    const isSocemro   = user.email === "socemro2@gmail.com";
 
     if (isOvidio) {
       return res.json({
@@ -2377,6 +2378,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
         signerName:        "José Luis Barrientos Terreros",
         signerTitle:       "Founder",
         supplierAddress:   "7652 Sawmill Road, Suite 341, Dublin, Ohio 43016",
+      });
+    }
+
+    if (isSocemro) {
+      return res.json({
+        userId:           user.id,
+        userName:         user.fullName,
+        userEmail:        user.email,
+        plan:             "Usuario Banxico+ Annual",
+        totalAmount:      750,
+        paidAmount:       750,
+        remainingAmount:  0,
+        currency:         "USD",
+        contractDate:     "2026-06-24",
+        contractTerm:     "12 months",
+        status:           "complete",
+        posUnlocked:      true,
+        posLocked:        false,
+        restricted:       false,
+        routingLocked:    false,
+        paymentWarning:   null,
+        walletAddress:    "TGnjTT2TU8RCZgBiYLJkardukPoiwtpvii",
+        walletNetwork:    "TRON (TRC-20)",
+        walletToken:      "USDT",
+        marginPercentage: 50,
+        company:          "—",
+        phone:            "—",
+        signerName:       "José Luis Barrientos Terreros",
+        signerTitle:      "Founder",
+        supplierAddress:  "7652 Sawmill Road, Suite 341, Dublin, Ohio 43016",
       });
     }
 
