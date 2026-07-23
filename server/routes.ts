@@ -1139,6 +1139,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ====================================================================
+  // BROKER STATUS — ping activo a exchanges disponibles
+  // ====================================================================
+
+  let brokerStatusCache: { data: any[]; fetchedAt: number } | null = null;
+  const BROKER_CACHE_TTL_MS = 30_000;
+
+  app.get("/api/broker-status", requireSession, async (_req, res) => {
+    if (brokerStatusCache && Date.now() - brokerStatusCache.fetchedAt < BROKER_CACHE_TTL_MS) {
+      return res.json(brokerStatusCache.data);
+    }
+
+    const BROKERS = [
+      { name: "KuCoin",    id: "kucoin",    url: "https://api.kucoin.com/api/v1/status",            active: true  },
+      { name: "Binance",   id: "binance",   url: "https://api.binance.com/api/v3/ping",             active: false },
+      { name: "Kraken",    id: "kraken",    url: "https://api.kraken.com/0/public/SystemStatus",    active: false },
+      { name: "CoinGecko", id: "coingecko", url: "https://api.coingecko.com/api/v3/ping",           active: true  },
+    ];
+
+    const results = await Promise.allSettled(
+      BROKERS.map(async (b) => {
+        const start = Date.now();
+        try {
+          const r = await fetch(b.url, { signal: AbortSignal.timeout(6000) });
+          const latency = Date.now() - start;
+          let status: "online" | "offline" | "restricted" = "online";
+          let note = "";
+
+          if (b.id === "binance") {
+            const body: any = await r.json().catch(() => ({}));
+            if (r.status === 451 || (body?.msg ?? "").toLowerCase().includes("restricted")) {
+              status = "restricted";
+              note = "HTTP 451 · Geoblocked (OFAC/FinCEN)";
+            }
+          } else if (b.id === "kucoin") {
+            const body: any = await r.json().catch(() => ({}));
+            status = body?.data?.status === "open" ? "online" : "offline";
+            note = body?.data?.msg ?? "";
+          } else if (b.id === "kraken") {
+            const body: any = await r.json().catch(() => ({}));
+            status = body?.result?.status === "online" ? "online" : "offline";
+            note = body?.result?.timestamp ?? "";
+          }
+
+          return { ...b, status, latency, note };
+        } catch {
+          return { ...b, status: "offline" as const, latency: null, note: "No response / timeout" };
+        }
+      })
+    );
+
+    const data = results.map((r, i) =>
+      r.status === "fulfilled"
+        ? r.value
+        : { ...BROKERS[i], status: "offline", latency: null, note: "Error" }
+    );
+
+    brokerStatusCache = { data, fetchedAt: Date.now() };
+    res.json(data);
+  });
+
+  // ====================================================================
+  // HISTORIAL RECIENTE EXCHANGE / DISPERSION
+  // ====================================================================
+
+  app.get("/api/crypto/recent", requireSession, async (req, res) => {
+    try {
+      const user = req.currentUser!;
+      const allTxs = user.role === "ADMIN"
+        ? await storage.getAllTransactions()
+        : await storage.getTransactionsByUser(user.username);
+
+      const recent = allTxs
+        .filter((t: Transaction) => t.transactionId.startsWith("EXC-") || t.transactionId.startsWith("DSP-"))
+        .sort((a: Transaction, b: Transaction) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime())
+        .slice(0, 8);
+      res.json(recent);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ====================================================================
   // TRANSACCIONES
   // ====================================================================
   

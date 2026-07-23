@@ -13,6 +13,7 @@ import {
   ArrowRightLeft, Lock, RefreshCw, TrendingUp, BarChart2,
   Activity, Coins, DollarSign, TrendingDown, Clock,
   Wallet, Send, ShieldCheck, Copy, CheckCircle2, AlertTriangle,
+  Wifi, WifiOff, Zap, History, ArrowRight, ChevronRight,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -287,6 +288,16 @@ interface MarginPool {
   participants: MarginParticipant[];
 }
 
+interface BrokerStatus {
+  name: string; id: string; status: "online" | "offline" | "restricted";
+  latency: number | null; note: string; active: boolean;
+}
+
+interface RecentTx {
+  transactionId: string; type: string; amount: string; currency: string;
+  status: string; description: string; createdAt: string; createdBy: string;
+}
+
 export default function ExchangePage() {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -355,6 +366,9 @@ export default function ExchangePage() {
   const [fromId, setFromId] = useState("eth");
   const [toId, setToId]     = useState("btc");
   const [fromAmount, setFromAmount] = useState("0.1");
+  const [confirmSwap, setConfirmSwap] = useState(false);
+
+  const SLIPPAGE_PCT = 0.5; // 0.5%
 
   const { data: liveData, dataUpdatedAt } = useQuery<Record<string, LiveCryptoData>>({
     queryKey: ["/api/crypto-prices"],
@@ -367,6 +381,21 @@ export default function ExchangePage() {
     queryKey: ["/api/crypto-balances"],
     enabled: !!user,
     refetchInterval: 15000,
+  });
+
+  // Estado de brokers
+  const { data: brokerStatuses, isLoading: brokersLoading } = useQuery<BrokerStatus[]>({
+    queryKey: ["/api/broker-status"],
+    enabled: !!user,
+    refetchInterval: 60000,
+    staleTime: 30000,
+  });
+
+  // Historial reciente de exchange/dispersión
+  const { data: recentTxs = [] } = useQuery<RecentTx[]>({
+    queryKey: ["/api/crypto/recent"],
+    enabled: !!user,
+    refetchInterval: 20000,
   });
 
   function mergeLive(coin: Crypto): Crypto {
@@ -528,6 +557,11 @@ export default function ExchangePage() {
       });
       return;
     }
+    setConfirmSwap(true);
+  }
+
+  function handleConfirmExchange() {
+    setConfirmSwap(false);
     exchangeMutation.mutate();
   }
 
@@ -566,8 +600,71 @@ export default function ExchangePage() {
 
   const updStr = new Date(dataUpdatedAt || Date.now()).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
 
+  // Slippage sobre toAmount
+  const toAmountAfterSlippage = toAmount
+    ? (parseFloat(toAmount) * (1 - SLIPPAGE_PCT / 100)).toFixed(8)
+    : "";
+
+  const fromUsdValue = fromPrice * (parseFloat(fromAmount) || 0);
+  const toUsdValue   = toPrice   * (parseFloat(toAmount)   || 0);
+
   return (
     <div className="p-4 md:p-6 pb-20 max-w-2xl mx-auto space-y-5">
+
+      {/* ── Panel de estado de brokers ───────────────────────────────── */}
+      <Card className="border shadow-sm">
+        <CardContent className="p-0">
+          <div className="flex items-center gap-3 px-5 py-3 border-b">
+            <div className="w-8 h-8 rounded-md bg-green-50 flex items-center justify-center flex-shrink-0">
+              <Wifi className="w-4 h-4 text-green-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-sm">Estado de Brokers</p>
+              <p className="text-[10px] text-muted-foreground">Conexión en tiempo real · Actualización cada 30s</p>
+            </div>
+            {brokersLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
+          </div>
+          <div className="px-5 py-3 flex flex-col gap-2">
+            {(brokerStatuses ?? []).map(b => {
+              const isOnline     = b.status === "online";
+              const isRestricted = b.status === "restricted";
+              return (
+                <div key={b.id} className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    {isOnline
+                      ? <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                      : isRestricted
+                        ? <div className="w-2 h-2 rounded-full bg-amber-400" />
+                        : <div className="w-2 h-2 rounded-full bg-red-400" />
+                    }
+                    <span className="text-sm font-semibold">{b.name}</span>
+                    {b.active && (
+                      <Badge className="text-[9px] bg-green-100 text-green-700 border-green-200 no-default-active-elevate py-0 px-1.5">
+                        <Zap className="w-2.5 h-2.5 mr-0.5" />ACTIVO
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 text-right">
+                    {isOnline && b.latency !== null && (
+                      <span className="text-[10px] font-mono text-muted-foreground">{b.latency}ms</span>
+                    )}
+                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-sm ${
+                      isOnline     ? "bg-green-100 text-green-700" :
+                      isRestricted ? "bg-amber-100 text-amber-700" :
+                                     "bg-red-100 text-red-600"
+                    }`}>
+                      {isOnline ? "ONLINE" : isRestricted ? "RESTRINGIDO" : "OFFLINE"}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+            {!brokerStatuses && !brokersLoading && (
+              <p className="text-xs text-muted-foreground text-center py-1">Verificando conexiones…</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* ── Aviso de suscripción suspendida (solo cuando posLocked) ── */}
       {subLocked && (
@@ -622,16 +719,23 @@ export default function ExchangePage() {
               </button>
             </div>
             <div className="flex items-center gap-3">
-              <Input
-                value={fromAmount}
-                onChange={e => setFromAmount(e.target.value)}
-                type="number"
-                step="0.0001"
-                placeholder="0.1"
-                className="flex-1 border-0 text-2xl font-light p-0 h-auto focus-visible:ring-0 shadow-none bg-transparent"
-                data-testid="input-from-amount"
-              />
-              <CryptoPicker value={fromId} onChange={handleFromChange} exclude={toId} />
+              <div className="flex-1">
+                <Input
+                  value={fromAmount}
+                  onChange={e => { setFromAmount(e.target.value); setConfirmSwap(false); }}
+                  type="number"
+                  step="0.0001"
+                  placeholder="0.1"
+                  className="border-0 text-2xl font-light p-0 h-auto focus-visible:ring-0 shadow-none bg-transparent w-full"
+                  data-testid="input-from-amount"
+                />
+                {fromAmount && parseFloat(fromAmount) > 0 && (
+                  <p className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                    ≈ ${fromUsdValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+                  </p>
+                )}
+              </div>
+              <CryptoPicker value={fromId} onChange={id => { handleFromChange(id); setConfirmSwap(false); }} exclude={toId} />
             </div>
           </div>
 
@@ -639,10 +743,10 @@ export default function ExchangePage() {
           <div className="flex items-center justify-between px-5 py-3 bg-muted/30">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Lock className="w-3.5 h-3.5" />
-              <span>Floating rate</span>
+              <span>Floating rate · <span className="font-mono text-[10px]">Slippage {SLIPPAGE_PCT}%</span></span>
             </div>
             <button
-              onClick={handleSwap}
+              onClick={() => { handleSwap(); setConfirmSwap(false); }}
               className="w-7 h-7 rounded-md bg-background border flex items-center justify-center hover-elevate"
               data-testid="button-swap"
               title="Swap currencies"
@@ -652,7 +756,7 @@ export default function ExchangePage() {
           </div>
 
           {/* You get */}
-          <div className="px-5 pt-4 pb-5 border-b">
+          <div className="px-5 pt-4 pb-4 border-b">
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs text-muted-foreground">You get</p>
               <span className="text-[10px] text-muted-foreground font-mono" data-testid="text-to-balance">
@@ -660,32 +764,89 @@ export default function ExchangePage() {
               </span>
             </div>
             <div className="flex items-center gap-3">
-              <div className="flex-1 text-2xl font-light text-muted-foreground">
-                {toAmount ? `≈ ${toAmount}` : <span className="text-muted-foreground/50">—</span>}
+              <div className="flex-1">
+                <div className="text-2xl font-light text-muted-foreground">
+                  {toAmount ? `≈ ${toAmount}` : <span className="text-muted-foreground/50">—</span>}
+                </div>
+                {toAmount && parseFloat(toAmount) > 0 && (
+                  <p className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                    ≈ ${toUsdValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+                  </p>
+                )}
               </div>
-              <CryptoPicker value={toId} onChange={handleToChange} exclude={fromId} />
+              <CryptoPicker value={toId} onChange={id => { handleToChange(id); setConfirmSwap(false); }} exclude={fromId} />
             </div>
           </div>
 
-          {/* Exchange button */}
+          {/* Slippage breakdown */}
+          {fromAmount && parseFloat(fromAmount) > 0 && toAmount && (
+            <div className="px-5 py-3 border-b bg-muted/20 space-y-1.5">
+              <div className="flex items-center justify-between text-[10px] text-muted-foreground font-mono">
+                <span>Tasa</span>
+                <span>1 {fromCoin.symbol} ≈ {rate.toFixed(8)} {toCoin.symbol}</span>
+              </div>
+              <div className="flex items-center justify-between text-[10px] text-muted-foreground font-mono">
+                <span>Slippage ({SLIPPAGE_PCT}%)</span>
+                <span className="text-amber-600">−{(parseFloat(toAmount) * SLIPPAGE_PCT / 100).toFixed(8)} {toCoin.symbol}</span>
+              </div>
+              <div className="flex items-center justify-between text-[10px] font-semibold font-mono">
+                <span>Mínimo recibido</span>
+                <span className="text-green-700">{toAmountAfterSlippage} {toCoin.symbol}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Exchange button / confirmation */}
           <div className="px-5 py-4">
-            {fromAmount && parseFloat(fromAmount) > 0 && (
-              <p className="text-xs text-muted-foreground mb-3 text-center font-mono">
-                1 {fromCoin.symbol} ≈ {rate.toFixed(8)} {toCoin.symbol}
-              </p>
+            {!confirmSwap ? (
+              <Button
+                onClick={handleExchange}
+                disabled={exchangeMutation.isPending || !fromAmount || parseFloat(fromAmount) <= 0}
+                className="w-full h-11 font-semibold text-base"
+                style={{ backgroundColor: "#1a56db" }}
+                data-testid="button-exchange"
+              >
+                {exchangeMutation.isPending
+                  ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Processing...</>
+                  : <><ArrowRightLeft className="w-4 h-4 mr-2" /> Exchange</>
+                }
+              </Button>
+            ) : (
+              <div className="space-y-3">
+                <div className="rounded-md border border-[#1a56db]/30 bg-blue-50 px-4 py-3 space-y-1.5">
+                  <p className="text-xs font-bold text-[#1a56db]">Confirmar intercambio</p>
+                  <div className="flex items-center gap-2 text-sm font-mono">
+                    <span className="font-semibold">{parseFloat(fromAmount).toFixed(8)} {fromCoin.symbol}</span>
+                    <ArrowRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                    <span className="font-semibold text-green-700">≥ {toAmountAfterSlippage} {toCoin.symbol}</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Valor estimado: ${fromUsdValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD · Slippage máx. {SLIPPAGE_PCT}%
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1 h-9 text-sm"
+                    onClick={() => setConfirmSwap(false)}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    onClick={handleConfirmExchange}
+                    disabled={exchangeMutation.isPending}
+                    className="flex-1 h-9 font-semibold text-sm"
+                    style={{ backgroundColor: "#1a56db" }}
+                    data-testid="button-exchange-confirm"
+                  >
+                    {exchangeMutation.isPending
+                      ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      : <><CheckCircle2 className="w-3.5 h-3.5 mr-1.5" /> Confirmar</>
+                    }
+                  </Button>
+                </div>
+              </div>
             )}
-            <Button
-              onClick={handleExchange}
-              disabled={exchangeMutation.isPending || !fromAmount || parseFloat(fromAmount) <= 0}
-              className="w-full h-11 font-semibold text-base"
-              style={{ backgroundColor: "#1a56db" }}
-              data-testid="button-exchange"
-            >
-              {exchangeMutation.isPending
-                ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Processing...</>
-                : "Exchange"
-              }
-            </Button>
           </div>
         </CardContent>
       </Card>
@@ -792,16 +953,12 @@ export default function ExchangePage() {
 
       {/* ── Panel Distribución del Margen Operacional ──────────────────────── */}
       {isMarginUser && marginPool && (() => {
-        // Meta mensual de referencia: $40,000,000 USD
-        const MONTHLY_GOAL   = 40_000_000;
-        const GOAL_MARGIN    = MONTHLY_GOAL * 0.50;          // $20,000,000
-        const PARTICIPANTS_DEF = [
-          { name: "JM Open Door",    pct: 44, wallet: null,                                              network: null,              token: null,   dispersed: 0, available: 0 },
-          { name: "Dany León Pinto", pct:  3, wallet: "TApbzNzmVxNE1SZLkMDcARuDEjYFEUpex2",             network: "TRON (TRC-20)",   token: "USDT", dispersed: 0, available: 0 },
-          { name: "Mónica",          pct:  3, wallet: "0xc1ad2A381aE511427a2F83A422f4510c9Fc098a2",      network: "ETHEREUM (ERC-20)", token: "USDT", dispersed: 0, available: 0 },
-          { name: "Banxico Plus LLC",pct: 50, wallet: null,                                              network: "Plataforma",      token: null,   dispersed: 0, available: 0 },
-        ];
-        const colors = ["bg-blue-500", "bg-green-500", "bg-purple-500", "bg-[#c8322b]"];
+        const MONTHLY_GOAL = 40_000_000;
+        const GOAL_MARGIN  = MONTHLY_GOAL * 0.50;
+        const PALETTE      = ["bg-blue-500", "bg-green-500", "bg-purple-500", "bg-[#c8322b]", "bg-orange-400", "bg-teal-500"];
+
+        // Usa directamente los participantes del servidor (ya incluye Socemro, Emiliano, Agustín)
+        const participants = marginPool.participants;
 
         return (
           <Card className="border shadow-sm">
@@ -828,9 +985,7 @@ export default function ExchangePage() {
                 <div className="text-[11px] text-amber-800 leading-relaxed">
                   <span className="font-semibold">Estimación proyectada — no refleja fondos reales.</span>{" "}
                   Los montos mostrados corresponden a una meta operacional mensual de referencia de{" "}
-                  <span className="font-semibold font-mono">$40,000,000 USD</span>. Al día de hoy, ningún
-                  participante ha realizado dispersiones; los saldos reales se mantienen en{" "}
-                  <span className="font-semibold">$0.00 USD</span>.
+                  <span className="font-semibold font-mono">$40,000,000 USD</span>.
                 </div>
               </div>
 
@@ -855,23 +1010,26 @@ export default function ExchangePage() {
                 </div>
               </div>
 
-              {/* Participants */}
+              {/* Participants — datos en tiempo real del servidor */}
               <div className="px-5 pb-4 space-y-2">
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                  Ratio por participante — proyección $40M mensual
+                  Participantes · datos en tiempo real
                 </p>
-                {PARTICIPANTS_DEF.map((p, i) => {
+                {participants.map((p, i) => {
                   const projectedMonthly = GOAL_MARGIN * (p.pct / 100);
-                  const isMe = (p.name === "Dany León Pinto" && user?.username === "danyleonpinto") ||
-                               (p.name === "JM Open Door" && user?.username === "jmdoorsopen@gmail.com") ||
-                               user?.role === "ADMIN";
+                  const colorClass = PALETTE[i % PALETTE.length];
+                  const isBanxico = p.name === "Banxico Plus LLC";
+                  const isMe = user?.role === "ADMIN" ||
+                    (p.name === "Dany León Pinto" && user?.username === "danyleonpinto") ||
+                    (p.name === "JM Open Door"    && user?.username === "jmdoorsopen@gmail.com") ||
+                    (p.name === "Socemro"          && user?.email   === "socemro2@gmail.com");
                   return (
                     <div key={i} className={`rounded-md border px-4 py-3 space-y-2 ${isMe ? "border-[#c8322b]/40 bg-[#c8322b]/5" : "border-border bg-muted/20"}`}>
 
-                      {/* Name + % + projected */}
+                      {/* Name + % */}
                       <div className="flex items-center justify-between gap-2 flex-wrap">
                         <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${colors[i]}`} />
+                          <div className={`w-2 h-2 rounded-full ${colorClass}`} />
                           <span className="font-semibold text-sm">{p.name}</span>
                           {isMe && user?.role !== "ADMIN" && (
                             <Badge className="bg-[#c8322b]/10 text-[#c8322b] border-[#c8322b]/30 no-default-active-elevate text-[9px]">
@@ -887,9 +1045,9 @@ export default function ExchangePage() {
                         </div>
                       </div>
 
-                      {/* Barra de ratio */}
+                      {/* Barra */}
                       <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
-                        <div className={`h-1.5 rounded-full ${colors[i]}`} style={{ width: `${p.pct}%` }} />
+                        <div className={`h-1.5 rounded-full ${colorClass}`} style={{ width: `${Math.min(p.pct, 100)}%` }} />
                       </div>
 
                       {/* Wallet */}
@@ -900,27 +1058,30 @@ export default function ExchangePage() {
                           <span className="text-[9px] bg-muted rounded px-1 py-0.5 flex-shrink-0 whitespace-nowrap">{p.network} · {p.token}</span>
                         </div>
                       )}
-                      {!p.wallet && p.name !== "Banxico Plus LLC" && (
+                      {!p.wallet && !isBanxico && (
                         <div className="flex items-center gap-1.5 text-[10px] text-amber-600">
                           <AlertTriangle className="w-3 h-3 flex-shrink-0" />
                           <span>Wallet pendiente de registro</span>
                         </div>
                       )}
-                      {p.name === "Banxico Plus LLC" && (
+                      {isBanxico && (
                         <div className="text-[10px] text-muted-foreground flex items-center gap-1">
                           <ShieldCheck className="w-3 h-3" />
                           <span>Red interna · Plataforma Banxico Plus LLC</span>
                         </div>
                       )}
 
-                      {/* Saldo real (siempre $0) */}
-                      {p.name !== "Banxico Plus LLC" && (
+                      {/* Saldos reales */}
+                      {!isBanxico && (
                         <div className="flex items-center justify-between text-[10px] font-mono pt-1 border-t border-border/50">
                           <span className="text-muted-foreground">
-                            Dispersado real: <span className="font-semibold text-foreground">$0.00 USD</span>
+                            Dispersado:{" "}
+                            <span className="font-semibold text-foreground">
+                              ${p.dispersedUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+                            </span>
                           </span>
-                          <span className="text-muted-foreground">
-                            Saldo disponible: <span className="font-semibold text-foreground">$0.00 USD</span>
+                          <span className={`font-semibold ${p.availableUSD > 0 ? "text-green-700" : "text-foreground"}`}>
+                            Disponible: ${p.availableUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
                           </span>
                         </div>
                       )}
@@ -928,10 +1089,8 @@ export default function ExchangePage() {
                   );
                 })}
 
-                {/* Nota de pie */}
                 <p className="text-[10px] text-muted-foreground pt-2 text-center leading-relaxed">
-                  Las proyecciones se calculan sobre una meta de capacidad mensual y no garantizan rendimiento.
-                  Los saldos reales se actualizan conforme se registren transacciones completadas en la plataforma.
+                  Saldos disponibles calculados en tiempo real desde transacciones completadas en plataforma.
                 </p>
               </div>
 
@@ -952,6 +1111,23 @@ export default function ExchangePage() {
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-sm">Dispersión</p>
               <p className="text-xs text-muted-foreground">Conversión de saldo POS Virtual (USD/EUR) a criptoactivo</p>
+              {/* Broker activo para dispersión */}
+              <div className="flex items-center gap-1.5 mt-1">
+                {(() => {
+                  const kucoin = brokerStatuses?.find(b => b.id === "kucoin");
+                  return kucoin?.status === "online" ? (
+                    <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-green-100 text-green-700">
+                      <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                      Via KuCoin · TRC-20
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
+                      <WifiOff className="w-2.5 h-2.5" />
+                      Broker verificando…
+                    </span>
+                  );
+                })()}
+              </div>
             </div>
             {coldWallet ? (
               <Badge className="bg-green-100 text-green-700 border-green-200 no-default-active-elevate text-[10px]">
@@ -1129,6 +1305,65 @@ export default function ExchangePage() {
 
         </CardContent>
       </Card>
+
+      {/* ── Historial reciente Exchange / Dispersión ────────────────────── */}
+      {recentTxs.length > 0 && (
+        <Card className="border shadow-sm">
+          <CardContent className="p-0">
+            <div className="flex items-center gap-3 px-5 py-3 border-b">
+              <div className="w-8 h-8 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
+                <History className="w-4 h-4 text-muted-foreground" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm">Historial reciente</p>
+                <p className="text-[10px] text-muted-foreground">Últimas operaciones de swap y dispersión</p>
+              </div>
+            </div>
+            <div className="divide-y">
+              {recentTxs.map(tx => {
+                const isExchange    = tx.transactionId.startsWith("EXC-");
+                const isDispersion  = tx.transactionId.startsWith("DSP-");
+                const dateStr = new Date(tx.createdAt).toLocaleString("es-MX", {
+                  day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
+                });
+                return (
+                  <div key={tx.transactionId} className="flex items-start gap-3 px-5 py-3">
+                    <div className={`w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                      isExchange ? "bg-blue-50" : isDispersion ? "bg-[#c8322b]/10" : "bg-muted"
+                    }`}>
+                      {isExchange
+                        ? <ArrowRightLeft className="w-3.5 h-3.5 text-[#1a56db]" />
+                        : <Send className="w-3.5 h-3.5 text-[#c8322b]" />
+                      }
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1 flex-wrap">
+                        <p className="text-xs font-semibold truncate">
+                          {isExchange ? "Swap" : "Dispersión"}
+                        </p>
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-sm ${
+                          tx.status === "completed" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
+                        }`}>
+                          {tx.status === "completed" ? "✓" : "…"} {tx.status}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground truncate leading-relaxed mt-0.5">
+                        {tx.description}
+                      </p>
+                      <div className="flex items-center justify-between mt-1">
+                        <span className="text-[10px] font-mono text-muted-foreground">{dateStr}</span>
+                        <span className="text-[10px] font-mono font-semibold">
+                          {parseFloat(tx.amount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 8 })} {tx.currency}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
     </div>
   );
