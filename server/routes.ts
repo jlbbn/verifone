@@ -1907,7 +1907,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Access control: ADMIN always; others need at least one active terminal
       if (actor.role !== "ADMIN") {
         const myTerminals = await storage.getTerminalsByOwner(actor.username);
-        const hasActive = myTerminals.some(t => t.status === "active");
+        const OPERATIVE = new Set(["active", "online", "reconfigured", "idle"]);
+        const hasActive = myTerminals.some(t => OPERATIVE.has((t.status ?? "").toLowerCase()));
         if (!hasActive) {
           res.status(403).json({
             error: "Terminal no activa. Contacta al administrador para habilitar tu terminal antes de operar vinculaciones.",
