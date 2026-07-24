@@ -9,6 +9,8 @@ import { randomBytes } from "crypto";
 import { z } from "zod";
 import { verifyPassword, maskCardNumber, hashPassword } from "./auth-utils";
 import { insertPaymentMethodSchema, insertTransactionSchema, type User, type Transaction, CRYPTO_ASSETS, type CryptoAsset, insertCajaMovementSchema, convertToUSD, CAJA_INGRESO_TX_TYPES } from "@shared/schema";
+import { BROKER_REGISTRY, brokerSummary, checkAmlThreshold } from "./crypto/brokers.js";
+import { fetchPrices, clearPriceCache } from "./crypto/price-aggregator.js";
 
 declare module "express-session" {
   interface SessionData {
@@ -971,58 +973,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ====================================================================
-  // PRECIOS CRYPTO EN TIEMPO REAL (CoinGecko)
+  // PRECIOS CRYPTO EN TIEMPO REAL (Binance → Kraken fallback)
   // ====================================================================
-
-  const COINGECKO_IDS: Record<string, string> = {
-    btc: "bitcoin", eth: "ethereum", xrp: "ripple", ltc: "litecoin",
-    doge: "dogecoin", sol: "solana", ada: "cardano", dot: "polkadot",
-    usdt: "tether",
-  };
-
-  let cryptoPriceCache: { data: Record<string, any>; fetchedAt: number } | null = null;
-  const CRYPTO_CACHE_TTL_MS = 20_000;
 
   app.get("/api/crypto-prices", async (_req, res) => {
     try {
-      if (cryptoPriceCache && Date.now() - cryptoPriceCache.fetchedAt < CRYPTO_CACHE_TTL_MS) {
-        res.json(cryptoPriceCache.data);
-        return;
-      }
-
-      const ids = Object.values(COINGECKO_IDS).join(",");
-      const response = await fetch(
-        `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}`,
-        { headers: { Accept: "application/json" } }
-      );
-
-      if (!response.ok) throw new Error(`CoinGecko respondió ${response.status}`);
-      const rows: any[] = await response.json();
-
-      const byId: Record<string, any> = {};
-      for (const [localId, cgId] of Object.entries(COINGECKO_IDS)) {
-        const row = rows.find(r => r.id === cgId);
-        if (!row) continue;
-        byId[localId] = {
-          price: row.current_price,
-          change24h: row.price_change_percentage_24h,
-          volume24h: row.total_volume,
-          marketCap: row.market_cap,
-          supply: row.circulating_supply,
-          athPrice: row.ath,
-          athDate: row.ath_date,
-        };
-      }
-
-      cryptoPriceCache = { data: byId, fetchedAt: Date.now() };
-      res.json(byId);
+      const result = await fetchPrices();
+      // Attach source metadata in headers for diagnostics
+      res.setHeader("X-Price-Source",    result.source);
+      res.setHeader("X-Price-LatencyMs", String(result.latencyMs));
+      res.setHeader("X-Price-FetchedAt", String(result.fetchedAt));
+      res.json(result.data);
     } catch (error) {
-      if (cryptoPriceCache) {
-        res.json(cryptoPriceCache.data);
-        return;
-      }
-      res.status(502).json({ error: "No se pudieron obtener precios en tiempo real" });
+      res.status(502).json({ error: "No se pudieron obtener precios en tiempo real. Todos los brokers fallaron." });
     }
+  });
+
+  // Admin: force-clear price cache
+  app.post("/api/crypto-prices/refresh", requireSession, (req, res) => {
+    if (req.currentUser!.role !== "ADMIN")
+      return res.status(403).json({ error: "Solo administradores" });
+    clearPriceCache();
+    res.json({ ok: true, message: "Caché de precios limpiado. Próxima consulta obtendrá datos frescos." });
   });
 
   // ====================================================================
@@ -1139,7 +1111,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ====================================================================
-  // BROKER STATUS — ping activo a exchanges disponibles
+  // BROKER REGISTRY — catálogo completo con compliance
+  // ====================================================================
+
+  /** Full broker catalog with compliance parameters */
+  app.get("/api/crypto/brokers", requireSession, (_req, res) => {
+    res.json(BROKER_REGISTRY.map(brokerSummary));
+  });
+
+  /** AML compliance check for a specific amount */
+  app.get("/api/crypto/brokers/:id/aml-check", requireSession, (req, res) => {
+    const { id }  = req.params;
+    const amount  = parseFloat(req.query.amountUSD as string ?? "0");
+    if (isNaN(amount) || amount <= 0)
+      return res.status(400).json({ error: "amountUSD debe ser positivo" });
+    const result = checkAmlThreshold(id, amount);
+    res.json(result);
+  });
+
+  // ====================================================================
+  // BROKER STATUS — ping en tiempo real + compliance overlay
   // ====================================================================
 
   let brokerStatusCache: { data: any[]; fetchedAt: number } | null = null;
@@ -1150,51 +1141,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json(brokerStatusCache.data);
     }
 
-    const BROKERS = [
-      { name: "KuCoin",    id: "kucoin",    url: "https://api.kucoin.com/api/v1/status",            active: true  },
-      { name: "Binance",   id: "binance",   url: "https://api.binance.com/api/v3/ping",             active: false },
-      { name: "Kraken",    id: "kraken",    url: "https://api.kraken.com/0/public/SystemStatus",    active: false },
-      { name: "CoinGecko", id: "coingecko", url: "https://api.coingecko.com/api/v3/ping",           active: true  },
-    ];
-
     const results = await Promise.allSettled(
-      BROKERS.map(async (b) => {
+      BROKER_REGISTRY.map(async (b) => {
         const start = Date.now();
         try {
-          const r = await fetch(b.url, { signal: AbortSignal.timeout(6000) });
+          const r = await fetch(b.statusUrl, { signal: AbortSignal.timeout(6_000) });
           const latency = Date.now() - start;
-          let status: "online" | "offline" | "restricted" = "online";
+          let pingStatus: "online" | "offline" | "restricted" = "online";
           let note = "";
 
           if (b.id === "binance") {
             const body: any = await r.json().catch(() => ({}));
             if (r.status === 451 || (body?.msg ?? "").toLowerCase().includes("restricted")) {
-              status = "restricted";
-              note = "HTTP 451 · Geoblocked (OFAC/FinCEN)";
+              pingStatus = "restricted";
+              note = "HTTP 451 · Geoblocked (OFAC/FinCEN) desde IP del servidor";
             }
-          } else if (b.id === "kucoin") {
-            const body: any = await r.json().catch(() => ({}));
-            status = body?.data?.status === "open" ? "online" : "offline";
-            note = body?.data?.msg ?? "";
           } else if (b.id === "kraken") {
             const body: any = await r.json().catch(() => ({}));
-            status = body?.result?.status === "online" ? "online" : "offline";
+            pingStatus = body?.result?.status === "online" ? "online" : "offline";
             note = body?.result?.timestamp ?? "";
           }
 
-          return { ...b, status, latency, note };
+          return {
+            id:              b.id,
+            name:            b.name,
+            legalName:       b.legalName,
+            type:            b.type,
+            registryStatus:  b.status,
+            pingStatus,
+            active:          b.active,
+            priority:        b.priority,
+            jurisdiction:    b.jurisdiction,
+            latencyMs:       latency,
+            note,
+            inactiveReason:  b.inactiveReason,
+            complianceStatus: b.aml.complianceStatus,
+            fatfCompliant:   b.aml.fatfCompliant,
+            fincenMsb:       b.aml.fincenMsb,
+            micaCompliant:   b.aml.micaCompliant,
+            ofacScreening:   b.aml.ofacScreening,
+            kycTier:         b.aml.kycTier,
+            maxTxUSD:        b.aml.maxTxUSD,
+            travelRuleThresholdUSD: b.aml.travelRuleThresholdUSD,
+            networks:        b.networks.map(n => ({ id: n.id, name: n.name, token: n.token, withdrawEnabled: n.withdrawEnabled })),
+            fees:            b.fees,
+            capabilities:    b.capabilities,
+          };
         } catch {
-          return { ...b, status: "offline" as const, latency: null, note: "No response / timeout" };
+          return {
+            id: b.id, name: b.name, legalName: b.legalName, type: b.type,
+            registryStatus: b.status, pingStatus: "offline" as const,
+            active: b.active, priority: b.priority, jurisdiction: b.jurisdiction,
+            latencyMs: null, note: "Sin respuesta / timeout",
+            inactiveReason: b.inactiveReason,
+            complianceStatus: b.aml.complianceStatus,
+            fatfCompliant: b.aml.fatfCompliant, fincenMsb: b.aml.fincenMsb,
+            micaCompliant: b.aml.micaCompliant, ofacScreening: b.aml.ofacScreening,
+            kycTier: b.aml.kycTier, maxTxUSD: b.aml.maxTxUSD,
+            travelRuleThresholdUSD: b.aml.travelRuleThresholdUSD,
+            networks: b.networks.map(n => ({ id: n.id, name: n.name, token: n.token, withdrawEnabled: n.withdrawEnabled })),
+            fees: b.fees, capabilities: b.capabilities,
+          };
         }
       })
     );
 
-    const data = results.map((r, i) =>
-      r.status === "fulfilled"
-        ? r.value
-        : { ...BROKERS[i], status: "offline", latency: null, note: "Error" }
-    );
-
+    const data = results.map(r => r.status === "fulfilled" ? r.value : null).filter(Boolean);
     brokerStatusCache = { data, fetchedAt: Date.now() };
     res.json(data);
   });
