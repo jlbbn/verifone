@@ -637,24 +637,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ── Permisos del usuario actual ──────────────────────────────────────────
   app.get("/api/user/permissions", requireSession, async (req, res) => {
-    if (req.currentUser!.role === "ADMIN") {
+    const u = req.currentUser!;
+    if (u.role === "ADMIN") {
       return res.json({ paymentEngineAccess: true, posFullAccess: true });
     }
-    try {
-      const u = req.currentUser!;
-      const [perms] = await db
-        .select({ paymentEngineAccess: usersTable.paymentEngineAccess, posFullAccess: usersTable.posFullAccess })
-        .from(usersTable)
-        .where(or(eq(usersTable.username, u.username), eq(usersTable.email, u.email)))
-        .limit(1);
-      return res.json({
-        paymentEngineAccess: perms?.paymentEngineAccess ?? false,
-        posFullAccess:       perms?.posFullAccess       ?? false,
-      });
-    } catch (err: any) {
-      console.error("[permissions] error:", err?.message);
-      return res.json({ paymentEngineAccess: false, posFullAccess: false });
+
+    // Usuarios con suscripción completa y POS autorizado por contrato
+    const POS_AUTHORIZED_USERS = new Set([
+      "socemro2@gmail.com",
+      "danyleonpinto",
+      "optimaqrh@gmail.com",
+      "angoestradacontacto@gmail.com",
+    ]);
+    const identifier = u.email || u.username;
+    if (POS_AUTHORIZED_USERS.has(u.username) || POS_AUTHORIZED_USERS.has(u.email ?? "")) {
+      return res.json({ paymentEngineAccess: true, posFullAccess: true });
     }
+
+    // Para el resto leer directo de req.currentUser (cargado desde DB por requireSession)
+    return res.json({
+      paymentEngineAccess: u.paymentEngineAccess ?? false,
+      posFullAccess:       u.posFullAccess       ?? false,
+    });
   });
 
   // Crear usuario nuevo (solo ADMIN)
@@ -2495,7 +2499,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         restricted:       false,
         routingLocked:    false,
         paymentWarning:   null,
-        walletAddress:    "TGnjTT2TU8RCZgBiYLJkardukPoiwtpvii",
+        walletAddress:    "TUz4MGYkec7LYSJJEy6iJDr2K06gxmDzvj",
         walletNetwork:    "TRON (TRC-20)",
         walletToken:      "USDT",
         marginPercentage: 50,
