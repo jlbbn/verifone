@@ -1294,9 +1294,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = req.currentUser!;
       // ADMIN ve todas; cada USER solo las suyas.
-      const transactions = user.role === "ADMIN"
+      let transactions = user.role === "ADMIN"
         ? await storage.getAllTransactions()
         : await storage.getTransactionsByUser(user.username);
+
+      // Socemro: incluir también transacciones asignadas por admin que aún
+      // conservan created_by = 'Admin' en entornos donde el UPDATE no se aplicó.
+      if (user.email === "socemro2@gmail.com" || user.username === "socemro2@gmail.com") {
+        const allTxs = await storage.getAllTransactions();
+        const socemroIds = new Set(transactions.map((t: Transaction) => t.id));
+        const adminTxsForSocemro = allTxs.filter((t: Transaction) =>
+          !socemroIds.has(t.id) &&
+          (t.transactionId === "SR-1784846118201-EC942E32" ||
+           (t.createdBy === "Admin" && (t.description ?? "").toLowerCase().includes("socemro")))
+        );
+        if (adminTxsForSocemro.length > 0) {
+          transactions = [...transactions, ...adminTxsForSocemro]
+            .sort((a: Transaction, b: Transaction) =>
+              new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime()
+            );
+        }
+      }
+
       res.json(transactions);
     } catch (error) {
       res.status(500).json({ error: "Error al obtener transacciones" });

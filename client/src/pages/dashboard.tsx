@@ -154,7 +154,10 @@ export default function Dashboard() {
           <div className="text-right">
             <p className="text-xs text-muted-foreground">Saldo Disponible</p>
             <p className="text-2xl font-bold text-green-600" data-testid="balance">
-              {fmtMoney(settings?.saldoSistemaUSD ?? 1250000)} <span className="text-sm font-semibold text-muted-foreground">USD</span>
+              {isAdmin
+                ? fmtMoney(settings?.saldoSistemaUSD ?? 1250000)
+                : fmtMoney((user as any)?.cajaSaldoUSD ?? 1250000)
+              } <span className="text-sm font-semibold text-muted-foreground">USD</span>
             </p>
           </div>
           <Button size="sm" className="bg-[#c8322b] hover:bg-[#a62822]" onClick={() => setLocation("/transacciones")} data-testid="button-nueva-tx">
