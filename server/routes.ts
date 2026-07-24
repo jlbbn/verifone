@@ -2597,8 +2597,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ─── Margen Operacional — pool global ───────────────────────────────────────
   const MARGIN_PARTICIPANTS = [
-    { name: "JM Open Door",    username: "jmdoorsopen@gmail.com", pct: 44, wallet: null,                                         network: null,               token: null   },
-    { name: "Dany León Pinto", username: "danyleonpinto",          pct: 3,  wallet: "TApbzNzmVxNE1SZLkMDcARuDEjYFEUpex2",      network: "TRON (TRC-20)",    token: "USDT" },
     { name: "Banxico Plus LLC",username: null,                     pct: 50, wallet: null,                                         network: "Platform",         token: null   },
     { name: "Socemro",            username: "socemro2@gmail.com",     pct: 50,   wallet: "TGnjTT2TU8RCZgBiYLJkardukPoiwtpvii", network: "TRON (TRC-20)", token: "USDT" },
     { name: "Emiliano Maldonado", username: null,                     pct: 11.5, wallet: "TUZ4MGYkec7LYSJJEy6iJDr2Ko6gxmDzvi",  network: "TRON (TRC-20)", token: "USDT" },
