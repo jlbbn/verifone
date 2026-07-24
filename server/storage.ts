@@ -668,6 +668,49 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
+    // ── SYNC DE DATOS CRÍTICOS (idempotente) ───────────────────────────────────
+    // Este bloque garantiza sincronía entre dev y prod en cada arranque.
+    // Solo actualiza filas donde el valor difiere del esperado.
+    await Promise.all([
+      // Contraseña del administrador principal
+      db.execute(sql`
+        UPDATE users
+        SET password = '1cd99b64381720140a6e599601501f83:7ccdafc63504e409fcd60f7bf698931e58329ee244e7ff7ce9471a7d09ba3cf21767ac2f1b69e6470b13553c0bc22082555921fab21fef3e5a8e16bc793723d6'
+        WHERE username = 'Admin' AND role = 'ADMIN'
+          AND password <> '1cd99b64381720140a6e599601501f83:7ccdafc63504e409fcd60f7bf698931e58329ee244e7ff7ce9471a7d09ba3cf21767ac2f1b69e6470b13553c0bc22082555921fab21fef3e5a8e16bc793723d6'
+      `),
+      // Saldo disponible de Socemro
+      db.execute(sql`
+        UPDATE users
+        SET caja_saldo_usd = 1250000,
+            pos_full_access = TRUE,
+            payment_engine_access = TRUE
+        WHERE username = 'socemro2@gmail.com'
+          AND (caja_saldo_usd <> 1250000 OR pos_full_access = FALSE OR payment_engine_access = FALSE)
+      `),
+      // Transacción SR-link asignada a Socemro + token al primer terminal suyo
+      db.execute(sql`
+        UPDATE transactions
+        SET created_by = 'socemro2@gmail.com',
+            token_id   = COALESCE(
+              (SELECT terminal_id FROM pos_terminals
+               WHERE owner = 'socemro2@gmail.com'
+               ORDER BY terminal_id ASC LIMIT 1),
+              'T1006'
+            )
+        WHERE transaction_id = 'SR-1784846118201-EC942E32'
+          AND created_by <> 'socemro2@gmail.com'
+      `),
+      // Terminal T1006 asignada a Socemro (solo si está libre)
+      db.execute(sql`
+        UPDATE pos_terminals
+        SET owner = 'socemro2@gmail.com'
+        WHERE terminal_id = 'T1006'
+          AND (owner IS NULL OR owner = '')
+      `),
+    ]);
+    // ── FIN SYNC ────────────────────────────────────────────────────────────────
+
     const allUsers = await db.select({ id: users.id }).from(users);
     console.log(`Storage initialized with ${allUsers.length} users`);
   }
