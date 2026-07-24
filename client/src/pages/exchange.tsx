@@ -288,9 +288,20 @@ interface MarginPool {
   participants: MarginParticipant[];
 }
 
+interface BrokerNetwork {
+  id: string; name: string; token: string; withdrawEnabled: boolean;
+}
 interface BrokerStatus {
-  name: string; id: string; status: "online" | "offline" | "restricted";
-  latency: number | null; note: string; active: boolean;
+  id: string; name: string; legalName: string; type: string;
+  registryStatus: string; pingStatus: "online" | "offline" | "restricted";
+  active: boolean; priority: number; jurisdiction: string;
+  latencyMs: number | null; note: string; inactiveReason?: string;
+  complianceStatus: string;
+  fatfCompliant: boolean; fincenMsb: boolean; micaCompliant: boolean; ofacScreening: boolean;
+  kycTier: string; maxTxUSD: number; travelRuleThresholdUSD: number;
+  networks: BrokerNetwork[];
+  fees: { maker: number; taker: number; otcFee?: number };
+  capabilities: { spotTrading: boolean; priceData: boolean; withdrawals: boolean; travelRuleSupport: boolean };
 }
 
 interface RecentTx {
@@ -611,56 +622,127 @@ export default function ExchangePage() {
   return (
     <div className="p-4 md:p-6 pb-20 max-w-2xl mx-auto space-y-5">
 
-      {/* ── Panel de estado de brokers ───────────────────────────────── */}
+      {/* ── Panel de brokers con compliance ─────────────────────────── */}
       <Card className="border shadow-sm">
         <CardContent className="p-0">
           <div className="flex items-center gap-3 px-5 py-3 border-b">
-            <div className="w-8 h-8 rounded-md bg-green-50 flex items-center justify-center flex-shrink-0">
-              <Wifi className="w-4 h-4 text-green-600" />
+            <div className="w-8 h-8 rounded-md bg-blue-50 flex items-center justify-center flex-shrink-0">
+              <ShieldCheck className="w-4 h-4 text-[#1a56db]" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-sm">Estado de Brokers</p>
-              <p className="text-[10px] text-muted-foreground">Conexión en tiempo real · Actualización cada 30s</p>
+              <p className="font-semibold text-sm">Brokers · Compliance & Estado</p>
+              <p className="text-[10px] text-muted-foreground">Binance · Kraken — ping en tiempo real · caché 30s</p>
             </div>
             {brokersLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
           </div>
-          <div className="px-5 py-3 flex flex-col gap-2">
+
+          <div className="divide-y">
             {(brokerStatuses ?? []).map(b => {
-              const isOnline     = b.status === "online";
-              const isRestricted = b.status === "restricted";
+              const isOnline     = b.pingStatus === "online";
+              const isRestricted = b.pingStatus === "restricted";
+              const compColor =
+                b.complianceStatus === "compliant" ? "text-green-700 bg-green-50" :
+                b.complianceStatus === "partial"    ? "text-amber-700 bg-amber-50" :
+                                                      "text-red-600 bg-red-50";
               return (
-                <div key={b.id} className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2.5">
-                    {isOnline
-                      ? <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                      : isRestricted
-                        ? <div className="w-2 h-2 rounded-full bg-amber-400" />
-                        : <div className="w-2 h-2 rounded-full bg-red-400" />
-                    }
-                    <span className="text-sm font-semibold">{b.name}</span>
-                    {b.active && (
-                      <Badge className="text-[9px] bg-green-100 text-green-700 border-green-200 no-default-active-elevate py-0 px-1.5">
-                        <Zap className="w-2.5 h-2.5 mr-0.5" />ACTIVO
-                      </Badge>
+                <div key={b.id} className="px-5 py-4 space-y-3">
+                  {/* Row 1: name + status badges */}
+                  <div className="flex items-start justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+                        isOnline ? "bg-green-500 animate-pulse" : isRestricted ? "bg-amber-400" : "bg-red-400"
+                      }`} />
+                      <span className="font-bold text-sm">{b.name}</span>
+                      <span className="text-[10px] text-muted-foreground font-mono">{b.legalName}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {b.latencyMs !== null && isOnline && (
+                        <span className="text-[10px] font-mono text-muted-foreground">{b.latencyMs}ms</span>
+                      )}
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-sm ${
+                        isOnline ? "bg-green-100 text-green-700" : isRestricted ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-600"
+                      }`}>
+                        {isOnline ? "ONLINE" : isRestricted ? "RESTRINGIDO" : "OFFLINE"}
+                      </span>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-sm ${compColor}`}>
+                        {b.complianceStatus.toUpperCase()}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Row 2: jurisdiction + priority */}
+                  <div className="flex items-center gap-3 flex-wrap text-[10px] text-muted-foreground">
+                    <span className="font-mono">{b.jurisdiction}</span>
+                    <span>·</span>
+                    <span>Prioridad {b.priority}</span>
+                    {b.fees && (
+                      <>
+                        <span>·</span>
+                        <span>Maker {b.fees.maker}% / Taker {b.fees.taker}%</span>
+                      </>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 text-right">
-                    {isOnline && b.latency !== null && (
-                      <span className="text-[10px] font-mono text-muted-foreground">{b.latency}ms</span>
-                    )}
-                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-sm ${
-                      isOnline     ? "bg-green-100 text-green-700" :
-                      isRestricted ? "bg-amber-100 text-amber-700" :
-                                     "bg-red-100 text-red-600"
-                    }`}>
-                      {isOnline ? "ONLINE" : isRestricted ? "RESTRINGIDO" : "OFFLINE"}
+
+                  {/* Row 3: compliance badges */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { label: "FATF",   ok: b.fatfCompliant },
+                      { label: "FinCEN", ok: b.fincenMsb    },
+                      { label: "MiCA",   ok: b.micaCompliant },
+                      { label: "OFAC",   ok: b.ofacScreening },
+                      { label: "Travel Rule", ok: b.capabilities?.travelRuleSupport },
+                    ].map(({ label, ok }) => (
+                      <span key={label} className={`inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-sm ${
+                        ok ? "bg-green-100 text-green-700" : "bg-muted text-muted-foreground"
+                      }`}>
+                        {ok ? "✓" : "—"} {label}
+                      </span>
+                    ))}
+                    <span className="inline-flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.5 rounded-sm bg-muted text-muted-foreground">
+                      KYC {b.kycTier}
                     </span>
                   </div>
+
+                  {/* Row 4: AML thresholds */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { label: "Máx. Tx",     val: b.maxTxUSD,               fmt: (v:number)=> v > 0 ? `$${(v/1e6).toFixed(1)}M` : "—" },
+                      { label: "Travel Rule", val: b.travelRuleThresholdUSD,  fmt: (v:number)=> v > 0 ? `≥$${v.toLocaleString()}` : "—" },
+                      { label: "CTR/SAR",     val: 10000,                     fmt: ()=> "≥$10,000" },
+                    ].map(({ label, val, fmt }) => (
+                      <div key={label} className="bg-muted/40 rounded px-2 py-1.5">
+                        <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">{label}</p>
+                        <p className="text-[11px] font-mono font-bold mt-0.5">{fmt(val)}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Row 5: networks */}
+                  {b.networks && b.networks.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {b.networks.map(n => (
+                        <span key={n.id} className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-semibold ${
+                          n.withdrawEnabled ? "bg-blue-50 text-[#1a56db]" : "bg-muted text-muted-foreground"
+                        }`}>
+                          {n.name} {n.withdrawEnabled ? "↑" : "·"}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Row 6: inactiveReason / note */}
+                  {(b.inactiveReason || b.note) && (
+                    <div className="flex items-start gap-1.5 text-[10px] text-muted-foreground bg-muted/30 rounded px-2.5 py-2 leading-relaxed">
+                      <AlertTriangle className="w-3 h-3 flex-shrink-0 mt-0.5 text-amber-500" />
+                      <span>{b.inactiveReason || b.note}</span>
+                    </div>
+                  )}
                 </div>
               );
             })}
+
             {!brokerStatuses && !brokersLoading && (
-              <p className="text-xs text-muted-foreground text-center py-1">Verificando conexiones…</p>
+              <p className="text-xs text-muted-foreground text-center py-4">Verificando conexiones…</p>
             )}
           </div>
         </CardContent>
@@ -1114,11 +1196,11 @@ export default function ExchangePage() {
               {/* Broker activo para dispersión */}
               <div className="flex items-center gap-1.5 mt-1">
                 {(() => {
-                  const kucoin = brokerStatuses?.find(b => b.id === "kucoin");
-                  return kucoin?.status === "online" ? (
+                  const kraken = brokerStatuses?.find(b => b.id === "kraken");
+                  return kraken?.pingStatus === "online" ? (
                     <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-green-100 text-green-700">
                       <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                      Via KuCoin · TRC-20
+                      Via Kraken · TRC-20
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
