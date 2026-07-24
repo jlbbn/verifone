@@ -309,9 +309,73 @@ interface RecentTx {
   status: string; description: string; createdAt: string; createdBy: string;
 }
 
+const EXCHANGE_MAINTENANCE = true;
+
 export default function ExchangePage() {
   const { toast } = useToast();
   const { user } = useAuth();
+
+  if (EXCHANGE_MAINTENANCE) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center p-6">
+        <div className="max-w-md w-full text-center space-y-6">
+          {/* Icono */}
+          <div className="flex justify-center">
+            <div className="relative">
+              <div className="w-24 h-24 rounded-full bg-yellow-500/10 border border-yellow-500/30 flex items-center justify-center">
+                <ArrowRightLeft className="w-10 h-10 text-yellow-500" />
+              </div>
+              <div className="absolute -top-1 -right-1 w-7 h-7 rounded-full bg-yellow-500 flex items-center justify-center">
+                <Lock className="w-3.5 h-3.5 text-black" />
+              </div>
+            </div>
+          </div>
+
+          {/* Título */}
+          <div>
+            <h1 className="text-2xl font-bold text-white tracking-tight">
+              Módulo en Mantenimiento
+            </h1>
+            <p className="mt-2 text-zinc-400 text-sm leading-relaxed">
+              El módulo de Exchange & Dispersión está siendo calibrado para
+              ofrecerte una mejor experiencia. Estará disponible nuevamente
+              en breve.
+            </p>
+          </div>
+
+          {/* Estado */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-left space-y-3">
+            <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">Estado del sistema</p>
+            <div className="space-y-2">
+              {[
+                { label: "Precios de mercado",    ok: true  },
+                { label: "Brokers conectados",    ok: true  },
+                { label: "Motor de intercambio",  ok: false },
+                { label: "Dispersión de activos", ok: false },
+              ].map(({ label, ok }) => (
+                <div key={label} className="flex items-center justify-between">
+                  <span className="text-sm text-zinc-300">{label}</span>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${ok ? "bg-green-500/10 text-green-400" : "bg-yellow-500/10 text-yellow-400"}`}>
+                    {ok ? "Operativo" : "Calibrando"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Nota admin */}
+          {user?.role === "ADMIN" && (
+            <p className="text-xs text-zinc-600 border border-zinc-800 rounded-lg px-3 py-2">
+              <span className="text-yellow-500 font-medium">Admin:</span> cambia{" "}
+              <code className="text-zinc-400">EXCHANGE_MAINTENANCE</code> a{" "}
+              <code className="text-zinc-400">false</code> en{" "}
+              <code className="text-zinc-400">exchange.tsx</code> para reactivar.
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // ── Wallet / dispersión ─────────────────────────────────────────────────
   const { data: subData } = useQuery<SubData>({
