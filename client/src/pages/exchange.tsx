@@ -483,10 +483,10 @@ export default function ExchangePage() {
     refetchInterval: 20000,
   });
 
-  // Order book Kraken en tiempo real (activo seleccionado)
+  // Order book OKX en tiempo real (activo seleccionado)
   const { data: orderBook, dataUpdatedAt: obUpdatedAt } = useQuery<KrakenOrderBook>({
-    queryKey: ["/api/kraken/orderbook", fromId],
-    queryFn: () => fetch(`/api/kraken/orderbook/${fromId}?count=8`).then(r => r.json()),
+    queryKey: ["/api/okx/orderbook", fromId],
+    queryFn: () => fetch(`/api/okx/orderbook/${fromId}?count=8`).then(r => r.json()),
     enabled: !!user && fromId !== "usdt",
     refetchInterval: 10000,
     staleTime: 8000,
@@ -714,7 +714,7 @@ export default function ExchangePage() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-sm">Brokers · Compliance & Estado</p>
-              <p className="text-[10px] text-muted-foreground">Kraken (principal) · Binance (respaldo) — ping en tiempo real · caché 30s</p>
+              <p className="text-[10px] text-muted-foreground">OKX (principal) · Kraken (respaldo) — ping en tiempo real · caché 30s</p>
             </div>
             {brokersLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
           </div>
@@ -877,7 +877,7 @@ export default function ExchangePage() {
                 <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
                 <span className="text-xs font-semibold">Kraken Order Book</span>
                 <span className="text-[10px] font-mono text-muted-foreground">
-                  {({ btc:"XBTUSD", eth:"ETHUSD", xrp:"XRPUSD", ltc:"LTCUSD", doge:"DOGEUSD", sol:"SOLUSD", ada:"ADAUSD", dot:"DOTUSD" } as Record<string,string>)[fromId] ?? (fromId.toUpperCase()+"USD")} · Live
+                  {({ btc:"BTC-USDT", eth:"ETH-USDT", xrp:"XRP-USDT", ltc:"LTC-USDT", doge:"DOGE-USDT", sol:"SOL-USDT", ada:"ADA-USDT", dot:"DOT-USDT" } as Record<string,string>)[fromId] ?? (fromId.toUpperCase()+"-USDT")} · Live
                 </span>
               </div>
               <div className="flex items-center gap-2">
