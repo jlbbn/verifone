@@ -319,7 +319,7 @@ interface RecentTx {
   status: string; description: string; createdAt: string; createdBy: string;
 }
 
-const EXCHANGE_MAINTENANCE = false;
+const EXCHANGE_MAINTENANCE = true;
 
 export default function ExchangePage() {
   const { toast } = useToast();
