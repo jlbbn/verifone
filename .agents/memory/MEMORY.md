@@ -8,3 +8,5 @@
 - [Per-user multi-asset crypto balances architecture](crypto-balances-arch.md) — normalized `(userId, asset)` table, atomic swap/dispersion via `db.transaction`, admin flat-overwrite endpoints, no ledger.
 - [Caja multi-currency ingestion](caja-multicurrency-ingestion.md) — decimal columns return strings (cast to Number); protocol field prefix ("201.3" vs "P201.3") is inconsistent across creation paths.
 - [Mobile dialog/modal viewport handling](mobile-dialog-viewport.md) — fix overflow/width once in base Dialog component instead of per-dialog; same pattern for custom fixed-width modals.
+- [Kraken broker integration architecture](kraken-integration-arch.md) — Kraken is primary broker (priority 1, active:true); KRAKEN_URL env var; public API only until KRAKEN_API_KEY+SECRET added; SR-link guard uses lowercase status set not exact match.
+- [Dev/prod DB sync strategy](dev-prod-db-sync.md) — all persistent data changes go into the idempotent sync block inside storage.ts initialize(); prod executeSql is read-only from CodeExecution; only redeploy triggers the sync block in production.

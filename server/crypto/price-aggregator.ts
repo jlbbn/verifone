@@ -1,12 +1,13 @@
 /**
- * Banxico Plus LLC — Crypto Price Aggregator
+ * Banxico Plus LLC — Crypto Price Aggregator  v2
  *
- * Sources (priority order):
- *   1. Binance public ticker  — highest liquidity / most accurate
- *   2. Kraken public ticker   — fully accessible from server, no geo-block
+ * Primary  : Kraken (via kraken-client)  — sin restricciones geográficas
+ * Fallback  : Binance public ticker      — intento secundario (puede fallar por geo-block)
  *
- * Each response includes source attribution, latency, and timestamp.
+ * Cache TTL : 20 s  (configurable)
  */
+
+import * as Kraken from "./kraken-client.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -18,47 +19,22 @@ export interface PriceRecord {
   supply:    number;
   athPrice:  number;
   athDate:   string;
+  ask?:      number;
+  bid?:      number;
+  spread?:   number;
 }
 
 export interface PriceResult {
   data:       Record<string, PriceRecord>;
-  source:     "binance" | "kraken" | "cache";
+  source:     "kraken" | "binance" | "cache";
   fetchedAt:  number;
   latencyMs:  number;
   apiKeyUsed: boolean;
 }
 
-// ─── Asset maps ───────────────────────────────────────────────────────────────
-
-/** Binance spot pairs (quote = USDT) */
-const BINANCE_PAIRS: Record<string, string> = {
-  btc:  "BTCUSDT",
-  eth:  "ETHUSDT",
-  xrp:  "XRPUSDT",
-  ltc:  "LTCUSDT",
-  doge: "DOGEUSDT",
-  sol:  "SOLUSDT",
-  ada:  "ADAUSDT",
-  dot:  "DOTUSDT",
-  // USDT is the quote — stable at $1
-};
-
-/** Kraken pairs (XBT = BTC in Kraken notation) */
-const KRAKEN_PAIRS: Record<string, string> = {
-  btc:  "XBTUSD",
-  eth:  "ETHUSD",
-  xrp:  "XRPUSD",
-  ltc:  "LTCUSD",
-  doge: "DOGEUSD",
-  sol:  "SOLUSD",
-  ada:  "ADAUSD",
-  dot:  "DOTUSD",
-  // USDT stable — hardcoded 1:1
-};
-
 // ─── In-memory cache ──────────────────────────────────────────────────────────
 
-let priceCache: PriceResult | null = null;
+let   priceCache:   PriceResult | null = null;
 const CACHE_TTL_MS = 20_000;
 
 export function getCachedPrices(): PriceResult | null {
@@ -66,9 +42,54 @@ export function getCachedPrices(): PriceResult | null {
   return null;
 }
 
-export function clearPriceCache() { priceCache = null; }
+export function clearPriceCache(): void { priceCache = null; }
 
-// ─── Source 1: Binance ────────────────────────────────────────────────────────
+// ─── Source 1: Kraken (primary) ───────────────────────────────────────────────
+
+async function fetchFromKraken(): Promise<PriceResult> {
+  const start   = Date.now();
+  const tickers = await Kraken.fetchAllTickers();
+
+  const data: Record<string, PriceRecord> = {};
+  for (const [localId, t] of Object.entries(tickers)) {
+    const spread = t.ask > 0 && t.bid > 0 ? ((t.ask - t.bid) / t.ask) * 100 : 0;
+    data[localId] = {
+      price:     t.price,
+      change24h: t.change24h,
+      volume24h: t.volume24h,
+      marketCap: 0,
+      supply:    0,
+      athPrice:  t.high24h,
+      athDate:   "",
+      ask:       t.ask,
+      bid:       t.bid,
+      spread:    parseFloat(spread.toFixed(4)),
+    };
+  }
+
+  // USDT stable
+  data["usdt"] = {
+    price: 1.0, change24h: 0, volume24h: 0,
+    marketCap: 0, supply: 0, athPrice: 1, athDate: "",
+    ask: 1, bid: 1, spread: 0,
+  };
+
+  return {
+    data,
+    source:     "kraken",
+    fetchedAt:  Date.now(),
+    latencyMs:  Date.now() - start,
+    apiKeyUsed: false,
+  };
+}
+
+// ─── Source 2: Binance (fallback) ─────────────────────────────────────────────
+
+const BINANCE_PAIRS: Record<string, string> = {
+  btc:  "BTCUSDT", eth:  "ETHUSDT", xrp:  "XRPUSDT",
+  ltc:  "LTCUSDT", doge: "DOGEUSDT", sol:  "SOLUSDT",
+  ada:  "ADAUSDT", dot:  "DOTUSDT",
+};
 
 async function fetchFromBinance(): Promise<PriceResult> {
   const start   = Date.now();
@@ -91,105 +112,55 @@ async function fetchFromBinance(): Promise<PriceResult> {
     const row = rows.find((r: any) => r.symbol === pair);
     if (!row) continue;
     data[localId] = {
-      price:     parseFloat(row.lastPrice    ?? "0"),
+      price:     parseFloat(row.lastPrice          ?? "0"),
       change24h: parseFloat(row.priceChangePercent ?? "0"),
-      volume24h: parseFloat(row.quoteVolume  ?? "0"),
-      marketCap: 0,
-      supply:    0,
-      athPrice:  parseFloat(row.highPrice    ?? "0"),
+      volume24h: parseFloat(row.quoteVolume        ?? "0"),
+      marketCap: 0, supply: 0,
+      athPrice:  parseFloat(row.highPrice          ?? "0"),
       athDate:   "",
     };
   }
 
-  // USDT stable
-  data["usdt"] = { price: 1.0, change24h: 0, volume24h: parseFloat(rows.find((r:any)=>r.symbol==="USDTUSD")?.quoteVolume ?? "0"), marketCap: 0, supply: 0, athPrice: 1, athDate: "" };
+  data["usdt"] = {
+    price: 1.0, change24h: 0, volume24h: 0,
+    marketCap: 0, supply: 0, athPrice: 1, athDate: "",
+  };
 
-  return { data, source: "binance", fetchedAt: Date.now(), latencyMs: Date.now() - start, apiKeyUsed: false };
-}
-
-// ─── Source 2: Kraken ─────────────────────────────────────────────────────────
-
-async function fetchFromKraken(): Promise<PriceResult> {
-  const start = Date.now();
-  const pair  = Object.values(KRAKEN_PAIRS).join(",");
-  const url   = `https://api.kraken.com/0/public/Ticker?pair=${pair}`;
-
-  const res = await fetch(url, {
-    headers: { Accept: "application/json" },
-    signal: AbortSignal.timeout(8_000),
-  });
-
-  if (!res.ok) throw new Error(`Kraken ${res.status}`);
-
-  const body: any = await res.json();
-  if (body.error?.length) throw new Error(`Kraken API: ${body.error.join(", ")}`);
-
-  const result = body.result ?? {};
-  const data:   Record<string, PriceRecord> = {};
-
-  // Kraken pair names can differ (e.g. XXBTZUSD vs XBTUSD) — match by value
-  const krakenLookup: Record<string, string> = {};
-  for (const key of Object.keys(result)) {
-    for (const [localId, krakenPair] of Object.entries(KRAKEN_PAIRS)) {
-      // Kraken may prefix with X/Z — normalize
-      if (key.replace(/^X|Z/g, "").toUpperCase().includes(krakenPair.replace("USD","").toUpperCase())) {
-        krakenLookup[localId] = key;
-        break;
-      }
-      if (key === krakenPair || key === "X" + krakenPair || key === krakenPair + "T") {
-        krakenLookup[localId] = key;
-        break;
-      }
-    }
-  }
-
-  for (const [localId, krakenKey] of Object.entries(krakenLookup)) {
-    const t = result[krakenKey];
-    if (!t) continue;
-    // Kraken ticker fields: c=last, P=change%24h, v=volume[1]=24h, h=high, l=low
-    data[localId] = {
-      price:     parseFloat(t.c?.[0] ?? "0"),
-      change24h: parseFloat(t.P?.[1] ?? "0"),
-      volume24h: parseFloat(t.v?.[1] ?? "0"),
-      marketCap: 0,
-      supply:    0,
-      athPrice:  parseFloat(t.h?.[1] ?? "0"),
-      athDate:   "",
-    };
-  }
-
-  // USDT stable
-  data["usdt"] = { price: 1.0, change24h: 0, volume24h: 0, marketCap: 0, supply: 0, athPrice: 1, athDate: "" };
-
-  return { data, source: "kraken", fetchedAt: Date.now(), latencyMs: Date.now() - start, apiKeyUsed: false };
+  return {
+    data,
+    source:     "binance",
+    fetchedAt:  Date.now(),
+    latencyMs:  Date.now() - start,
+    apiKeyUsed: false,
+  };
 }
 
 // ─── Public aggregator ────────────────────────────────────────────────────────
 
 /**
- * Fetch prices: tries Binance first, falls back to Kraken.
- * Updates the in-memory cache.
+ * Returns cached data if fresh; otherwise fetches from Kraken (primary)
+ * and falls back to Binance if Kraken is unavailable.
  */
 export async function fetchPrices(): Promise<PriceResult> {
   const cached = getCachedPrices();
   if (cached) return { ...cached, source: "cache" };
 
-  // 1️⃣  Binance
-  try {
-    const result = await fetchFromBinance();
-    priceCache = result;
-    return result;
-  } catch (e) {
-    console.warn("[price-aggregator] Binance failed:", (e as Error).message, "→ fallback Kraken");
-  }
-
-  // 2️⃣  Kraken
+  // 1️⃣  Kraken (primary)
   try {
     const result = await fetchFromKraken();
-    priceCache = result;
+    priceCache   = result;
     return result;
   } catch (e) {
-    console.error("[price-aggregator] Kraken failed:", (e as Error).message);
-    throw new Error("Todos los price sources fallaron");
+    console.warn("[price-aggregator] Kraken failed:", (e as Error).message, "→ fallback Binance");
+  }
+
+  // 2️⃣  Binance (fallback)
+  try {
+    const result = await fetchFromBinance();
+    priceCache   = result;
+    return result;
+  } catch (e) {
+    console.error("[price-aggregator] Binance fallback failed:", (e as Error).message);
+    throw new Error("Todos los price sources fallaron (Kraken + Binance)");
   }
 }
