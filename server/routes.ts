@@ -11,6 +11,7 @@ import { verifyPassword, maskCardNumber, hashPassword } from "./auth-utils";
 import { insertPaymentMethodSchema, insertTransactionSchema, type User, type Transaction, CRYPTO_ASSETS, type CryptoAsset, insertCajaMovementSchema, convertToUSD, CAJA_INGRESO_TX_TYPES } from "@shared/schema";
 import { BROKER_REGISTRY, brokerSummary, checkAmlThreshold } from "./crypto/brokers.js";
 import { fetchPrices, clearPriceCache } from "./crypto/price-aggregator.js";
+import * as KrakenClient from "./crypto/kraken-client.js";
 
 declare module "express-session" {
   interface SessionData {
@@ -977,7 +978,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ====================================================================
-  // PRECIOS CRYPTO EN TIEMPO REAL (Binance → Kraken fallback)
+  // ====================================================================
+  // KRAKEN DIRECT ENDPOINTS (public API — no auth required)
+  // ====================================================================
+
+  /** System status */
+  app.get("/api/kraken/system", async (_req, res) => {
+    try {
+      const info = await KrakenClient.systemStatus();
+      res.json(info);
+    } catch (e: any) {
+      res.status(502).json({ error: e.message });
+    }
+  });
+
+  /** Order book for a given local asset id (btc, eth, xrp…) */
+  app.get("/api/kraken/orderbook/:asset", requireSession, async (req, res) => {
+    try {
+      const { asset } = req.params;
+      const count = Math.min(parseInt(req.query.count as string ?? "10"), 25);
+      const pair  = KrakenClient.KRAKEN_PAIR[asset.toLowerCase()];
+      if (!pair) return res.status(400).json({ error: `Activo no soportado: ${asset}` });
+      const book = await KrakenClient.orderBook(pair, count);
+      res.json({ asset, pair, ...book });
+    } catch (e: any) {
+      res.status(502).json({ error: e.message });
+    }
+  });
+
+  /** OHLC candles — interval in minutes (1,5,15,30,60,240,1440) */
+  app.get("/api/kraken/ohlc/:asset", requireSession, async (req, res) => {
+    try {
+      const { asset }   = req.params;
+      const interval    = parseInt(req.query.interval as string ?? "60");
+      const since       = req.query.since ? parseInt(req.query.since as string) : undefined;
+      const pair        = KrakenClient.KRAKEN_PAIR[asset.toLowerCase()];
+      if (!pair) return res.status(400).json({ error: `Activo no soportado: ${asset}` });
+      const { candles, last } = await KrakenClient.ohlc(pair, interval, since);
+      // Return last 100 candles max
+      res.json({ asset, pair, interval, last, candles: candles.slice(-100) });
+    } catch (e: any) {
+      res.status(502).json({ error: e.message });
+    }
+  });
+
+  /** Recent trades for a given asset */
+  app.get("/api/kraken/trades/:asset", requireSession, async (req, res) => {
+    try {
+      const { asset } = req.params;
+      const pair      = KrakenClient.KRAKEN_PAIR[asset.toLowerCase()];
+      if (!pair) return res.status(400).json({ error: `Activo no soportado: ${asset}` });
+      const trades = await KrakenClient.recentTrades(pair, 20);
+      res.json({ asset, pair, trades });
+    } catch (e: any) {
+      res.status(502).json({ error: e.message });
+    }
+  });
+
+  /** Available trading pairs info */
+  app.get("/api/kraken/pairs", async (_req, res) => {
+    try {
+      const pairsStr = Object.values(KrakenClient.KRAKEN_PAIR).join(",");
+      const pairs    = await KrakenClient.assetPairs(pairsStr);
+      res.json(pairs);
+    } catch (e: any) {
+      res.status(502).json({ error: e.message });
+    }
+  });
+
+  /** Private API capability status — tells the UI which features are available */
+  app.get("/api/kraken/capabilities", requireSession, (_req, res) => {
+    res.json({
+      privateApi:   KrakenClient.hasPrivateCredentials(),
+      publicApi:    true,
+      baseUrl:      (process.env.KRAKEN_URL ?? "https://api.kraken.com").replace(/\/+$/, ""),
+      supportedPairs: KrakenClient.KRAKEN_PAIR,
+    });
+  });
+
+  // ====================================================================
+  // PRECIOS CRYPTO EN TIEMPO REAL (Kraken primario → Binance fallback)
   // ====================================================================
 
   app.get("/api/crypto-prices", async (_req, res) => {

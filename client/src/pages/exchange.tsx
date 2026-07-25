@@ -41,13 +41,23 @@ interface Crypto {
 }
 
 interface LiveCryptoData {
-  price: number;
+  price:     number;
   change24h: number;
   volume24h: number;
   marketCap: number;
-  supply: number;
-  athPrice: number;
-  athDate: string;
+  supply:    number;
+  athPrice:  number;
+  athDate:   string;
+  ask?:      number;
+  bid?:      number;
+  spread?:   number;
+}
+
+interface KrakenOrderBook {
+  asset:  string;
+  pair:   string;
+  asks:   Array<[string, string, number]>;
+  bids:   Array<[string, string, number]>;
 }
 
 const CRYPTOS: Crypto[] = [
@@ -309,7 +319,7 @@ interface RecentTx {
   status: string; description: string; createdAt: string; createdBy: string;
 }
 
-const EXCHANGE_MAINTENANCE = true;
+const EXCHANGE_MAINTENANCE = false;
 
 export default function ExchangePage() {
   const { toast } = useToast();
@@ -471,6 +481,15 @@ export default function ExchangePage() {
     queryKey: ["/api/crypto/recent"],
     enabled: !!user,
     refetchInterval: 20000,
+  });
+
+  // Order book Kraken en tiempo real (activo seleccionado)
+  const { data: orderBook, dataUpdatedAt: obUpdatedAt } = useQuery<KrakenOrderBook>({
+    queryKey: ["/api/kraken/orderbook", fromId],
+    queryFn: () => fetch(`/api/kraken/orderbook/${fromId}?count=8`).then(r => r.json()),
+    enabled: !!user && fromId !== "usdt",
+    refetchInterval: 10000,
+    staleTime: 8000,
   });
 
   function mergeLive(coin: Crypto): Crypto {
@@ -695,7 +714,7 @@ export default function ExchangePage() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-sm">Brokers · Compliance & Estado</p>
-              <p className="text-[10px] text-muted-foreground">Binance · Kraken — ping en tiempo real · caché 30s</p>
+              <p className="text-[10px] text-muted-foreground">Kraken (principal) · Binance (respaldo) — ping en tiempo real · caché 30s</p>
             </div>
             {brokersLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
           </div>
@@ -846,6 +865,101 @@ export default function ExchangePage() {
             </Button>
           </div>
         </div>
+      )}
+
+      {/* ── Kraken Order Book (activo seleccionado) ─────────────────────── */}
+      {fromId !== "usdt" && (
+        <Card className="border shadow-sm overflow-hidden">
+          <CardContent className="p-0">
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-2.5 border-b bg-muted/20">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                <span className="text-xs font-semibold">Kraken Order Book</span>
+                <span className="text-[10px] font-mono text-muted-foreground">
+                  {({ btc:"XBTUSD", eth:"ETHUSD", xrp:"XRPUSD", ltc:"LTCUSD", doge:"DOGEUSD", sol:"SOLUSD", ada:"ADAUSD", dot:"DOTUSD" } as Record<string,string>)[fromId] ?? (fromId.toUpperCase()+"USD")} · Live
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {orderBook && (
+                  <>
+                    <span className="text-[10px] text-green-600 font-mono font-bold">
+                      Bid ${parseFloat(orderBook.bids?.[0]?.[0] ?? "0").toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-[9px] text-muted-foreground">·</span>
+                    <span className="text-[10px] text-red-500 font-mono font-bold">
+                      Ask ${parseFloat(orderBook.asks?.[0]?.[0] ?? "0").toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                    {orderBook.asks?.[0] && orderBook.bids?.[0] && (() => {
+                      const ask = parseFloat(orderBook.asks[0][0]);
+                      const bid = parseFloat(orderBook.bids[0][0]);
+                      const spread = ask > 0 ? ((ask - bid) / ask * 100).toFixed(3) : "—";
+                      return (
+                        <span className="text-[9px] bg-muted px-1.5 py-0.5 rounded font-mono text-muted-foreground">
+                          Spread {spread}%
+                        </span>
+                      );
+                    })()}
+                  </>
+                )}
+                <span className="text-[9px] text-muted-foreground">
+                  {obUpdatedAt ? new Date(obUpdatedAt).toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—"}
+                </span>
+              </div>
+            </div>
+
+            {/* Book columns */}
+            {orderBook ? (
+              <div className="grid grid-cols-2 divide-x">
+                {/* Bids */}
+                <div>
+                  <div className="flex justify-between px-3 py-1 text-[9px] font-semibold text-green-700 uppercase tracking-wider border-b bg-green-50/50">
+                    <span>Bid</span><span>Vol</span>
+                  </div>
+                  {(orderBook.bids ?? []).slice(0, 6).map(([price, vol], i) => (
+                    <div key={i} className="relative flex justify-between px-3 py-1">
+                      <div
+                        className="absolute inset-y-0 left-0 bg-green-100/60"
+                        style={{ width: `${Math.min((parseFloat(vol) / parseFloat(orderBook.bids[0][1])) * 100, 100)}%` }}
+                      />
+                      <span className="relative text-[10px] font-mono text-green-700 font-semibold z-10">
+                        ${parseFloat(price).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                      <span className="relative text-[10px] font-mono text-muted-foreground z-10">
+                        {parseFloat(vol).toFixed(4)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Asks */}
+                <div>
+                  <div className="flex justify-between px-3 py-1 text-[9px] font-semibold text-red-600 uppercase tracking-wider border-b bg-red-50/50">
+                    <span>Ask</span><span>Vol</span>
+                  </div>
+                  {(orderBook.asks ?? []).slice(0, 6).map(([price, vol], i) => (
+                    <div key={i} className="relative flex justify-between px-3 py-1">
+                      <div
+                        className="absolute inset-y-0 left-0 bg-red-100/60"
+                        style={{ width: `${Math.min((parseFloat(vol) / parseFloat(orderBook.asks[0][1])) * 100, 100)}%` }}
+                      />
+                      <span className="relative text-[10px] font-mono text-red-600 font-semibold z-10">
+                        ${parseFloat(price).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                      <span className="relative text-[10px] font-mono text-muted-foreground z-10">
+                        {parseFloat(vol).toFixed(4)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center py-6 text-xs text-muted-foreground gap-2">
+                <RefreshCw className="w-3 h-3 animate-spin" /> Cargando order book…
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {/* ── Exchange widget ─────────────────────────────────────────────── */}

@@ -226,12 +226,11 @@ export const BROKER_REGISTRY: Broker[] = [
     name:        "Kraken",
     legalName:   "Payward Inc.",
     type:        "cex",
-    status:      "restricted",
-    priority:    2,
-    active:      false,
-    apiBase:     "https://api.kraken.com",
-    statusUrl:   "https://api.kraken.com/0/public/SystemStatus",
-    inactiveReason: "RESTRINGIDO — Participante del pool de margen · conflicto de interés como contraparte directa",
+    status:      "active",
+    priority:    1,
+    active:      true,
+    apiBase:     process.env.KRAKEN_URL ?? "https://api.kraken.com",
+    statusUrl:   `${(process.env.KRAKEN_URL ?? "https://api.kraken.com").replace(/\/$/, "")}/0/public/SystemStatus`,
     jurisdiction: "United States",
     founded:     2011,
     aml: {
@@ -269,6 +268,7 @@ export const BROKER_REGISTRY: Broker[] = [
       privateRpm:     60,
       dailyCap:        0,
       requiresApiKey: false,
+      apiKeyEnvVar:   "KRAKEN_API_KEY",
     },
     capabilities: {
       spotTrading: true, futuresTrading: true, otcDesk: true,
@@ -276,8 +276,9 @@ export const BROKER_REGISTRY: Broker[] = [
       custodial:   true, fiatOnRamp:     true, travelRuleSupport: true,
     },
     notes:
-      "Broker secundario activo. API pública sin restricciones desde el servidor. " +
-      "Fuente principal de precios en tiempo real. FinCEN/MiCA fully compliant.",
+      "Broker principal activo. API pública sin restricciones desde el servidor. " +
+      "Fuente primaria de precios en tiempo real. FinCEN/MiCA fully compliant. " +
+      "API privada lista para órdenes y retiros (requiere KRAKEN_API_KEY + KRAKEN_API_SECRET).",
   },
 ];
 
