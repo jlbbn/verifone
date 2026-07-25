@@ -16,7 +16,7 @@ import { createHmac } from "crypto";
 // ─── Configuration ────────────────────────────────────────────────────────────
 
 const BASE_URL    = (process.env.OKX_URL ?? "https://www.okx.com").replace(/\/$/, "");
-const API_KEY     = process.env.OKX_API_KEY          ?? "";
+const API_KEY     = process.env.OK_API_KEY           ?? process.env.OKX_API_KEY ?? "";
 const API_SECRET  = process.env.OKX_SECRETKEY        ?? "";
 const PASSPHRASE  = process.env.OKX_API_PASSPHRASE   ?? "";
 const TIMEOUT     = 9_000;
