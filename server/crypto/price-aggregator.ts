@@ -1,12 +1,14 @@
 /**
- * Banxico Plus LLC — Crypto Price Aggregator  v2
+ * Banxico Plus LLC — Crypto Price Aggregator  v3
  *
- * Primary  : Kraken (via kraken-client)  — sin restricciones geográficas
- * Fallback  : Binance public ticker      — intento secundario (puede fallar por geo-block)
+ * Primary  : OKX (via okx-client)         — API key opcional, acceso público sin restricciones
+ * Fallback1 : Kraken (via kraken-client)  — sin restricciones geográficas
+ * Fallback2 : Binance public ticker       — intento terciario (puede fallar por geo-block)
  *
  * Cache TTL : 20 s  (configurable)
  */
 
+import * as OKX    from "./okx-client.js";
 import * as Kraken from "./kraken-client.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -26,7 +28,7 @@ export interface PriceRecord {
 
 export interface PriceResult {
   data:       Record<string, PriceRecord>;
-  source:     "kraken" | "binance" | "cache";
+  source:     "okx" | "kraken" | "binance" | "cache";
   fetchedAt:  number;
   latencyMs:  number;
   apiKeyUsed: boolean;
@@ -44,7 +46,45 @@ export function getCachedPrices(): PriceResult | null {
 
 export function clearPriceCache(): void { priceCache = null; }
 
-// ─── Source 1: Kraken (primary) ───────────────────────────────────────────────
+// ─── Source 1: OKX (primary) ──────────────────────────────────────────────────
+
+async function fetchFromOKX(): Promise<PriceResult> {
+  const start   = Date.now();
+  const tickers = await OKX.fetchAllTickers();
+
+  const data: Record<string, PriceRecord> = {};
+  for (const [localId, t] of Object.entries(tickers)) {
+    const spread = t.ask > 0 && t.bid > 0 ? ((t.ask - t.bid) / t.ask) * 100 : 0;
+    data[localId] = {
+      price:     t.price,
+      change24h: t.change24h,
+      volume24h: t.volume24h,
+      marketCap: 0,
+      supply:    0,
+      athPrice:  t.high24h,
+      athDate:   "",
+      ask:       t.ask,
+      bid:       t.bid,
+      spread:    parseFloat(spread.toFixed(4)),
+    };
+  }
+
+  data["usdt"] = {
+    price: 1.0, change24h: 0, volume24h: 0,
+    marketCap: 0, supply: 0, athPrice: 1, athDate: "",
+    ask: 1, bid: 1, spread: 0,
+  };
+
+  return {
+    data,
+    source:     "okx",
+    fetchedAt:  Date.now(),
+    latencyMs:  Date.now() - start,
+    apiKeyUsed: OKX.hasPrivateCredentials(),
+  };
+}
+
+// ─── Source 2: Kraken (fallback) ──────────────────────────────────────────────
 
 async function fetchFromKraken(): Promise<PriceResult> {
   const start   = Date.now();
@@ -67,7 +107,6 @@ async function fetchFromKraken(): Promise<PriceResult> {
     };
   }
 
-  // USDT stable
   data["usdt"] = {
     price: 1.0, change24h: 0, volume24h: 0,
     marketCap: 0, supply: 0, athPrice: 1, athDate: "",
@@ -83,7 +122,7 @@ async function fetchFromKraken(): Promise<PriceResult> {
   };
 }
 
-// ─── Source 2: Binance (fallback) ─────────────────────────────────────────────
+// ─── Source 3: Binance (last resort) ──────────────────────────────────────────
 
 const BINANCE_PAIRS: Record<string, string> = {
   btc:  "BTCUSDT", eth:  "ETHUSDT", xrp:  "XRPUSDT",
@@ -138,14 +177,23 @@ async function fetchFromBinance(): Promise<PriceResult> {
 // ─── Public aggregator ────────────────────────────────────────────────────────
 
 /**
- * Returns cached data if fresh; otherwise fetches from Kraken (primary)
- * and falls back to Binance if Kraken is unavailable.
+ * Returns cached data if fresh; otherwise fetches from OKX (primary),
+ * then Kraken, then Binance as last resort.
  */
 export async function fetchPrices(): Promise<PriceResult> {
   const cached = getCachedPrices();
   if (cached) return { ...cached, source: "cache" };
 
-  // 1️⃣  Kraken (primary)
+  // 1️⃣  OKX (primary)
+  try {
+    const result = await fetchFromOKX();
+    priceCache   = result;
+    return result;
+  } catch (e) {
+    console.warn("[price-aggregator] OKX failed:", (e as Error).message, "→ fallback Kraken");
+  }
+
+  // 2️⃣  Kraken (fallback)
   try {
     const result = await fetchFromKraken();
     priceCache   = result;
@@ -154,13 +202,13 @@ export async function fetchPrices(): Promise<PriceResult> {
     console.warn("[price-aggregator] Kraken failed:", (e as Error).message, "→ fallback Binance");
   }
 
-  // 2️⃣  Binance (fallback)
+  // 3️⃣  Binance (last resort)
   try {
     const result = await fetchFromBinance();
     priceCache   = result;
     return result;
   } catch (e) {
     console.error("[price-aggregator] Binance fallback failed:", (e as Error).message);
-    throw new Error("Todos los price sources fallaron (Kraken + Binance)");
+    throw new Error("Todos los price sources fallaron (OKX + Kraken + Binance)");
   }
 }

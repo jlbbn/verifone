@@ -1,6 +1,6 @@
 /**
  * Banxico Plus LLC — Crypto Broker Registry
- * Brokers activos: Binance · Kraken
+ * Brokers activos: OKX (principal) · Kraken (respaldo) · Binance (inactivo)
  *
  * Regulatory frameworks covered:
  *   - FATF Recommendations (2023)
@@ -220,15 +220,77 @@ export const BROKER_REGISTRY: Broker[] = [
       "DOJ consent agreement activo — enhanced compliance monitoring hasta 2028.",
   },
 
+  // ── OKX ───────────────────────────────────────────────────────────────────────
+  {
+    id:          "okx",
+    name:        "OKX",
+    legalName:   "OKX Technology Company Limited",
+    type:        "cex",
+    status:      "active",
+    priority:    1,
+    active:      true,
+    apiBase:     process.env.OKX_URL ?? "https://www.okx.com",
+    statusUrl:   "https://www.okx.com/api/v5/system/status",
+    jurisdiction: "Seychelles / Malta",
+    founded:     2017,
+    aml: {
+      maxTxUSD:                 2_000_000,
+      travelRuleThresholdUSD:   3_000,
+      ctrThresholdUSD:          10_000,
+      dailyLimitUSD:            10_000_000,
+      monthlyLimitUSD:          100_000_000,
+      requiresKyc:              true,
+      kycTier:                  "tier3_full",
+      requiresSar:              true,
+      fatfCompliant:            true,
+      fincenMsb:                false,
+      micaCompliant:            true,
+      cnbvAuthorized:           false,
+      ofacScreening:            true,
+      onChainAnalytics:         true,
+      complianceStatus:         "compliant",
+      regulatoryNotes:
+        "Regulado en Malta (MGA) y Dubai (VARA). MiCA compliant (EU). " +
+        "OFAC screening activo. Travel Rule vía Notabene. " +
+        "KYC obligatorio desde Nivel 1. Programa de monitoreo AML 24/7. " +
+        "Sin licencia FinCEN MSB — operaciones no disponibles en EE.UU. directo.",
+    },
+    geo: {
+      blockedCountries:  ["US","IR","KP","CU","SY","RU","SD","MM","AF"],
+      restrictedRegions: [],
+      vpnBlocking:       false,
+      geoEnforcement:    true,
+    },
+    networks: [TRC20, ERC20, BEP20, SOL_CHAIN, POLYGON, ARBITRUM, BTC_MAIN, LTC_MAIN],
+    fees: { maker: 0.08, taker: 0.10, otcFee: 0.02, withdrawalModel: "flat" },
+    rateLimit: {
+      publicRpm:      600,
+      privateRpm:     300,
+      dailyCap:          0,
+      requiresApiKey: false,
+      apiKeyEnvVar:   "OKX_API_KEY",
+    },
+    capabilities: {
+      spotTrading: true, futuresTrading: true, otcDesk: true,
+      priceData:   true, withdrawals:    true, deposits: true,
+      custodial:   true, fiatOnRamp:     true, travelRuleSupport: true,
+    },
+    notes:
+      "Broker principal activo. API pública de alto volumen (~20 req/2s). " +
+      "Fuente primaria de precios. Tercer exchange por volumen global. " +
+      "API privada lista para órdenes y retiros (requiere OKX_API_KEY + OKX_API_SECRET + OKX_API_PASSPHRASE).",
+  },
+
   // ── Kraken ────────────────────────────────────────────────────────────────────
   {
     id:          "kraken",
     name:        "Kraken",
     legalName:   "Payward Inc.",
     type:        "cex",
-    status:      "active",
-    priority:    1,
-    active:      true,
+    status:      "monitoring",
+    priority:    2,
+    active:      false,
+    inactiveReason: "Reemplazado por OKX como broker principal — disponible como respaldo",
     apiBase:     process.env.KRAKEN_URL ?? "https://api.kraken.com",
     statusUrl:   `${(process.env.KRAKEN_URL ?? "https://api.kraken.com").replace(/\/$/, "")}/0/public/SystemStatus`,
     jurisdiction: "United States",
@@ -250,10 +312,8 @@ export const BROKER_REGISTRY: Broker[] = [
       onChainAnalytics:         true,
       complianceStatus:         "compliant",
       regulatoryNotes:
-        "FinCEN MSB registrado desde 2013. NYDFS BitLicense (en proceso). " +
-        "EU MiCA compliant vía Kraken Crypto Services Europe Ltd. " +
-        "OFAC screening vía Chainalysis KYT. Travel Rule vía Notabene. " +
-        "SEC: ATS registrado (Kraken Pro). Wyoming SPDI bank charter solicitada.",
+        "FinCEN MSB registrado desde 2013. EU MiCA compliant. " +
+        "OFAC screening vía Chainalysis KYT. Travel Rule vía Notabene.",
     },
     geo: {
       blockedCountries:  ["IR","KP","CU","SY","RU"],
@@ -276,9 +336,8 @@ export const BROKER_REGISTRY: Broker[] = [
       custodial:   true, fiatOnRamp:     true, travelRuleSupport: true,
     },
     notes:
-      "Broker principal activo. API pública sin restricciones desde el servidor. " +
-      "Fuente primaria de precios en tiempo real. FinCEN/MiCA fully compliant. " +
-      "API privada lista para órdenes y retiros (requiere KRAKEN_API_KEY + KRAKEN_API_SECRET).",
+      "Broker de respaldo. FinCEN/MiCA fully compliant. " +
+      "Entra en operación si OKX falla. API privada lista (KRAKEN_API_KEY + KRAKEN_API_SECRET).",
   },
 ];
 
