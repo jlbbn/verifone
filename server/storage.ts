@@ -708,10 +708,10 @@ export class DatabaseStorage implements IStorage {
           from_account, to_account, description, auth_code,
           token_id, created_by, created_at
         ) VALUES (
-          'TXN-1784916406728-A716A7C2', 'payment', '101.1', '822340.00', 'MXN', 'completed',
+          'TXN-1784916406728-A716A7C2', 'payment', '101.1', '822340.00', 'EUR', 'completed',
           'KENITAY CARDENAS YEBRA · AMEX · **** **** **** 0810',
           'SOCEMRO · socemro2@gmail.com · TERMINAL POS',
-          'VENTA FORZADA · AMEX **** 0810 · KENITAY CARDENAS YEBRA · $822,340.00 MXN · PROTOCOLO 101.1 · LAREDO TX · AUTH-1784916406728-5528865D',
+          'VENTA FORZADA · AMEX **** 0810 · KENITAY CARDENAS YEBRA · $822,340.00 EUR · PROTOCOLO 101.1 · LAREDO TX · AUTH-1784916406728-5528865D',
           'AUTH-1784916406728-5528865D',
           (SELECT terminal_id FROM pos_terminals WHERE owner = 'socemro2@gmail.com' ORDER BY terminal_id ASC LIMIT 1),
           'socemro2@gmail.com',
@@ -719,15 +719,14 @@ export class DatabaseStorage implements IStorage {
         )
         ON CONFLICT (transaction_id) DO UPDATE
           SET created_by  = 'socemro2@gmail.com',
+              currency    = 'EUR',
               status      = 'completed',
               to_account  = 'SOCEMRO · socemro2@gmail.com · TERMINAL POS',
-              description = 'VENTA FORZADA · AMEX **** 0810 · KENITAY CARDENAS YEBRA · $822,340.00 MXN · PROTOCOLO 101.1 · LAREDO TX · AUTH-1784916406728-5528865D',
+              description = 'VENTA FORZADA · AMEX **** 0810 · KENITAY CARDENAS YEBRA · $822,340.00 EUR · PROTOCOLO 101.1 · LAREDO TX · AUTH-1784916406728-5528865D',
               token_id    = COALESCE(
                 (SELECT terminal_id FROM pos_terminals WHERE owner = 'socemro2@gmail.com' ORDER BY terminal_id ASC LIMIT 1),
                 transactions.token_id
               )
-        WHERE transactions.created_by <> 'socemro2@gmail.com'
-           OR transactions.status <> 'completed'
       `),
       // Terminal T1006 asignada a Socemro (solo si está libre)
       db.execute(sql`
