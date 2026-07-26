@@ -339,12 +339,13 @@ export async function balance(): Promise<Record<string, { available: number; fro
  * ordType: "market" | "limit" | "post_only" | "fok" | "ioc"
  */
 export async function addOrder(params: {
-  instId:  string;
-  side:    "buy" | "sell";
-  ordType: "market" | "limit" | "post_only" | "fok" | "ioc";
-  sz:      string;          // base currency amount
-  px?:     string;          // required for limit orders
-  tdMode?: "cash" | "cross" | "isolated";
+  instId:   string;
+  side:     "buy" | "sell";
+  ordType:  "market" | "limit" | "post_only" | "fok" | "ioc";
+  sz:       string;           // base currency amount (or quote if tgtCcy=quote_ccy)
+  px?:      string;           // required for limit orders
+  tdMode?:  "cash" | "cross" | "isolated";
+  tgtCcy?:  "base_ccy" | "quote_ccy";  // quote_ccy → sz is in USDT (for market buys)
   clOrdId?: string;
 }): Promise<{ ordId: string; clOrdId: string; tag: string; sCode: string; sMsg: string }[]> {
   return privatePost("/api/v5/trade/order", {
@@ -354,6 +355,7 @@ export async function addOrder(params: {
     ordType: params.ordType,
     sz:      params.sz,
     ...(params.px      ? { px:      params.px }      : {}),
+    ...(params.tgtCcy  ? { tgtCcy:  params.tgtCcy }  : {}),
     ...(params.clOrdId ? { clOrdId: params.clOrdId } : {}),
   });
 }
