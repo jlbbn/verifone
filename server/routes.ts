@@ -13,6 +13,7 @@ import { BROKER_REGISTRY, brokerSummary, checkAmlThreshold } from "./crypto/brok
 import { fetchPrices, clearPriceCache } from "./crypto/price-aggregator.js";
 import * as OKXClient    from "./crypto/okx-client.js";
 import * as KrakenClient from "./crypto/kraken-client.js";
+import { executeSwap, availableBroker } from "./crypto/broker-executor.js";
 
 declare module "express-session" {
   interface SessionData {
@@ -1111,29 +1112,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     const user = req.currentUser!;
     try {
-      const balances = await storage.exchangeCrypto(user.id, fromAsset, fromAmount, toAsset, toAmount);
+      // ── Intentar ejecución real en broker ─────────────────────────────────────
+      let actualToAmount = toAmount;
+      let brokerUsed     = "internal";
+      let brokerOrderIds: string[] = [];
+
+      const swapResult = await executeSwap(fromAsset, toAsset, fromAmount);
+      if (swapResult) {
+        actualToAmount = swapResult.toAmount;
+        brokerUsed     = swapResult.broker;
+        brokerOrderIds = swapResult.orderIds;
+        console.log(`[exchange] Swap real via ${swapResult.broker}: ${fromAmount} ${fromAsset} → ${actualToAmount.toFixed(8)} ${toAsset} | orders: ${brokerOrderIds.join(",")}`);
+      }
+
+      // ── Actualizar saldos internos con montos reales del fill ─────────────────
+      const balances = await storage.exchangeCrypto(user.id, fromAsset, fromAmount, toAsset, actualToAmount);
 
       const transactionId = `EXC-${Date.now()}-${randomBytes(4).toString('hex').toUpperCase()}`;
       const transaction = await storage.createTransaction({
         transactionId,
         protocol: "201.3",
-        type: "exchange",
-        amount: fromAmount.toFixed(8),
+        type:     "exchange",
+        amount:   fromAmount.toFixed(8),
         currency: (fromSymbol ?? fromAsset).toUpperCase(),
-        status: "completed",
+        status:   "completed",
         fromAccount: `EXCHANGE · ${(fromSymbol ?? fromAsset).toUpperCase()} · ${fromAmount}`,
-        toAccount: `${(toSymbol ?? toAsset).toUpperCase()} · ${toAmount}`,
-        description: `Exchange interno ${fromAmount} ${(fromSymbol ?? fromAsset).toUpperCase()} → ${toAmount} ${(toSymbol ?? toAsset).toUpperCase()}${rate ? ` (rate: ${rate})` : ""}`,
+        toAccount:   `${(toSymbol ?? toAsset).toUpperCase()} · ${actualToAmount.toFixed(8)}`,
+        description: `${brokerUsed === "internal" ? "Swap interno" : `Swap vía ${brokerUsed.toUpperCase()}`} ${fromAmount} ${(fromSymbol ?? fromAsset).toUpperCase()} → ${actualToAmount.toFixed(8)} ${(toSymbol ?? toAsset).toUpperCase()}${brokerOrderIds.length ? ` | orders: ${brokerOrderIds.join(",")}` : ""}`,
         createdBy: user.username,
       });
       await storage.createTransactionLog({
         transactionId: transaction.id,
         action: "EXCHANGE",
         status: "completed",
-        message: `Swap ejecutado: ${fromAmount} ${fromAsset.toUpperCase()} → ${toAmount} ${toAsset.toUpperCase()}`,
+        message: `Swap ejecutado [${brokerUsed}]: ${fromAmount} ${fromAsset.toUpperCase()} → ${actualToAmount.toFixed(8)} ${toAsset.toUpperCase()}`,
       });
 
-      res.json({ balances, transaction });
+      res.json({ balances, transaction, broker: brokerUsed, orderIds: brokerOrderIds });
     } catch (err: any) {
       if (err.message === "INSUFFICIENT_BALANCE") {
         return res.status(400).json({ error: "Saldo insuficiente del activo de origen" });
