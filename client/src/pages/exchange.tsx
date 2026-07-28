@@ -714,7 +714,7 @@ export default function ExchangePage() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-sm">Brokers · Compliance & Estado</p>
-              <p className="text-[10px] text-muted-foreground">OKX (principal) · Kraken (respaldo) — ping en tiempo real · caché 30s</p>
+              <p className="text-[10px] text-muted-foreground">Binance (principal) · OKX (respaldo) · Kraken (respaldo 2) — ping en tiempo real · caché 30s</p>
             </div>
             {brokersLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
           </div>

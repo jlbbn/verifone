@@ -1,18 +1,19 @@
 /**
  * Banxico Plus LLC — Broker Order Executor
  *
- * Ejecuta swaps crypto-to-crypto en el broker real (OKX → Kraken → interno).
+ * Ejecuta swaps crypto-to-crypto en el broker real (Binance → OKX → Kraken → interno).
  * Un swap A→B requiere dos market orders:
  *   1. Vender A/USDT  (si fromAsset ≠ usdt)
  *   2. Comprar B/USDT  (si toAsset  ≠ usdt)
  */
 
-import * as OKX    from "./okx-client.js";
-import * as Kraken from "./kraken-client.js";
+import * as Binance from "./binance-client.js";
+import * as OKX     from "./okx-client.js";
+import * as Kraken  from "./kraken-client.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type BrokerName = "okx" | "kraken" | "internal";
+export type BrokerName = "binance" | "okx" | "kraken" | "internal";
 
 export interface SwapResult {
   broker:      BrokerName;
@@ -27,6 +28,20 @@ export interface SwapResult {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+async function binanceSpotPrice(symbol: string): Promise<{ last: number; ask: number; bid: number }> {
+  const res = await fetch(`https://api.binance.com/api/v3/ticker/bookTicker?symbol=${symbol}`, {
+    signal: AbortSignal.timeout(6_000),
+  });
+  if (!res.ok) throw new Error(`Binance bookTicker ${symbol} → HTTP ${res.status}`);
+  const t: any = await res.json();
+  const mid = (parseFloat(t.askPrice ?? "0") + parseFloat(t.bidPrice ?? "0")) / 2;
+  return {
+    last: mid,
+    ask:  parseFloat(t.askPrice ?? "0"),
+    bid:  parseFloat(t.bidPrice ?? "0"),
+  };
+}
+
 async function okxSpotPrice(instId: string): Promise<{ last: number; ask: number; bid: number }> {
   const res = await fetch(`https://www.okx.com/api/v5/market/ticker?instId=${instId}`, {
     signal: AbortSignal.timeout(6_000),
@@ -38,6 +53,68 @@ async function okxSpotPrice(instId: string): Promise<{ last: number; ask: number
     last: parseFloat(t.last   ?? "0"),
     ask:  parseFloat(t.askPx  ?? "0"),
     bid:  parseFloat(t.bidPx  ?? "0"),
+  };
+}
+
+// ─── Binance executor ─────────────────────────────────────────────────────────
+
+async function executeViaBinance(
+  fromAsset: string,
+  toAsset:   string,
+  fromAmount: number,
+): Promise<SwapResult> {
+  const orderIds: string[] = [];
+  let usdtBridge = 0;
+  let toAmount   = 0;
+
+  // ── Leg 1: vender fromAsset → USDT (omitir si fromAsset ya es usdt) ─────────
+  if (fromAsset !== "usdt") {
+    const symbol = Binance.BINANCE_PAIR[fromAsset];
+    if (!symbol) throw new Error(`Binance: par no soportado para ${fromAsset}`);
+
+    const order = await Binance.newOrder({
+      symbol,
+      side:     "SELL",
+      quantity: fromAmount.toFixed(8),
+    });
+
+    if (order.orderId) orderIds.push(String(order.orderId));
+
+    // USDT recibidos ≈ executedQty × fill price (o bid si fills vacío)
+    const executed = parseFloat(order.executedQty         ?? "0");
+    const quoteQty = parseFloat(order.cummulativeQuoteQty ?? "0");
+    usdtBridge = quoteQty > 0 ? quoteQty : executed * (await binanceSpotPrice(symbol)).bid;
+  } else {
+    usdtBridge = fromAmount;
+  }
+
+  // ── Leg 2: comprar toAsset con USDT (omitir si toAsset ya es usdt) ──────────
+  if (toAsset !== "usdt") {
+    const symbol = Binance.BINANCE_PAIR[toAsset];
+    if (!symbol) throw new Error(`Binance: par no soportado para ${toAsset}`);
+
+    const order = await Binance.newOrder({
+      symbol,
+      side:         "BUY",
+      quoteOrderQty: usdtBridge.toFixed(4),  // comprar con USDT
+    });
+
+    if (order.orderId) orderIds.push(String(order.orderId));
+
+    const executed = parseFloat(order.executedQty ?? "0");
+    toAmount = executed > 0 ? executed
+      : usdtBridge / (await binanceSpotPrice(symbol)).ask;
+  } else {
+    toAmount = usdtBridge;
+  }
+
+  return {
+    broker:     "binance",
+    fromAsset,  toAsset,
+    fromAmount, toAmount,
+    usdtBridge,
+    executedAt: new Date().toISOString(),
+    orderIds,
   };
 }
 
@@ -181,7 +258,7 @@ async function executeViaKraken(
 
 /**
  * Ejecuta un swap en el mejor broker disponible.
- * Devuelve null si ningún broker privado está disponible (usar swap interno).
+ * Cadena: Binance → OKX → Kraken → null (swap interno).
  */
 export async function executeSwap(
   fromAsset:  string,
@@ -189,7 +266,16 @@ export async function executeSwap(
   fromAmount: number,
 ): Promise<SwapResult | null> {
 
-  // 1️⃣  OKX (principal)
+  // 1️⃣  Binance (principal)
+  if (Binance.hasPrivateCredentials()) {
+    try {
+      return await executeViaBinance(fromAsset, toAsset, fromAmount);
+    } catch (e) {
+      console.warn("[broker-executor] Binance swap falló:", (e as Error).message, "→ intentando OKX");
+    }
+  }
+
+  // 2️⃣  OKX (respaldo)
   if (OKX.hasPrivateCredentials()) {
     try {
       return await executeViaOKX(fromAsset, toAsset, fromAmount);
@@ -198,7 +284,7 @@ export async function executeSwap(
     }
   }
 
-  // 2️⃣  Kraken (respaldo)
+  // 3️⃣  Kraken (respaldo 2)
   if (Kraken.hasPrivateCredentials()) {
     try {
       return await executeViaKraken(fromAsset, toAsset, fromAmount);
@@ -213,7 +299,8 @@ export async function executeSwap(
 
 /** Qué broker ejecutaría si se llamara ahora */
 export function availableBroker(): BrokerName {
-  if (OKX.hasPrivateCredentials())    return "okx";
-  if (Kraken.hasPrivateCredentials()) return "kraken";
+  if (Binance.hasPrivateCredentials()) return "binance";
+  if (OKX.hasPrivateCredentials())     return "okx";
+  if (Kraken.hasPrivateCredentials())  return "kraken";
   return "internal";
 }

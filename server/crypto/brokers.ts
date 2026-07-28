@@ -1,6 +1,6 @@
 /**
  * Banxico Plus LLC — Crypto Broker Registry
- * Brokers activos: OKX (principal) · Kraken (respaldo) · Binance (inactivo)
+ * Brokers activos: Binance (principal) · OKX (respaldo) · Kraken (respaldo 2)
  *
  * Regulatory frameworks covered:
  *   - FATF Recommendations (2023)
@@ -166,12 +166,11 @@ export const BROKER_REGISTRY: Broker[] = [
     name:        "Binance",
     legalName:   "BAM Trading Services Inc. (US) / Binance Holdings Ltd. (Global)",
     type:        "cex",
-    status:      "restricted",
+    status:      "active",
     priority:    1,
-    active:      false,
+    active:      true,
     apiBase:     "https://api.binance.com",
     statusUrl:   "https://api.binance.com/api/v3/ping",
-    inactiveReason: "RESTRINGIDO — HTTP 451 · Geobloqueado por ubicación del servidor (OFAC/FinCEN compliance)",
     jurisdiction: "Cayman Islands / United States",
     founded:     2017,
     aml: {
@@ -215,8 +214,8 @@ export const BROKER_REGISTRY: Broker[] = [
       custodial:   true, fiatOnRamp:     true, travelRuleSupport: true,
     },
     notes:
-      "Broker principal. Acceso API restringido desde servidor por geolocalización (HTTP 451). " +
-      "Precios obtenidos vía Binance Data Stream o endpoint público alternativo. " +
+      "Broker principal activo. Mayor volumen global. API pública de alta disponibilidad. " +
+      "API privada requiere BINANCE_API_KEY + BINANCE_SECRET_KEY. " +
       "DOJ consent agreement activo — enhanced compliance monitoring hasta 2028.",
   },
 
@@ -227,7 +226,7 @@ export const BROKER_REGISTRY: Broker[] = [
     legalName:   "OKX Technology Company Limited",
     type:        "cex",
     status:      "active",
-    priority:    1,
+    priority:    2,
     active:      true,
     apiBase:     process.env.OKX_URL ?? "https://www.okx.com",
     statusUrl:   "https://www.okx.com/api/v5/system/status",
@@ -276,8 +275,8 @@ export const BROKER_REGISTRY: Broker[] = [
       custodial:   true, fiatOnRamp:     true, travelRuleSupport: true,
     },
     notes:
-      "Broker principal activo. API pública de alto volumen (~20 req/2s). " +
-      "Fuente primaria de precios. Tercer exchange por volumen global. " +
+      "Broker de respaldo (prioridad 2). API pública de alto volumen (~20 req/2s). " +
+      "Tercer exchange por volumen global. " +
       "API privada lista para órdenes y retiros (requiere OKX_API_KEY + OKX_API_SECRET + OKX_API_PASSPHRASE).",
   },
 
@@ -288,7 +287,7 @@ export const BROKER_REGISTRY: Broker[] = [
     legalName:   "Payward Inc.",
     type:        "cex",
     status:      "active",
-    priority:    2,
+    priority:    3,
     active:      true,
     apiBase:     process.env.KRAKEN_URL ?? "https://api.kraken.com",
     statusUrl:   `${(process.env.KRAKEN_URL ?? "https://api.kraken.com").replace(/\/$/, "")}/0/public/SystemStatus`,
@@ -335,8 +334,8 @@ export const BROKER_REGISTRY: Broker[] = [
       custodial:   true, fiatOnRamp:     true, travelRuleSupport: true,
     },
     notes:
-      "Broker de respaldo. FinCEN/MiCA fully compliant. " +
-      "Entra en operación si OKX falla. API privada lista (KRAKEN_API_KEY + KRAKEN_API_SECRET).",
+      "Broker de respaldo 2. FinCEN/MiCA fully compliant. " +
+      "Entra en operación si Binance y OKX fallan. API privada lista (KRAKEN_API_KEY + KRAKEN_API_SECRET).",
   },
 ];
 
