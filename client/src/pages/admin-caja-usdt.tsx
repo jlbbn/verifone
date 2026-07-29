@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   PieChart,
   Pie,
@@ -23,6 +23,8 @@ import {
   RefreshCw,
   CalendarDays,
   Info,
+  Zap,
+  AlertCircle,
 } from "lucide-react";
 
 const WALLET_ADDRESS = "0x5293790F2C49A1B11B3d3b2AcB8583946B20f735";
@@ -106,6 +108,145 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: any[] 
   );
 }
 
+interface HotWalletData {
+  address:     string;
+  usdtBalance: number;
+  trxBalance:  number;
+  network:     string;
+  token:       string;
+  fetchedAt:   string;
+}
+
+function HotWalletWidget() {
+  const [data, setData]       = useState<HotWalletData | null>(null);
+  const [error, setError]     = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [copiedHW, setCopiedHW] = useState(false);
+
+  const fetchBalance = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/hot-wallet/balance");
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Error al obtener saldo");
+      setData(json);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchBalance();
+    const timer = setInterval(fetchBalance, 60_000);
+    return () => clearInterval(timer);
+  }, [fetchBalance]);
+
+  function copyHWAddress() {
+    if (data?.address) {
+      navigator.clipboard.writeText(data.address);
+      setCopiedHW(true);
+      setTimeout(() => setCopiedHW(false), 2000);
+    }
+  }
+
+  return (
+    <Card className="border-green-200 bg-green-50/40">
+      <CardContent className="px-5 py-4 space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <Zap className="w-4 h-4 text-green-600" />
+            <span className="text-sm font-semibold">Hot Wallet de Dispersión</span>
+            <Badge variant="outline" className="text-[10px] border-green-400 text-green-700 bg-green-50">
+              TRON TRC-20
+            </Badge>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs text-muted-foreground"
+            onClick={fetchBalance}
+            disabled={loading}
+          >
+            <RefreshCw className={`w-3 h-3 mr-1 ${loading ? "animate-spin" : ""}`} />
+            {loading ? "Consultando…" : "Actualizar"}
+          </Button>
+        </div>
+
+        {error ? (
+          <div className="flex items-start gap-2 p-3 rounded-md bg-red-50 border border-red-200">
+            <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs font-semibold text-red-700">Error al consultar blockchain</p>
+              <p className="text-[11px] text-red-600 mt-0.5">{error}</p>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Balance principal */}
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex-1 min-w-[140px]">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">Saldo USDT</p>
+                {loading ? (
+                  <div className="h-8 w-32 bg-muted/50 rounded animate-pulse" />
+                ) : (
+                  <p className="text-2xl font-bold text-green-700">
+                    ${data ? fmt(data.usdtBalance) : "—"}
+                    <span className="text-sm font-normal text-muted-foreground ml-1">USDT</span>
+                  </p>
+                )}
+              </div>
+              <div className="flex-1 min-w-[120px]">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">TRX (gas)</p>
+                {loading ? (
+                  <div className="h-5 w-20 bg-muted/50 rounded animate-pulse" />
+                ) : (
+                  <p className="text-sm font-semibold text-foreground">
+                    {data ? data.trxBalance.toFixed(4) : "—"} TRX
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Dirección */}
+            {data && (
+              <div className="bg-muted/30 rounded-md px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] text-muted-foreground mb-0.5">Dirección de la hot wallet</p>
+                    <p className="text-xs font-mono break-all text-foreground">{data.address}</p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 flex-shrink-0"
+                    onClick={copyHWAddress}
+                  >
+                    {copiedHW ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Meta */}
+            {data && (
+              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                <CheckCircle className="w-3 h-3 text-green-500" />
+                <span>Red: {data.network} · Token: {data.token}</span>
+                <span className="ml-auto">
+                  Actualizado: {new Date(data.fetchedAt).toLocaleTimeString("es-MX")}
+                </span>
+              </div>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function AdminCajaUSDT() {
   const [copied, setCopied] = useState(false);
   const [expandedUser, setExpandedUser] = useState<number | null>(null);
@@ -133,6 +274,9 @@ export default function AdminCajaUSDT() {
           Recaudación de suscripciones Banxico Plus · Enero 2023 – Junio 2026 · Pago anual único
         </p>
       </div>
+
+      {/* ── Hot Wallet de dispersión USDT ── */}
+      <HotWalletWidget />
 
       {/* ── Nota pago anual ── */}
       <Card className="border-blue-200 bg-blue-50/60">

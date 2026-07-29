@@ -49,6 +49,7 @@ integrations = ["javascript_log_in_with_replit:2.0.0", "javascript_database:1.0.
 
 [userenv.shared]
 MP_PUBLIC_KEY = "TEST-9b1bf33e-307f-42f4-b071-5cae2ed28e68"
+PLATFORM_TRON_ADDRESS = "TD99cNkHynEmTZzD6EJqmTDGxu64kvHH1b"
 
 [userenv.development]
 STRIPE_CONNECTOR_KEY = "sk_test_51TmGonLHuyconhpqKxqb2YgYYjUsQAwM2zPbl08JdnAseZidKhYhx9DrVzmzkFcW43UERdgHbBEyBIli11h2NWml00jBaaHAI9"
