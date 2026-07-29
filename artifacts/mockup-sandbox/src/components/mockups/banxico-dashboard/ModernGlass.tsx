@@ -1,114 +1,210 @@
 export function ModernGlass() {
-  const done = [
-    { title: "Hot Wallet TRON activa",      sub: "Saldo USDT en tiempo real" },
-    { title: "Dispersión USDT on-chain",    sub: "Firma, broadcast y registro de TXID" },
-    { title: "Historial de dispersiones",   sub: "Tabla con txid + link TronScan" },
-    { title: "Contraseña admin permanente", sub: "Sin revertir en reinicios" },
-    { title: "Migrations post-merge auto",  sub: "Script DB en cada deploy" },
-    { title: "Broker Binance (listo)",      sub: "Esperando API Key correcta" },
+  const pipeline = [
+    {
+      phase: "ADMIN UI",
+      color: "#60a5fa",
+      glow: "#3b82f6",
+      items: [
+        { name: "Formulario dispersión", live: true },
+        { name: "Selector de dirección TRON", live: true },
+        { name: "Validación formato T…", live: true },
+        { name: "Balance visible en widget", live: true },
+      ],
+    },
+    {
+      phase: "AUTH LAYER",
+      color: "#c084fc",
+      glow: "#9333ea",
+      items: [
+        { name: "Verificación contraseña admin", live: true },
+        { name: "requireRole('ADMIN')", live: true },
+        { name: "Límite máx. por operación", live: false },
+        { name: "Rate limiting endpoint", live: false },
+      ],
+    },
+    {
+      phase: "TRON CLIENT",
+      color: "#f87171",
+      glow: "#c8322b",
+      items: [
+        { name: "PLATFORM_TRON_PRIVATE_KEY", live: true },
+        { name: "rawAmount = floor(amt × 10⁶)", live: true },
+        { name: "contract.transfer().send()", live: true },
+        { name: "feeLimit: 40_000_000 sun", live: true },
+      ],
+    },
+    {
+      phase: "BLOCKCHAIN",
+      color: "#4ade80",
+      glow: "#22c55e",
+      items: [
+        { name: "TRON Mainnet broadcast", live: true },
+        { name: "Contrato USDT TR7NHq…", live: true },
+        { name: "Polling confirmación", live: false },
+        { name: "TronScan verification link", live: true },
+      ],
+    },
+    {
+      phase: "AUDIT DB",
+      color: "#fbbf24",
+      glow: "#f59e0b",
+      items: [
+        { name: "tabla hot_wallet_dispersions", live: true },
+        { name: "status: pending→confirmed", live: true },
+        { name: "txid + nota + timestamp", live: true },
+        { name: "Historial últimas 50 TXs", live: true },
+      ],
+    },
   ];
 
-  const next = [
-    { title: "API Key Binance",        urgency: "alta",  sub: "BINANCE_API_KEY + SECRET" },
-    { title: "Límite máx. dispersión", urgency: "media", sub: "Tope por operación en settings" },
-    { title: "Auto-recarga TRX",       urgency: "media", sub: "Gas automático para hot wallet" },
-    { title: "Avo Export activo",      urgency: "baja",  sub: "Unsuspend + migrar datos" },
-  ];
+  const totalItems  = pipeline.flatMap(p => p.items).length;
+  const liveItems   = pipeline.flatMap(p => p.items).filter(i => i.live).length;
+  const pct = Math.round((liveItems / totalItems) * 100);
 
   return (
     <div
-      className="min-h-screen font-sans p-6 space-y-5"
-      style={{ background: "linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%)" }}
+      className="min-h-screen font-sans p-5 space-y-4"
+      style={{ background: "linear-gradient(160deg, #06040f 0%, #0d0820 40%, #0a1020 100%)" }}
     >
-      {/* Title */}
-      <div className="text-center pt-2">
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-white/10 bg-white/5 mb-3">
-          <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-          <span className="text-[11px] text-white/60 tracking-widest uppercase font-medium">Sistema operativo · Mainnet</span>
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-[10px] tracking-[0.3em] text-white/30 uppercase mb-1.5">Banxico Plus LLC · Crypto Module</p>
+          <h1 className="text-2xl font-black text-white leading-none">
+            Pipeline de Dispersión
+            <br />
+            <span style={{ background: "linear-gradient(90deg,#c8322b,#f87171,#fbbf24)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+              USDT On-Chain
+            </span>
+          </h1>
+          <p className="text-[11px] text-white/30 mt-1.5">TRON TRC-20 · TronWeb v6 · PostgreSQL Audit</p>
         </div>
-        <h1 className="text-3xl font-black text-white tracking-tight">Dispersión USDT</h1>
-        <p className="text-sm text-white/40 mt-1">Banxico Plus LLC · Hot Wallet TRON · Julio 2026</p>
+        <div className="text-right space-y-1.5 mt-1">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-green-500/20 bg-green-500/8">
+            <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+            <span className="text-[11px] text-green-400 font-medium">Mainnet Live</span>
+          </div>
+          <div className="block">
+            <span className="text-[11px] text-white/30">{liveItems}/{totalItems} funciones activas</span>
+          </div>
+        </div>
       </div>
 
       {/* Progress */}
-      <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm p-4">
-        <div className="flex justify-between items-end mb-2">
-          <span className="text-xs text-white/60 font-medium">Progreso del sprint</span>
-          <span className="text-lg font-black text-white">75%</span>
+      <div className="rounded-2xl border border-white/8 bg-white/4 p-3">
+        <div className="flex justify-between items-center mb-2">
+          <span className="text-[11px] text-white/50 font-medium">Completitud del pipeline</span>
+          <span className="text-xl font-black text-white">{pct}%</span>
         </div>
-        <div className="h-2.5 rounded-full bg-white/10 overflow-hidden">
-          <div className="h-full rounded-full" style={{ width: "75%", background: "linear-gradient(90deg,#c8322b,#ef4444)" }} />
+        <div className="h-2 rounded-full bg-white/8 overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all"
+            style={{
+              width: `${pct}%`,
+              background: "linear-gradient(90deg, #c8322b 0%, #f87171 50%, #fbbf24 100%)",
+            }}
+          />
         </div>
-        <div className="flex justify-between mt-1.5">
-          <span className="text-[10px] text-white/30">6 de 8 tareas completadas</span>
-          <span className="text-[10px] text-white/30">2 en cola</span>
+        <div className="flex justify-between mt-1.5 text-[10px] text-white/25">
+          <span>{liveItems} funciones desplegadas</span>
+          <span>{totalItems - liveItems} en construcción</span>
         </div>
       </div>
 
-      {/* Two cols */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-5 h-5 rounded-full bg-green-500/20 border border-green-500/30 flex items-center justify-center">
-              <span className="text-green-400 text-[11px] font-bold">✓</span>
-            </div>
-            <span className="text-xs font-semibold text-white/80">Completado</span>
-          </div>
-          <div className="space-y-2.5">
-            {done.map((d) => (
-              <div key={d.title} className="flex items-start gap-2.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0 mt-1.5" />
-                <div>
-                  <p className="text-[12px] font-medium text-white/90 leading-tight">{d.title}</p>
-                  <p className="text-[10px] text-white/40 mt-0.5">{d.sub}</p>
+      {/* Pipeline columns */}
+      <div className="grid grid-cols-5 gap-2">
+        {pipeline.map((phase) => {
+          const liveCnt  = phase.items.filter(i => i.live).length;
+          const totalCnt = phase.items.length;
+          return (
+            <div
+              key={phase.phase}
+              className="rounded-xl border border-white/8 bg-white/4 p-2.5 space-y-2"
+            >
+              {/* Phase header */}
+              <div>
+                <div
+                  className="text-[9px] font-black tracking-[0.2em] uppercase mb-1"
+                  style={{ color: phase.color }}
+                >
+                  {phase.phase}
                 </div>
+                <div className="h-0.5 rounded-full bg-white/8 overflow-hidden">
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${(liveCnt / totalCnt) * 100}%`,
+                      background: phase.color,
+                      boxShadow: `0 0 6px ${phase.glow}`,
+                    }}
+                  />
+                </div>
+                <p className="text-[9px] text-white/25 mt-1">{liveCnt}/{totalCnt}</p>
               </div>
-            ))}
-          </div>
-        </div>
 
-        <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-5 h-5 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center">
-              <span className="text-amber-400 text-[11px]">→</span>
-            </div>
-            <span className="text-xs font-semibold text-white/80">Próximos pasos</span>
-          </div>
-          <div className="space-y-2.5">
-            {next.map((n) => (
-              <div key={n.title} className="flex items-start gap-2.5">
-                <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5 ${
-                  n.urgency === "alta" ? "bg-red-400" : n.urgency === "media" ? "bg-amber-400" : "bg-zinc-500"
-                }`} />
-                <div>
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <p className="text-[12px] font-medium text-white/90 leading-tight">{n.title}</p>
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wide ${
-                      n.urgency === "alta"  ? "bg-red-500/20 text-red-400" :
-                      n.urgency === "media" ? "bg-amber-500/20 text-amber-400" :
-                                              "bg-zinc-500/20 text-zinc-400"
-                    }`}>{n.urgency}</span>
+              {/* Items */}
+              <div className="space-y-1.5">
+                {phase.items.map((item) => (
+                  <div key={item.name} className="flex items-start gap-1.5">
+                    <div
+                      className="w-3 h-3 rounded-sm flex-shrink-0 flex items-center justify-center mt-0.5 text-[8px] font-bold border"
+                      style={item.live
+                        ? { background: phase.color + "22", borderColor: phase.color + "55", color: phase.color }
+                        : { background: "transparent", borderColor: "#ffffff15", color: "#ffffff20" }
+                      }
+                    >
+                      {item.live ? "✓" : "○"}
+                    </div>
+                    <p
+                      className="text-[10px] leading-tight font-mono"
+                      style={{ color: item.live ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.2)" }}
+                    >
+                      {item.name}
+                    </p>
                   </div>
-                  <p className="text-[10px] text-white/40 mt-0.5">{n.sub}</p>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
+          );
+        })}
       </div>
 
-      {/* Bottom metrics */}
-      <div className="grid grid-cols-3 gap-3">
+      {/* Key specs row */}
+      <div className="grid grid-cols-4 gap-2">
         {[
-          { value: "TRON",   label: "Red blockchain",  g: "from-[#c8322b] to-[#ff6b6b]" },
-          { value: "≈$0.02", label: "Fee por TX",      g: "from-blue-600 to-blue-400"   },
-          { value: "AES-256",label: "Cifrado admin",   g: "from-purple-600 to-purple-400"},
+          { v: "TRON",    d: "TRC-20 Mainnet",          g: "#c8322b,#f87171" },
+          { v: "≈$0.02",  d: "Fee por dispersión",       g: "#22c55e,#4ade80" },
+          { v: "10⁶",     d: "Decimales precisión USDT", g: "#3b82f6,#60a5fa" },
+          { v: "40 TRX",  d: "Fee limit configurado",    g: "#f59e0b,#fbbf24" },
         ].map((m) => (
-          <div key={m.label} className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
-            <p className={`text-lg font-black bg-gradient-to-r ${m.g} bg-clip-text text-transparent`}>{m.value}</p>
-            <p className="text-[10px] text-white/40 mt-0.5">{m.label}</p>
+          <div key={m.d} className="rounded-xl border border-white/8 bg-white/4 p-3 text-center">
+            <p
+              className="text-xl font-black"
+              style={{ background: `linear-gradient(135deg,${m.g})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}
+            >
+              {m.v}
+            </p>
+            <p className="text-[10px] text-white/30 mt-0.5 leading-tight">{m.d}</p>
           </div>
         ))}
+      </div>
+
+      {/* Next */}
+      <div className="rounded-xl border border-white/8 bg-white/4 p-3">
+        <p className="text-[10px] font-bold text-white/40 uppercase tracking-wider mb-2">Pendiente en el pipeline</p>
+        <div className="flex flex-wrap gap-2">
+          {[
+            "Validar saldo antes de firmar",
+            "Límite máx. por TX (configurable)",
+            "Auto-recarga TRX cuando gas bajo",
+            "Polling confirmación on-chain",
+            "Binance API Key → exchange activo",
+          ].map((t) => (
+            <span key={t} className="text-[10px] px-2.5 py-1 rounded-full border border-white/10 bg-white/5 text-white/40 font-medium">
+              {t}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );

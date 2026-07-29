@@ -1,103 +1,181 @@
 export function ExecutiveLight() {
-  const milestones = [
+  const modules = [
     {
-      date: "Jul 2026", title: "Hot Wallet TRON",
-      desc: "Wallet configurada en mainnet TRON. Saldo USDT visible en tiempo real desde el panel admin.",
-      tag: "Completado", color: "green",
+      title: "Hot Wallet",
+      status: "live",
+      icon: "🔥",
+      color: "red",
+      points: [
+        "Clave privada propia (no custodia externa)",
+        "Saldo USDT en tiempo real vía TronGrid API",
+        "TRX para gas visible en panel admin",
+        "Dirección pública configurable por env var",
+      ],
     },
     {
-      date: "Jul 2026", title: "Interfaz de Dispersión USDT",
-      desc: "Formulario para enviar USDT on-chain. Confirmación con contraseña, historial de TXs con link a TronScan.",
-      tag: "Completado", color: "green",
+      title: "Motor de Dispersión",
+      status: "live",
+      icon: "⚡",
+      color: "green",
+      points: [
+        "POST /api/admin/hot-wallet/disperse",
+        "Autenticación por contraseña antes de firmar",
+        "TronWeb v6 firma y broadcast on-chain",
+        "Registro inmediato en DB con status",
+      ],
     },
     {
-      date: "Jul 2026", title: "Seguridad de Contraseñas",
-      desc: "Los cambios de contraseña del admin ahora persisten: ya no se revierten al reiniciar el servidor.",
-      tag: "Completado", color: "green",
+      title: "Audit Log",
+      status: "live",
+      icon: "🗃",
+      color: "blue",
+      points: [
+        "Tabla hot_wallet_dispersions en PostgreSQL",
+        "Campos: toAddress, amount, txid, status, note",
+        "Historial con link directo a TronScan",
+        "Estados: pending → confirmed / failed",
+      ],
     },
     {
-      date: "Jul 2026", title: "Migrations Automáticas",
-      desc: "Script post-merge ejecuta migraciones de base de datos en cada deploy sin intervención manual.",
-      tag: "Completado", color: "green",
+      title: "Broker Exchange",
+      status: "partial",
+      icon: "📈",
+      color: "amber",
+      points: [
+        "Cadena: Binance → OKX → Kraken (fallback)",
+        "broker-executor.ts con lógica de failover",
+        "Código Binance listo — falta API Key",
+        "OKX activo como respaldo principal",
+      ],
     },
     {
-      date: "En curso", title: "Binance como Broker Principal",
-      desc: "Código listo. Pendiente agregar BINANCE_API_KEY y BINANCE_SECRET_KEY en los secrets del proyecto.",
-      tag: "En progreso", color: "amber",
+      title: "Validaciones de Seguridad",
+      status: "building",
+      icon: "🔒",
+      color: "purple",
+      points: [
+        "Verificar saldo antes de firmar TX",
+        "Límite máximo configurable por operación",
+        "Rate limiting en endpoint de dispersión",
+        "Bloqueo si saldo insuficiente con msg claro",
+      ],
     },
     {
-      date: "Próximo", title: "Límite de Dispersión + Auto-recarga TRX",
-      desc: "Tope máximo por operación para reducir riesgo. Recarga automática de TRX cuando el gas esté bajo.",
-      tag: "Pendiente", color: "slate",
+      title: "Auto-gestión de Gas",
+      status: "building",
+      icon: "⛽",
+      color: "slate",
+      points: [
+        "Monitor de saldo TRX en hot wallet",
+        "Recarga automática al bajar del umbral",
+        "Configuración del umbral desde admin panel",
+        "Alertas si recarga falla",
+      ],
     },
   ];
 
-  const cm: Record<string, { bg: string; text: string; dot: string; border: string }> = {
-    green: { bg: "bg-green-50",  text: "text-green-700", dot: "bg-green-500",  border: "border-green-200" },
-    amber: { bg: "bg-amber-50",  text: "text-amber-700", dot: "bg-amber-400",  border: "border-amber-200" },
-    slate: { bg: "bg-slate-50",  text: "text-slate-500", dot: "bg-slate-300",  border: "border-slate-200" },
+  const statusColor = {
+    live:     { badge: "bg-green-100 text-green-700 border-green-200", dot: "bg-green-500",  ring: "border-green-200" },
+    partial:  { badge: "bg-amber-100 text-amber-700 border-amber-200", dot: "bg-amber-400",  ring: "border-amber-200" },
+    building: { badge: "bg-slate-100 text-slate-500 border-slate-200", dot: "bg-slate-300",  ring: "border-slate-200" },
+  };
+
+  const iconColor: Record<string, string> = {
+    red:    "bg-red-50 border-red-200",
+    green:  "bg-green-50 border-green-200",
+    blue:   "bg-blue-50 border-blue-200",
+    amber:  "bg-amber-50 border-amber-200",
+    purple: "bg-purple-50 border-purple-200",
+    slate:  "bg-slate-50 border-slate-200",
+  };
+
+  const statusLabel: Record<string, string> = {
+    live: "En producción", partial: "En progreso", building: "En construcción",
   };
 
   return (
-    <div className="min-h-screen bg-white font-sans p-8">
+    <div className="min-h-screen bg-white font-sans p-7">
+
       {/* Header */}
-      <div className="mb-7 pb-5 border-b border-slate-200 flex items-center justify-between">
+      <div className="mb-6 flex items-start justify-between pb-5 border-b border-slate-100">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-[#c8322b] flex items-center justify-center font-black text-white text-sm">B+</div>
+          <div className="w-11 h-11 rounded-xl bg-[#c8322b] flex items-center justify-center font-black text-white">B+</div>
           <div>
-            <h1 className="text-xl font-bold text-slate-900">Reporte de Avances</h1>
-            <p className="text-sm text-slate-500">Sistema de Dispersión USDT · Banxico Plus LLC</p>
+            <h1 className="text-xl font-black text-slate-900 leading-tight">Sistema de Dispersión Crypto</h1>
+            <p className="text-sm text-slate-500">Banxico Plus LLC · Arquitectura TRON TRC-20 · Julio 2026</p>
           </div>
         </div>
-        <div className="text-right">
-          <p className="text-[10px] text-slate-400 uppercase tracking-wider">Periodo</p>
-          <p className="text-sm font-semibold text-slate-700">Julio 2026</p>
+        <div className="flex gap-2 mt-1">
+          {[
+            { n: "3", l: "módulos en producción",  c: "text-green-600 bg-green-50 border-green-200"  },
+            { n: "2", l: "en construcción",          c: "text-amber-600 bg-amber-50 border-amber-200" },
+          ].map(k => (
+            <div key={k.l} className={`px-3 py-2 rounded-xl border text-center min-w-[90px] ${k.c}`}>
+              <p className="text-xl font-black">{k.n}</p>
+              <p className="text-[10px] font-medium leading-tight mt-0.5">{k.l}</p>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-4 gap-4 mb-7">
-        {[
-          { n: "4",     label: "Funcionalidades completadas", color: "text-[#c8322b]" },
-          { n: "2",     label: "Tareas activas en cola",      color: "text-amber-600" },
-          { n: "TRON",  label: "Red blockchain activa",       color: "text-blue-600"  },
-          { n: "≈$0.02",label: "Costo fee por dispersión",    color: "text-green-600" },
-        ].map((k) => (
-          <div key={k.label} className="p-4 rounded-xl border border-slate-200 bg-slate-50">
-            <p className={`text-2xl font-black ${k.color}`}>{k.n}</p>
-            <p className="text-[11px] text-slate-500 mt-1 leading-tight">{k.label}</p>
-          </div>
-        ))}
+      {/* Key insight */}
+      <div className="mb-5 rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 p-4 flex items-start gap-3">
+        <div className="text-2xl mt-0.5">🔑</div>
+        <div>
+          <p className="text-sm font-bold text-white">Infraestructura blockchain propia — sin intermediarios</p>
+          <p className="text-[12px] text-slate-400 mt-1 leading-relaxed">
+            La plataforma controla su propia clave privada TRON. Cada dispersión USDT se firma y transmite
+            directamente a mainnet sin pasar por un exchange o servicio de custodia. Costo por transferencia:
+            <strong className="text-white"> ≈ $0.02 USD</strong>. Verificable en TronScan.
+          </p>
+        </div>
       </div>
 
-      {/* Timeline */}
-      <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Hoja de ruta</h2>
-      <div className="space-y-0">
-        {milestones.map((m, i) => {
-          const c = cm[m.color];
+      {/* Modules grid */}
+      <div className="grid grid-cols-2 gap-3">
+        {modules.map((m) => {
+          const sc = statusColor[m.status as keyof typeof statusColor];
           return (
-            <div key={m.title} className="flex gap-4">
-              <div className="flex flex-col items-center w-6 flex-shrink-0">
-                <div className={`w-3 h-3 rounded-full mt-1.5 flex-shrink-0 ${c.dot}`} />
-                {i < milestones.length - 1 && <div className="w-px flex-1 bg-slate-200 my-1" />}
-              </div>
-              <div className={`mb-3 flex-1 rounded-lg border ${c.border} ${c.bg} p-3`}>
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-xs font-bold text-slate-800">{m.title}</p>
-                    <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">{m.desc}</p>
+            <div key={m.title} className={`rounded-xl border ${sc.ring} p-4`}>
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className={`w-8 h-8 rounded-lg border text-base flex items-center justify-center ${iconColor[m.color]}`}>
+                    {m.icon}
                   </div>
-                  <div className="flex-shrink-0 text-right">
-                    <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full ${c.bg} ${c.text} border ${c.border}`}>
-                      {m.tag}
-                    </span>
-                    <p className="text-[10px] text-slate-400 mt-1">{m.date}</p>
+                  <div>
+                    <p className="text-sm font-bold text-slate-800 leading-tight">{m.title}</p>
                   </div>
                 </div>
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${sc.badge}`}>
+                  {statusLabel[m.status]}
+                </span>
               </div>
+              <ul className="space-y-1">
+                {m.points.map((p) => (
+                  <li key={p} className="flex items-start gap-1.5">
+                    <div className={`w-1 h-1 rounded-full flex-shrink-0 mt-1.5 ${sc.dot}`} />
+                    <span className="text-[11px] text-slate-600 leading-tight">{p}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           );
         })}
+      </div>
+
+      {/* Footer */}
+      <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-4 gap-3">
+        {[
+          { v: "TRON",        l: "Red blockchain"      },
+          { v: "TRC-20 USDT", l: "Token estándar"       },
+          { v: "PostgreSQL",  l: "Audit log persistente" },
+          { v: "AES-256",     l: "Cifrado de sesiones"   },
+        ].map(s => (
+          <div key={s.l} className="text-center p-2 rounded-lg bg-slate-50 border border-slate-100">
+            <p className="text-xs font-black text-slate-800">{s.v}</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">{s.l}</p>
+          </div>
+        ))}
       </div>
     </div>
   );
