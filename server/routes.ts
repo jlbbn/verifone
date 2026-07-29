@@ -667,6 +667,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(401).json({ error: "Contraseña incorrecta" });
     }
 
+    // Validate against configurable max dispersal limit
+    const settings = await storage.getSettings();
+    const maxUsdt = settings.maxDispersalUsdt ?? 5000;
+    if (parsed.data.amountUsdt > maxUsdt) {
+      return res.status(400).json({
+        error: `El monto excede el límite máximo configurado de $${maxUsdt.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT por operación.`,
+        code: "EXCEEDS_MAX_DISPERSAL",
+        maxUsdt,
+      });
+    }
+
     const info = TronClient.platformWalletInfo();
     if (!info.configured) {
       return res.status(503).json({ error: "Hot wallet no configurada" });

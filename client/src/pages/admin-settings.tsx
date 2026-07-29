@@ -372,11 +372,34 @@ export default function AdminSettingsPage() {
                 </div>
               </div>
               <Separator className="my-5" />
+
+              {/* Max dispersal limit */}
+              <div className="space-y-1.5">
+                <Label htmlFor="maxDispersalUsdt">Límite máximo de dispersión por operación (USDT)</Label>
+                <div className="relative max-w-xs">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">$</span>
+                  <Input
+                    id="maxDispersalUsdt"
+                    type="number"
+                    step="100"
+                    min="1"
+                    className="pl-6"
+                    value={draft.maxDispersalUsdt ?? 5000}
+                    onChange={e => set("maxDispersalUsdt", parseFloat(e.target.value) || 5000)}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  El endpoint <code className="text-[11px] bg-muted px-1 py-0.5 rounded">/api/admin/hot-wallet/disperse</code> rechazará cualquier operación que supere este monto. Actualmente: <strong>${fmtUSD(draft.maxDispersalUsdt ?? 5000)} USDT</strong>.
+                </p>
+              </div>
+
+              <Separator className="my-5" />
               <div className="rounded-md bg-muted/50 p-4 text-sm space-y-1">
                 <p className="font-medium">Vista previa — Caja Administrador</p>
                 <p className="text-muted-foreground">Saldo apertura: <span className="font-mono text-foreground">${fmtUSD(draft.saldoAperturaUSD)} USD</span></p>
                 <p className="text-muted-foreground">Saldo sistema: <span className="font-mono text-foreground">${fmtUSD(draft.saldoSistemaUSD)} USD</span></p>
                 <p className="text-muted-foreground">En MXN ({draft.tipoCambio}): <span className="font-mono text-foreground">${fmtUSD(draft.saldoSistemaUSD * draft.tipoCambio)} MXN</span></p>
+                <p className="text-muted-foreground">Límite dispersión: <span className="font-mono text-foreground">${fmtUSD(draft.maxDispersalUsdt ?? 5000)} USDT</span></p>
               </div>
             </CardContent>
           </Card>

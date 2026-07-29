@@ -148,6 +148,7 @@ function DisperseWidget() {
   const [lastTxid,   setLastTxid]   = useState<string | null>(null);
   const [history,    setHistory]    = useState<Dispersion[]>([]);
   const [histLoading, setHistLoading] = useState(true);
+  const [maxUsdt,    setMaxUsdt]    = useState<number>(5000);
 
   const fetchHistory = async () => {
     try {
@@ -158,7 +159,17 @@ function DisperseWidget() {
     }
   };
 
-  useEffect(() => { fetchHistory(); }, []);
+  const fetchLimit = async () => {
+    try {
+      const res = await fetch("/api/settings");
+      if (res.ok) {
+        const s = await res.json();
+        if (s.maxDispersalUsdt) setMaxUsdt(Number(s.maxDispersalUsdt));
+      }
+    } catch { /* use default */ }
+  };
+
+  useEffect(() => { fetchHistory(); fetchLimit(); }, []);
 
   function openConfirm() {
     setError(null);
@@ -168,6 +179,10 @@ function DisperseWidget() {
       return;
     }
     if (!amt || amt <= 0) { setError("Monto inválido"); return; }
+    if (amt > maxUsdt) {
+      setError(`El monto excede el límite máximo por operación: $${fmt(maxUsdt)} USDT`);
+      return;
+    }
     setPassword("");
     setShowDialog(true);
   }
@@ -311,15 +326,27 @@ function DisperseWidget() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="text-xs">Monto (USDT)</Label>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs">Monto (USDT)</Label>
+                  <span className="text-[10px] text-muted-foreground">
+                    Máx: <span className="font-semibold text-foreground">${fmt(maxUsdt)}</span>
+                  </span>
+                </div>
                 <Input
                   type="number"
                   min="0.01"
                   step="0.01"
+                  max={maxUsdt}
                   placeholder="0.00"
                   value={amount}
                   onChange={e => setAmount(e.target.value)}
+                  className={parseFloat(amount) > maxUsdt ? "border-red-400 focus-visible:ring-red-400" : ""}
                 />
+                {parseFloat(amount) > maxUsdt && (
+                  <p className="text-[10px] text-red-500 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />Supera el límite configurado
+                  </p>
+                )}
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Nota (opcional)</Label>
