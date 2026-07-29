@@ -10,6 +10,16 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import {
   Wallet,
   Copy,
@@ -25,6 +35,11 @@ import {
   Info,
   Zap,
   AlertCircle,
+  Send,
+  ExternalLink,
+  Lock,
+  XCircle,
+  Loader2,
 } from "lucide-react";
 
 const WALLET_ADDRESS = "0x5293790F2C49A1B11B3d3b2AcB8583946B20f735";
@@ -105,6 +120,284 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: any[] 
       <p className="text-muted-foreground">Usuarios: <strong className="text-foreground">{d.users}</strong></p>
       <p className="text-muted-foreground">Monto: <strong className="text-foreground">${fmt(d.value)} USDT</strong></p>
     </div>
+  );
+}
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface Dispersion {
+  id:         number;
+  toAddress:  string;
+  amountUsdt: string;
+  txid:       string | null;
+  status:     string;
+  note:       string | null;
+  createdAt:  string;
+}
+
+// ── Dispersal Widget ──────────────────────────────────────────────────────────
+
+function DisperseWidget() {
+  const [toAddress,  setToAddress]  = useState("");
+  const [amount,     setAmount]     = useState("");
+  const [note,       setNote]       = useState("");
+  const [showDialog, setShowDialog] = useState(false);
+  const [password,   setPassword]   = useState("");
+  const [loading,    setLoading]    = useState(false);
+  const [error,      setError]      = useState<string | null>(null);
+  const [lastTxid,   setLastTxid]   = useState<string | null>(null);
+  const [history,    setHistory]    = useState<Dispersion[]>([]);
+  const [histLoading, setHistLoading] = useState(true);
+
+  const fetchHistory = async () => {
+    try {
+      const res = await fetch("/api/admin/hot-wallet/dispersions");
+      if (res.ok) setHistory(await res.json());
+    } finally {
+      setHistLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchHistory(); }, []);
+
+  function openConfirm() {
+    setError(null);
+    const amt = parseFloat(amount);
+    if (!toAddress.match(/^T[a-zA-Z0-9]{33}$/)) {
+      setError("Dirección TRON inválida (debe empezar con T y tener 34 caracteres)");
+      return;
+    }
+    if (!amt || amt <= 0) { setError("Monto inválido"); return; }
+    setPassword("");
+    setShowDialog(true);
+  }
+
+  async function executeDisperse() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/hot-wallet/disperse", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          toAddress,
+          amountUsdt: parseFloat(amount),
+          password,
+          note: note || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Error en dispersión");
+      setLastTxid(json.txid);
+      setShowDialog(false);
+      setToAddress(""); setAmount(""); setNote("");
+      fetchHistory();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function statusBadge(status: string) {
+    if (status === "confirmed") return (
+      <Badge className="text-[10px] bg-green-100 text-green-700 border-green-200 no-default-active-elevate gap-1">
+        <CheckCircle className="w-2.5 h-2.5" />Confirmado
+      </Badge>
+    );
+    if (status === "failed") return (
+      <Badge className="text-[10px] bg-red-100 text-red-700 border-red-200 no-default-active-elevate gap-1">
+        <XCircle className="w-2.5 h-2.5" />Fallido
+      </Badge>
+    );
+    return (
+      <Badge className="text-[10px] bg-amber-100 text-amber-800 border-amber-200 no-default-active-elevate gap-1">
+        <Clock className="w-2.5 h-2.5" />Pendiente
+      </Badge>
+    );
+  }
+
+  return (
+    <>
+      {/* Confirm dialog */}
+      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lock className="w-4 h-4 text-[#c8322b]" />
+              Confirmar dispersión
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 space-y-1">
+              <p className="text-xs text-amber-800 font-semibold">Resumen de la operación</p>
+              <p className="text-xs text-amber-700">
+                <span className="font-mono break-all">{toAddress}</span>
+              </p>
+              <p className="text-lg font-bold text-amber-900">${parseFloat(amount || "0").toFixed(2)} USDT</p>
+              {note && <p className="text-[11px] text-amber-600 italic">{note}</p>}
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Contraseña de administrador</Label>
+              <Input
+                type="password"
+                placeholder="Tu contraseña"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && !loading && executeDisperse()}
+                autoFocus
+              />
+            </div>
+            {error && (
+              <p className="text-xs text-red-600 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" />{error}
+              </p>
+            )}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setShowDialog(false)} disabled={loading}>
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              className="bg-[#c8322b] hover:bg-[#a82820] text-white"
+              onClick={executeDisperse}
+              disabled={loading || !password}
+            >
+              {loading ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Enviando…</> : <><Send className="w-3.5 h-3.5 mr-1.5" />Firmar y enviar</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Card className="border-[#c8322b]/20 bg-red-50/20">
+        <CardContent className="px-5 py-4 space-y-4">
+          {/* Header */}
+          <div className="flex items-center gap-2">
+            <Send className="w-4 h-4 text-[#c8322b]" />
+            <span className="text-sm font-semibold">Dispersar USDT</span>
+            <Badge variant="outline" className="text-[10px] ml-auto no-default-active-elevate">TRC-20 · On-chain</Badge>
+          </div>
+
+          {/* Success banner */}
+          {lastTxid && (
+            <div className="flex items-start gap-2 p-3 rounded-md bg-green-50 border border-green-200">
+              <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-green-700">¡Dispersión enviada exitosamente!</p>
+                <p className="text-[11px] text-green-600 font-mono break-all mt-0.5">{lastTxid}</p>
+                <a
+                  href={`https://tronscan.org/#/transaction/${lastTxid}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-[11px] text-green-700 underline mt-1"
+                >
+                  Ver en TronScan <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+            </div>
+          )}
+
+          {/* Form */}
+          <div className="grid gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Dirección TRON destino</Label>
+              <Input
+                placeholder="T… (dirección TRC-20)"
+                value={toAddress}
+                onChange={e => setToAddress(e.target.value)}
+                className="font-mono text-xs"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Monto (USDT)</Label>
+                <Input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={amount}
+                  onChange={e => setAmount(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Nota (opcional)</Label>
+                <Input
+                  placeholder="Concepto…"
+                  value={note}
+                  onChange={e => setNote(e.target.value)}
+                />
+              </div>
+            </div>
+            {error && !showDialog && (
+              <p className="text-xs text-red-600 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" />{error}
+              </p>
+            )}
+            <Button
+              onClick={openConfirm}
+              className="bg-[#c8322b] hover:bg-[#a82820] text-white w-full sm:w-auto self-end"
+              size="sm"
+            >
+              <Send className="w-3.5 h-3.5 mr-1.5" />
+              Revisar y enviar
+            </Button>
+          </div>
+
+          {/* History */}
+          <div className="pt-2 border-t border-border space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Historial de dispersiones</p>
+              <Button variant="ghost" size="sm" className="h-6 px-2 text-[11px]" onClick={fetchHistory}>
+                <RefreshCw className="w-3 h-3 mr-1" />Actualizar
+              </Button>
+            </div>
+
+            {histLoading ? (
+              <div className="space-y-2">
+                {[1,2].map(i => <div key={i} className="h-12 bg-muted/40 rounded animate-pulse" />)}
+              </div>
+            ) : history.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-4 text-center">Sin dispersiones registradas</p>
+            ) : (
+              <div className="divide-y divide-border rounded-md border border-border overflow-hidden">
+                {history.map(d => (
+                  <div key={d.id} className="px-3 py-2.5 bg-background hover:bg-muted/20 transition-colors">
+                    <div className="flex items-start justify-between gap-2 flex-wrap">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-bold text-[#c8322b]">
+                            ${parseFloat(d.amountUsdt).toFixed(2)} USDT
+                          </span>
+                          {statusBadge(d.status)}
+                        </div>
+                        <p className="text-[11px] font-mono text-muted-foreground truncate mt-0.5">{d.toAddress}</p>
+                        {d.txid && (
+                          <a
+                            href={`https://tronscan.org/#/transaction/${d.txid}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[11px] text-blue-600 hover:underline mt-0.5"
+                          >
+                            <span className="font-mono truncate max-w-[180px]">{d.txid.slice(0, 16)}…</span>
+                            <ExternalLink className="w-2.5 h-2.5 flex-shrink-0" />
+                          </a>
+                        )}
+                        {d.note && <p className="text-[11px] text-muted-foreground italic mt-0.5">{d.note}</p>}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground flex-shrink-0">
+                        {new Date(d.createdAt).toLocaleString("es-MX")}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </>
   );
 }
 
@@ -277,6 +570,9 @@ export default function AdminCajaUSDT() {
 
       {/* ── Hot Wallet de dispersión USDT ── */}
       <HotWalletWidget />
+
+      {/* ── Dispersar USDT ── */}
+      <DisperseWidget />
 
       {/* ── Nota pago anual ── */}
       <Card className="border-blue-200 bg-blue-50/60">

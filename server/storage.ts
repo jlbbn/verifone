@@ -457,10 +457,8 @@ export class DatabaseStorage implements IStorage {
       await db.insert(users).values(u).onConflictDoUpdate({
         target: users.username,
         set: {
-          email: u.email,
-          role: u.role,
-          suspended: u.suspended,
-          subscriptionPlan: u.subscriptionPlan,
+          email:             u.email,
+          role:              u.role,
           subscriptionStart: u.subscriptionStart,
         },
       });
