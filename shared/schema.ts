@@ -315,6 +315,8 @@ export interface SystemSettings {
   tickerItems: TickerItem[];
   // Parámetros terminal (label + value only; UI metadata stays in frontend)
   terminalParams: { label: string; value: string }[];
+  // Crypto — límite de dispersión por operación (USDT)
+  maxDispersalUsdt: number;
 }
 
 export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
@@ -343,6 +345,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
     { symbol: "DOT/USD", value: "$15.32" },
     { symbol: "ADA/USD", value: "$0.82" },
   ],
+  maxDispersalUsdt: 5000,
   terminalParams: [
     { label: "APLICACION",    value: "RETAIL" },
     { label: "VERSION",       value: "PROVEEOPENAT400" },
