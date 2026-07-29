@@ -452,9 +452,17 @@ export class DatabaseStorage implements IStorage {
     ];
 
     for (const u of seedUsers) {
+      // Do NOT include password in the SET clause — changing a password at
+      // runtime would be silently reverted on every server restart otherwise.
       await db.insert(users).values(u).onConflictDoUpdate({
         target: users.username,
-        set: { password: u.password },
+        set: {
+          email: u.email,
+          role: u.role,
+          suspended: u.suspended,
+          subscriptionPlan: u.subscriptionPlan,
+          subscriptionStart: u.subscriptionStart,
+        },
       });
     }
 

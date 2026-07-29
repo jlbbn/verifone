@@ -14,6 +14,7 @@ import { fetchPrices, clearPriceCache } from "./crypto/price-aggregator.js";
 import * as OKXClient    from "./crypto/okx-client.js";
 import * as KrakenClient from "./crypto/kraken-client.js";
 import { executeSwap, availableBroker } from "./crypto/broker-executor.js";
+import * as TronClient from "./crypto/tron-client.js";
 
 declare module "express-session" {
   interface SessionData {
@@ -615,6 +616,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         balances: byUser.get(u.id) ?? Object.fromEntries(CRYPTO_ASSETS.map(a => [a, 0])),
       }));
       res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Hot wallet TRON (saldo USDT en tiempo real) ─────────────────────────
+  app.get("/api/admin/hot-wallet/balance", requireRole("ADMIN"), async (_req, res) => {
+    try {
+      const info = TronClient.platformWalletInfo();
+      if (!info.configured) {
+        return res.status(503).json({
+          error: "Hot wallet no configurada",
+          detail: "Faltan PLATFORM_TRON_ADDRESS y/o PLATFORM_TRON_PRIVATE_KEY",
+          address: info.address,
+          network: info.network,
+          token:   info.token,
+        });
+      }
+      const balance = await TronClient.getBalance();
+      res.json({
+        address:     balance.address,
+        usdtBalance: balance.usdtBalance,
+        trxBalance:  balance.trxBalance,
+        rawUsdt:     balance.rawUsdt,
+        network:     "TRON (TRC-20)",
+        token:       "USDT",
+        contract:    TronClient.USDT_CONTRACT,
+        fetchedAt:   new Date().toISOString(),
+      });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
