@@ -4,7 +4,7 @@ import rateLimit from "express-rate-limit";
 import { storage } from "./storage";
 import { db } from "./db";
 import { eq, inArray, sql, or } from "drizzle-orm";
-import { transactions as txTable, users as usersTable } from "@shared/schema";
+import { transactions as txTable, users as usersTable, hotWalletDispersions } from "@shared/schema";
 import { randomBytes } from "crypto";
 import { z } from "zod";
 import { verifyPassword, maskCardNumber, hashPassword } from "./auth-utils";
@@ -645,6 +645,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
         contract:    TronClient.USDT_CONTRACT,
         fetchedAt:   new Date().toISOString(),
       });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Dispersar USDT desde la hot wallet ──────────────────────────────────
+  app.post("/api/admin/hot-wallet/disperse", requireRole("ADMIN"), async (req, res) => {
+    const schema = z.object({
+      toAddress:  z.string().min(30),
+      amountUsdt: z.number().positive().finite(),
+      password:   z.string().min(1),
+      note:       z.string().optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Datos inválidos", detail: parsed.error.issues });
+
+    const admin = req.currentUser!;
+    // Verify admin password before signing
+    if (!verifyPassword(parsed.data.password, admin.password)) {
+      return res.status(401).json({ error: "Contraseña incorrecta" });
+    }
+
+    const info = TronClient.platformWalletInfo();
+    if (!info.configured) {
+      return res.status(503).json({ error: "Hot wallet no configurada" });
+    }
+
+    // Insert pending record first — we have a txid after broadcast
+    const [row] = await db.insert(hotWalletDispersions).values({
+      adminId:    admin.id,
+      toAddress:  parsed.data.toAddress,
+      amountUsdt: String(parsed.data.amountUsdt),
+      status:     "pending",
+      note:       parsed.data.note ?? null,
+    }).returning();
+
+    try {
+      const result = await TronClient.transfer(parsed.data.toAddress, parsed.data.amountUsdt);
+      await db.update(hotWalletDispersions)
+        .set({ txid: result.txid, status: "confirmed" })
+        .where(eq(hotWalletDispersions.id, row.id));
+
+      return res.json({ success: true, txid: result.txid, id: row.id });
+    } catch (err: any) {
+      await db.update(hotWalletDispersions)
+        .set({ status: "failed", note: (parsed.data.note ?? "") + " | ERR: " + err.message })
+        .where(eq(hotWalletDispersions.id, row.id));
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Historial de dispersiones ────────────────────────────────────────────
+  app.get("/api/admin/hot-wallet/dispersions", requireRole("ADMIN"), async (_req, res) => {
+    try {
+      const rows = await db
+        .select()
+        .from(hotWalletDispersions)
+        .orderBy(sql`${hotWalletDispersions.createdAt} DESC`)
+        .limit(50);
+      res.json(rows);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

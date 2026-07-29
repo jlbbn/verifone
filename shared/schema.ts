@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, decimal, integer, boolean, doublePrecision, unique, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, decimal, integer, boolean, doublePrecision, unique, jsonb, serial, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -463,6 +463,19 @@ export type InsertRoutingRule = z.infer<typeof insertRoutingRuleSchema>;
 
 export type RoutingDecision = typeof routingDecisions.$inferSelect;
 export type TerminalCommand = typeof terminalCommands.$inferSelect;
+
+// ─── Hot wallet dispersions audit log ────────────────────────────────────────
+export const hotWalletDispersions = pgTable("hot_wallet_dispersions", {
+  id:          serial("id").primaryKey(),
+  adminId:     text("admin_id").notNull(),
+  toAddress:   text("to_address").notNull(),
+  amountUsdt:  numeric("amount_usdt", { precision: 18, scale: 6 }).notNull(),
+  txid:        text("txid"),
+  status:      text("status").notNull().default("pending"),   // pending | confirmed | failed
+  note:        text("note"),
+  createdAt:   timestamp("created_at").defaultNow().notNull(),
+});
+export type HotWalletDispersion = typeof hotWalletDispersions.$inferSelect;
 
 // ─── Persistencia de configuración del sistema ───────────────────────────────
 // Tabla de fila única: id siempre = 1
