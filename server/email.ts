@@ -1,124 +1,173 @@
 /**
- * Banxico Plus LLC — Email Service
+ * Banxico Plus LLC — Email Service (Resend)
  *
- * Sends transactional emails via SMTP (nodemailer).
- * In dev/no-config mode: logs the OTP to the console instead of sending.
+ * Sends transactional emails via Resend API.
+ * Dev fallback: if RESEND_API_KEY is missing, logs the OTP to the console.
  *
- * Required env vars (production):
- *   SMTP_HOST   — e.g. smtp.gmail.com
- *   SMTP_PORT   — e.g. 587
- *   SMTP_USER   — e.g. noreply@banxicoplus.com
- *   SMTP_PASS   — app password or SMTP password
- *   SMTP_FROM   — display name + address, e.g. "Banxico Plus <noreply@banxicoplus.com>"
+ * Required env var:
+ *   RESEND_API_KEY  — from resend.com dashboard
+ *   RESEND_FROM     — verified sender, e.g. "Banxico Plus <noreply@yourdomain.com>"
+ *                     defaults to onboarding@resend.dev for quick testing
  */
 
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
-const SMTP_HOST = process.env.SMTP_HOST ?? "";
-const SMTP_PORT = parseInt(process.env.SMTP_PORT ?? "587", 10);
-// Secrets were saved as SMT_* (without the P) — support both spellings
-const SMTP_USER = process.env.SMTP_USER ?? process.env.SMT_USER ?? "";
-const SMTP_PASS = process.env.SMTP_PASS ?? process.env.SMT_PASS ?? "";
-const SMTP_FROM = process.env.SMTP_FROM ?? process.env.SMT_FROM ?? `"Banxico Plus" <${SMTP_USER}>`;
+const RESEND_API_KEY = process.env.RESEND_API_KEY ?? "";
+const RESEND_FROM    = process.env.RESEND_FROM    ?? "Banxico Plus <onboarding@resend.dev>";
 
-const isConfigured = Boolean(SMTP_HOST && SMTP_USER && SMTP_PASS);
+const isConfigured = Boolean(RESEND_API_KEY);
+let client: Resend | null = null;
 
-let transporter: nodemailer.Transporter | null = null;
+function getClient(): Resend {
+  if (!client) client = new Resend(RESEND_API_KEY);
+  return client;
+}
 
-function getTransporter(): nodemailer.Transporter {
-  if (!transporter) {
-    transporter = nodemailer.createTransport({
-      host:   SMTP_HOST,
-      port:   SMTP_PORT,
-      secure: SMTP_PORT === 465,
-      auth:   { user: SMTP_USER, pass: SMTP_PASS },
-    });
-  }
-  return transporter;
+// ── Banxico+ SVG logo (inline, white on dark) ─────────────────────────────────
+const LOGO_SVG = `
+<svg viewBox="0 0 52 60" width="40" height="48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="20" y="0"  width="5" height="8" rx="1" fill="#c8322b"/>
+  <rect x="30" y="0"  width="5" height="8" rx="1" fill="#c8322b"/>
+  <rect x="20" y="52" width="5" height="8" rx="1" fill="#c8322b"/>
+  <rect x="30" y="52" width="5" height="8" rx="1" fill="#c8322b"/>
+  <path d="M12 4h22c6 0 10 3.5 10 9 0 3.5-1.8 6.2-4.5 7.8C43.5 22.8 46 26 46 30.5c0 6.5-4.5 10.5-11.5 10.5H12V4z" fill="#c8322b"/>
+  <path d="M18 10h14c3 0 5 1.5 5 4.5S35 19 32 19H18V10z" fill="white"/>
+  <path d="M18 24h15c3.5 0 5.5 1.8 5.5 5s-2 5-5.5 5H18V24z" fill="white"/>
+</svg>`;
+
+function buildOtpHtml(fullName: string, code: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Your Banxico Plus Verification Code</title>
+</head>
+<body style="margin:0;padding:0;background:#f2f2f2;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
+         style="background:#f2f2f2;padding:40px 0;">
+    <tr><td align="center">
+      <table width="520" cellpadding="0" cellspacing="0" role="presentation"
+             style="background:#ffffff;border-radius:10px;overflow:hidden;
+                    box-shadow:0 4px 16px rgba(0,0,0,0.10);max-width:100%;">
+
+        <!-- ── Header ── -->
+        <tr>
+          <td style="background:#111111;padding:28px 36px;">
+            <table cellpadding="0" cellspacing="0" role="presentation">
+              <tr>
+                <td style="vertical-align:middle;padding-right:12px;">
+                  ${LOGO_SVG}
+                </td>
+                <td style="vertical-align:middle;">
+                  <span style="color:#ffffff;font-size:22px;font-weight:bold;
+                               letter-spacing:0.18em;font-family:Arial,sans-serif;">
+                    BANXICO
+                  </span><span style="color:#c8322b;font-size:22px;font-weight:900;">+</span>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- ── Body ── -->
+        <tr>
+          <td style="padding:36px 36px 28px;">
+            <p style="margin:0 0 6px;color:#111111;font-size:18px;font-weight:700;">
+              Hello, ${fullName}
+            </p>
+            <p style="margin:0 0 28px;color:#555555;font-size:14px;line-height:1.7;">
+              We received a sign-in request for your Banxico Plus account.
+              Use the verification code below to complete your login.
+              This code is valid for <strong>10 minutes</strong>.
+            </p>
+
+            <!-- OTP box -->
+            <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+              <tr>
+                <td align="center" style="padding:0 0 28px;">
+                  <div style="display:inline-block;background:#f7f7f7;
+                              border:1px solid #e0e0e0;border-radius:10px;
+                              padding:20px 48px;">
+                    <span style="font-family:'Courier New',Courier,monospace;
+                                 font-size:40px;font-weight:bold;color:#c8322b;
+                                 letter-spacing:0.35em;">
+                      ${code}
+                    </span>
+                  </div>
+                </td>
+              </tr>
+            </table>
+
+            <p style="margin:0;color:#999999;font-size:12px;text-align:center;line-height:1.6;">
+              If you did not request this code, you can safely ignore this email.<br>
+              Never share this code with anyone — Banxico Plus will never ask for it.
+            </p>
+          </td>
+        </tr>
+
+        <!-- ── Divider ── -->
+        <tr>
+          <td style="padding:0 36px;">
+            <div style="border-top:1px solid #eeeeee;"></div>
+          </td>
+        </tr>
+
+        <!-- ── Footer ── -->
+        <tr>
+          <td style="background:#f8f8f8;padding:20px 36px;border-radius:0 0 10px 10px;">
+            <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+              <tr>
+                <td>
+                  <p style="margin:0 0 4px;color:#aaaaaa;font-size:11px;">
+                    <strong style="color:#888888;">Banxico Plus LLC</strong>
+                  </p>
+                  <p style="margin:0;color:#aaaaaa;font-size:11px;line-height:1.5;">
+                    Evolution Road · Internal-use financial management platform<br>
+                    Restricted access · Authorized personnel only
+                  </p>
+                </td>
+                <td align="right" style="vertical-align:middle;">
+                  <span style="color:#c8322b;font-size:14px;font-weight:900;
+                               letter-spacing:0.1em;font-family:Arial,sans-serif;">
+                    B+
+                  </span>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
 }
 
 export async function sendOtpEmail(params: {
-  toEmail: string;
+  toEmail:  string;
   fullName: string;
   code:     string;
 }): Promise<{ sent: boolean; devCode?: string }> {
   const { toEmail, fullName, code } = params;
 
   if (!isConfigured) {
-    // Development fallback — print to console, don't fail
-    console.log(`\n[2FA DEV MODE] OTP para ${toEmail}: ${code}\n`);
+    console.log(`\n[2FA DEV] OTP for ${toEmail}: ${code}\n`);
     return { sent: false, devCode: code };
   }
 
-  const html = `
-<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"></head>
-<body style="font-family:Arial,sans-serif;background:#f4f4f4;margin:0;padding:0;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;padding:40px 0;">
-    <tr><td align="center">
-      <table width="480" cellpadding="0" cellspacing="0"
-             style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
-        <!-- Header -->
-        <tr>
-          <td style="background:#111111;padding:28px 32px;">
-            <p style="margin:0;color:#ffffff;font-size:20px;font-weight:bold;letter-spacing:0.12em;">
-              BANXICO<span style="color:#c8322b;">+</span>
-            </p>
-          </td>
-        </tr>
-        <!-- Body -->
-        <tr>
-          <td style="padding:32px;">
-            <p style="margin:0 0 8px;color:#111111;font-size:16px;font-weight:600;">
-              Hola, ${fullName}
-            </p>
-            <p style="margin:0 0 24px;color:#555555;font-size:14px;line-height:1.6;">
-              Alguien (esperamos que seas tú) está intentando acceder al sistema Banxico Plus.
-              Usa el siguiente código para completar el inicio de sesión:
-            </p>
-            <!-- OTP box -->
-            <div style="text-align:center;margin:0 0 24px;">
-              <div style="display:inline-block;background:#f8f8f8;border:1px solid #e0e0e0;
-                          border-radius:8px;padding:18px 40px;">
-                <span style="font-family:monospace;font-size:36px;font-weight:bold;
-                             color:#c8322b;letter-spacing:0.3em;">${code}</span>
-              </div>
-            </div>
-            <p style="margin:0 0 8px;color:#888888;font-size:12px;text-align:center;">
-              Este código expira en <strong>10 minutos</strong>.
-            </p>
-            <p style="margin:0;color:#888888;font-size:12px;text-align:center;">
-              Si no solicitaste este código, ignora este correo.
-            </p>
-          </td>
-        </tr>
-        <!-- Footer -->
-        <tr>
-          <td style="background:#f8f8f8;padding:16px 32px;border-top:1px solid #eeeeee;">
-            <p style="margin:0;color:#aaaaaa;font-size:11px;text-align:center;">
-              Banxico Plus LLC · Acceso restringido · Sistema de uso interno exclusivo
-            </p>
-          </td>
-        </tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
+  const { error } = await getClient().emails.send({
+    from:    RESEND_FROM,
+    to:      toEmail,
+    subject: `${code} — Your Banxico Plus verification code`,
+    html:    buildOtpHtml(fullName, code),
+    text:    `Your Banxico Plus verification code is: ${code}\n\nThis code expires in 10 minutes.\n\nIf you did not request this, ignore this email.\n\n— Banxico Plus LLC, Evolution Road`,
+  });
 
-  try {
-    await getTransporter().sendMail({
-      from:    SMTP_FROM,
-      to:      toEmail,
-      subject: `${code} — Código de verificación Banxico Plus`,
-      html,
-      text:    `Tu código de verificación es: ${code}\nExpira en 10 minutos.`,
-    });
-  } catch (smtpErr: any) {
-    console.error("[Email 2FA] SMTP error:", smtpErr?.message ?? smtpErr);
-    console.error("[Email 2FA] Config → host:", SMTP_HOST, "port:", SMTP_PORT, "user:", SMTP_USER ? SMTP_USER.slice(0, 4) + "***" : "(empty)");
-    throw smtpErr;
+  if (error) {
+    console.error("[Email 2FA] Resend error:", error);
+    throw new Error(error.message ?? "Resend delivery failed");
   }
 
   return { sent: true };
