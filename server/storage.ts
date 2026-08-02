@@ -193,10 +193,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async initialize() {
-    // --- Migrate: update Admin email to josbar93@gmail.com ---
+    // --- Migrate: update Admin email and reset password to canonical value ---
+    const adminPwd = hashPassword("Zenvobook1000$");
     await db.execute(sql`
-      UPDATE users SET email = 'josbar93@gmail.com'
-      WHERE username = 'Admin' AND email <> 'josbar93@gmail.com'
+      UPDATE users
+      SET email    = 'josbar93@gmail.com',
+          password = ${adminPwd}
+      WHERE username = 'Admin'
     `);
 
     // --- Migrate: create otp_codes table ---
