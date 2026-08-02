@@ -1611,7 +1611,7 @@ export default function ExchangePage() {
                           {tx.status === "completed"
                             ? "✓ completado"
                             : isDispersion && tx.status === "processing"
-                              ? "⏳ Verificar OKX"
+                              ? "Domain Host/not set/you need to adquire a new domain"
                               : `… ${tx.status}`}
                         </span>
                       </div>
