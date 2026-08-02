@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
-import { Lock, User, ShieldCheck, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Lock, User, ShieldCheck, Eye, EyeOff, Loader2, Mail, KeyRound, ArrowLeft } from "lucide-react";
 
 const loginSchema = z.object({
   username: z.string().min(1, "Usuario o correo requerido"),
@@ -36,14 +36,8 @@ function BanxicoLogo() {
           d="M12 4h22c6 0 10 3.5 10 9 0 3.5-1.8 6.2-4.5 7.8C43.5 22.8 46 26 46 30.5c0 6.5-4.5 10.5-11.5 10.5H12V4z"
           fill="#c8322b"
         />
-        <path
-          d="M18 10h14c3 0 5 1.5 5 4.5S35 19 32 19H18V10z"
-          fill="white"
-        />
-        <path
-          d="M18 24h15c3.5 0 5.5 1.8 5.5 5s-2 5-5.5 5H18V24z"
-          fill="white"
-        />
+        <path d="M18 10h14c3 0 5 1.5 5 4.5S35 19 32 19H18V10z" fill="white" />
+        <path d="M18 24h15c3.5 0 5.5 1.8 5.5 5s-2 5-5.5 5H18V24z" fill="white" />
       </svg>
       <div className="leading-none">
         <span className="text-white font-bold tracking-widest text-2xl uppercase" style={{ letterSpacing: "0.18em" }}>
@@ -58,7 +52,14 @@ function BanxicoLogo() {
 export default function LoginPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(false);
+
+  // ── Step state ──────────────────────────────────────────────────────────────
+  const [step, setStep]               = useState<"credentials" | "otp">("credentials");
+  const [maskedEmail, setMaskedEmail] = useState("");
+  const [devCode, setDevCode]         = useState<string | null>(null);  // dev-mode OTP
+
+  // ── Credentials step ────────────────────────────────────────────────────────
+  const [isLoading, setIsLoading]   = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const form = useForm<LoginForm>({
@@ -76,11 +77,12 @@ export default function LoginPage() {
         body: JSON.stringify({ username: data.username, password: data.password }),
       });
       const result = await response.json();
-      if (response.ok && result.success) {
-        queryClient.setQueryData(["/api/me"], result.user);
-        toast({ title: "Acceso concedido", description: `Bienvenido, ${result.user?.fullName ?? "usuario"}` });
-        setLocation("/dashboard");
-      } else {
+
+      if (response.ok && result.step === "otp") {
+        setMaskedEmail(result.maskedEmail ?? "");
+        if (result.devCode) setDevCode(result.devCode);
+        setStep("otp");
+      } else if (!response.ok) {
         toast({ title: "Acceso denegado", description: result.error || "Credenciales incorrectas", variant: "destructive" });
       }
     } catch {
@@ -89,6 +91,43 @@ export default function LoginPage() {
     setIsLoading(false);
   }
 
+  // ── OTP step ────────────────────────────────────────────────────────────────
+  const [otp, setOtp]           = useState("");
+  const [otpLoading, setOtpLoading] = useState(false);
+
+  async function onOtpSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (otp.length !== 6) return;
+    setOtpLoading(true);
+    try {
+      const response = await fetch("/api/verify-2fa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ code: otp }),
+      });
+      const result = await response.json();
+      if (response.ok && result.success) {
+        queryClient.setQueryData(["/api/me"], result.user);
+        toast({ title: "Acceso concedido", description: `Bienvenido, ${result.user?.fullName ?? "usuario"}` });
+        setLocation("/dashboard");
+      } else {
+        toast({ title: "Código inválido", description: result.error || "Verifica el código", variant: "destructive" });
+        setOtp("");
+      }
+    } catch {
+      toast({ title: "Error de conexión", description: "No se pudo verificar el código", variant: "destructive" });
+    }
+    setOtpLoading(false);
+  }
+
+  function goBack() {
+    setStep("credentials");
+    setOtp("");
+    setDevCode(null);
+  }
+
+  // ── Layout ──────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen flex">
       {/* Left panel — branding */}
@@ -96,13 +135,10 @@ export default function LoginPage() {
         className="hidden lg:flex flex-col justify-between w-[420px] flex-shrink-0 p-10 relative overflow-hidden"
         style={{ background: "linear-gradient(160deg, #0f0f0f 0%, #1c0a09 50%, #0f0f0f 100%)" }}
       >
-        {/* Decorative circles */}
         <div className="absolute -top-24 -left-24 w-80 h-80 rounded-full opacity-10" style={{ background: "radial-gradient(circle, #c8322b, transparent)" }} />
         <div className="absolute -bottom-32 -right-16 w-96 h-96 rounded-full opacity-10" style={{ background: "radial-gradient(circle, #c8322b, transparent)" }} />
 
-        <div className="relative z-10">
-          <BanxicoLogo />
-        </div>
+        <div className="relative z-10"><BanxicoLogo /></div>
 
         <div className="relative z-10 space-y-8">
           <div>
@@ -113,8 +149,8 @@ export default function LoginPage() {
           <div className="space-y-3">
             {[
               { label: "Terminales POS activas", value: "6+" },
-              { label: "Protocolos bancarios", value: "EMV / PCI DSS" },
-              { label: "Cifrado de datos", value: "AES-256" },
+              { label: "Protocolos bancarios",   value: "EMV / PCI DSS" },
+              { label: "Cifrado de datos",        value: "AES-256" },
             ].map((item) => (
               <div key={item.label} className="flex items-center justify-between border-t border-white/10 pt-3">
                 <span className="text-gray-400 text-xs">{item.label}</span>
@@ -130,105 +166,174 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Right panel — login form */}
-      <div
-        className="flex-1 flex flex-col items-center justify-center p-6 md:p-10"
-        style={{ background: "#111111" }}
-      >
-        {/* Mobile logo */}
-        <div className="lg:hidden mb-10">
-          <BanxicoLogo />
-        </div>
+      {/* Right panel */}
+      <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-10" style={{ background: "#111111" }}>
+        <div className="lg:hidden mb-10"><BanxicoLogo /></div>
 
         <div className="w-full max-w-sm">
-          <div className="mb-8">
-            <h1 className="text-white text-2xl font-bold mb-1">Iniciar sesión</h1>
-            <p className="text-gray-500 text-sm">Ingresa tus credenciales para continuar</p>
-          </div>
 
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
-              <FormField
-                control={form.control}
-                name="username"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-gray-300 text-sm font-medium">Usuario o correo</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                        <Input
-                          {...field}
-                          placeholder="Ingresa tu usuario"
-                          autoComplete="username"
-                          data-testid="input-username"
-                          className="pl-9 bg-white/5 border-white/10 text-white placeholder:text-gray-600 focus:border-[#c8322b]/60 focus:ring-[#c8322b]/20 h-11"
-                        />
-                      </div>
-                    </FormControl>
-                    <FormMessage className="text-red-400 text-xs" />
-                  </FormItem>
+          {/* ── STEP 1: Credentials ── */}
+          {step === "credentials" && (
+            <>
+              <div className="mb-8">
+                <h1 className="text-white text-2xl font-bold mb-1">Iniciar sesión</h1>
+                <p className="text-gray-500 text-sm">Ingresa tus credenciales para continuar</p>
+              </div>
+
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+                  <FormField
+                    control={form.control}
+                    name="username"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-gray-300 text-sm font-medium">Usuario o correo</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                            <Input
+                              {...field}
+                              placeholder="Ingresa tu usuario"
+                              autoComplete="username"
+                              data-testid="input-username"
+                              className="pl-9 bg-white/5 border-white/10 text-white placeholder:text-gray-600 focus:border-[#c8322b]/60 focus:ring-[#c8322b]/20 h-11"
+                            />
+                          </div>
+                        </FormControl>
+                        <FormMessage className="text-red-400 text-xs" />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-gray-300 text-sm font-medium">Contraseña</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                            <Input
+                              {...field}
+                              type={showPassword ? "text" : "password"}
+                              placeholder="••••••••••••"
+                              autoComplete="current-password"
+                              data-testid="input-password"
+                              className="pl-9 pr-10 bg-white/5 border-white/10 text-white placeholder:text-gray-600 focus:border-[#c8322b]/60 focus:ring-[#c8322b]/20 h-11"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword(p => !p)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                              tabIndex={-1}
+                            >
+                              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        </FormControl>
+                        <FormMessage className="text-red-400 text-xs" />
+                      </FormItem>
+                    )}
+                  />
+
+                  <Button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full h-11 bg-[#c8322b] text-white font-semibold text-sm mt-2"
+                    data-testid="button-login"
+                  >
+                    {isLoading
+                      ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Verificando...</>
+                      : "Acceder al sistema"
+                    }
+                  </Button>
+                </form>
+              </Form>
+            </>
+          )}
+
+          {/* ── STEP 2: OTP ── */}
+          {step === "otp" && (
+            <>
+              <div className="mb-8">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-full bg-[#c8322b]/15 flex items-center justify-center">
+                    <Mail className="w-5 h-5 text-[#c8322b]" />
+                  </div>
+                  <div>
+                    <h1 className="text-white text-xl font-bold">Verificación 2FA</h1>
+                    <p className="text-gray-500 text-xs">Código de seguridad</p>
+                  </div>
+                </div>
+                <p className="text-gray-400 text-sm leading-relaxed">
+                  Enviamos un código de 6 dígitos a{" "}
+                  <span className="text-white font-medium">{maskedEmail}</span>.
+                  Ingrésalo a continuación.
+                </p>
+                {devCode && (
+                  <div className="mt-3 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+                    <p className="text-yellow-400 text-xs font-medium">
+                      Modo desarrollo — SMTP no configurado
+                    </p>
+                    <p className="text-yellow-300 text-lg font-mono font-bold tracking-widest mt-1">
+                      {devCode}
+                    </p>
+                  </div>
                 )}
-              />
+              </div>
 
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-gray-300 text-sm font-medium">Contraseña</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                        <Input
-                          {...field}
-                          type={showPassword ? "text" : "password"}
-                          placeholder="••••••••••••"
-                          autoComplete="current-password"
-                          data-testid="input-password"
-                          className="pl-9 pr-10 bg-white/5 border-white/10 text-white placeholder:text-gray-600 focus:border-[#c8322b]/60 focus:ring-[#c8322b]/20 h-11"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(p => !p)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
-                          data-testid="button-toggle-password"
-                          tabIndex={-1}
-                        >
-                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </FormControl>
-                    <FormMessage className="text-red-400 text-xs" />
-                  </FormItem>
-                )}
-              />
+              <form onSubmit={onOtpSubmit} className="space-y-5">
+                <div className="space-y-2">
+                  <label className="text-gray-300 text-sm font-medium block">
+                    Código de verificación
+                  </label>
+                  <div className="relative">
+                    <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                    <Input
+                      value={otp}
+                      onChange={e => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      placeholder="000000"
+                      maxLength={6}
+                      autoComplete="one-time-code"
+                      inputMode="numeric"
+                      autoFocus
+                      className="pl-9 bg-white/5 border-white/10 text-white placeholder:text-gray-600 focus:border-[#c8322b]/60 focus:ring-[#c8322b]/20 h-11 text-center text-xl font-mono tracking-[0.5em]"
+                    />
+                  </div>
+                  <p className="text-gray-600 text-xs">El código expira en 10 minutos</p>
+                </div>
 
-              <Button
-                type="submit"
-                disabled={isLoading}
-                className="w-full h-11 bg-[#c8322b] text-white font-semibold text-sm mt-2"
-                data-testid="button-login"
-              >
-                {isLoading
-                  ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Autenticando...</>
-                  : "Acceder al sistema"
-                }
-              </Button>
-            </form>
-          </Form>
+                <Button
+                  type="submit"
+                  disabled={otp.length !== 6 || otpLoading}
+                  className="w-full h-11 bg-[#c8322b] text-white font-semibold text-sm"
+                >
+                  {otpLoading
+                    ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Verificando...</>
+                    : "Confirmar acceso"
+                  }
+                </Button>
+
+                <button
+                  type="button"
+                  onClick={goBack}
+                  className="flex items-center gap-1.5 text-gray-500 hover:text-gray-300 text-sm transition-colors mx-auto"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  Volver a credenciales
+                </button>
+              </form>
+            </>
+          )}
 
           {/* Security indicators */}
           <div className="mt-8 pt-6 border-t border-white/8 space-y-3">
             <div className="flex items-center justify-center gap-4">
-              {[
-                { label: "EMV" },
-                { label: "PCI DSS" },
-                { label: "AES-256" },
-              ].map(item => (
-                <div key={item.label} className="flex items-center gap-1.5">
+              {["EMV", "PCI DSS", "AES-256"].map(label => (
+                <div key={label} className="flex items-center gap-1.5">
                   <div className="w-1.5 h-1.5 rounded-full bg-[#c8322b]" />
-                  <span className="text-gray-600 text-[10px] font-semibold tracking-wider">{item.label}</span>
+                  <span className="text-gray-600 text-[10px] font-semibold tracking-wider">{label}</span>
                 </div>
               ))}
             </div>

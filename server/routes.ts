@@ -7,6 +7,7 @@ import { eq, inArray, sql, or } from "drizzle-orm";
 import { transactions as txTable, users as usersTable, hotWalletDispersions } from "@shared/schema";
 import { randomBytes } from "crypto";
 import { z } from "zod";
+import { sendOtpEmail } from "./email";
 import { verifyPassword, maskCardNumber, hashPassword } from "./auth-utils";
 import { insertPaymentMethodSchema, insertTransactionSchema, type User, type Transaction, CRYPTO_ASSETS, type CryptoAsset, insertCajaMovementSchema, convertToUSD, CAJA_INGRESO_TX_TYPES } from "@shared/schema";
 import { BROKER_REGISTRY, brokerSummary, checkAmlThreshold } from "./crypto/brokers.js";
@@ -18,6 +19,7 @@ import * as TronClient from "./crypto/tron-client.js";
 
 declare module "express-session" {
   interface SessionData {
+    pendingUserId?: string;   // set after step-1 login, cleared after OTP verification
     username?: string;
   }
 }
@@ -211,23 +213,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (user && isValid) {
-        // Regenerar la sesión evita fijación de sesión tras autenticarse.
-        req.session.regenerate((err) => {
-          if (err) {
-            console.error("Session regenerate error");
-            res.status(500).json({ error: "Error en autenticación" });
-            return;
-          }
-          req.session.username = user.username;
-          req.session.save((saveErr) => {
-            if (saveErr) {
-              console.error("Session save error");
-              res.status(500).json({ error: "Error en autenticación" });
-              return;
-            }
-            res.json({ success: true, user: publicUser(user) });
+        // ── Step 1 complete: generate & send OTP, do NOT create session yet ──
+        try {
+          const code = await storage.createOtp(user.id);
+          const emailResult = await sendOtpEmail({
+            toEmail:  user.email,
+            fullName: user.fullName,
+            code,
           });
-        });
+
+          // Store pending user in session (not yet authenticated)
+          req.session.pendingUserId = user.id;
+          await new Promise<void>((resolve, reject) =>
+            req.session.save(e => e ? reject(e) : resolve())
+          );
+
+          // Mask email for display: a***@domain.com
+          const [localPart, domain] = user.email.split("@");
+          const maskedEmail = localPart.slice(0, 2) + "***@" + domain;
+
+          res.json({
+            step: "otp",
+            maskedEmail,
+            // devCode only present when SMTP is not configured (dev mode)
+            ...(emailResult.devCode ? { devCode: emailResult.devCode } : {}),
+          });
+        } catch (emailErr: any) {
+          console.error("OTP generation/email error:", emailErr.message);
+          res.status(500).json({ error: "Error al enviar código de verificación" });
+        }
       } else {
         res.status(401).json({ error: "Credenciales inválidas" });
       }
@@ -235,6 +249,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Login error');
       res.status(500).json({ error: "Error en autenticación" });
     }
+  });
+
+  // ── Step 2: verify OTP and create authenticated session ──────────────────────
+  const otpLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 5 });
+
+  app.post("/api/verify-2fa", otpLimiter, async (req, res) => {
+    const schema = z.object({ code: z.string().length(6).regex(/^\d{6}$/) });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success)
+      return res.status(400).json({ error: "Código inválido" });
+
+    const pendingUserId = req.session.pendingUserId;
+    if (!pendingUserId)
+      return res.status(400).json({ error: "Sesión de verificación expirada. Inicia sesión nuevamente." });
+
+    const result = await storage.verifyOtp(pendingUserId, parsed.data.code);
+    if (result === "invalid") return res.status(401).json({ error: "Código incorrecto" });
+    if (result === "expired") return res.status(401).json({ error: "Código expirado. Inicia sesión nuevamente." });
+    if (result === "used")    return res.status(401).json({ error: "Código ya utilizado" });
+
+    // OTP valid — get user and create real session
+    const user = await storage.getUser(pendingUserId);
+    if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
+
+    delete req.session.pendingUserId;
+    req.session.regenerate((err) => {
+      if (err) return res.status(500).json({ error: "Error en autenticación" });
+      req.session.username = user.username;
+      req.session.save((saveErr) => {
+        if (saveErr) return res.status(500).json({ error: "Error en autenticación" });
+        res.json({ success: true, user: publicUser(user) });
+      });
+    });
   });
 
   // Devuelve el usuario de la sesión actual (sin datos sensibles).

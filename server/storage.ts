@@ -159,7 +159,52 @@ export interface IStorage {
 
 export class DatabaseStorage implements IStorage {
 
+  // ── OTP methods ─────────────────────────────────────────────────────────────
+
+  async createOtp(userId: string): Promise<string> {
+    const code = String(Math.floor(100000 + Math.random() * 900000)); // 6 digits
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min
+    await db.execute(sql`
+      INSERT INTO otp_codes (user_id, code, expires_at, used)
+      VALUES (${userId}, ${code}, ${expiresAt}, false)
+    `);
+    return code;
+  }
+
+  async verifyOtp(userId: string, code: string): Promise<"ok" | "invalid" | "expired" | "used"> {
+    const result = await db.execute(sql`
+      SELECT id, code, expires_at AS "expiresAt", used
+      FROM otp_codes
+      WHERE user_id = ${userId} AND code = ${code}
+      ORDER BY created_at DESC
+      LIMIT 1
+    `);
+    const row = (result.rows ?? (result as any))[0] as any;
+    if (!row) return "invalid";
+    if (row.used) return "used";
+    if (new Date(row.expiresAt ?? row.expires_at) < new Date()) return "expired";
+    // Mark as used
+    await db.execute(sql`UPDATE otp_codes SET used = true WHERE id = ${row.id}`);
+    return "ok";
+  }
+
+  async cleanExpiredOtps(): Promise<void> {
+    await db.execute(sql`DELETE FROM otp_codes WHERE expires_at < NOW() - INTERVAL '1 hour'`);
+  }
+
   async initialize() {
+    // --- Migrate: create otp_codes table ---
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS otp_codes (
+        id         VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id    VARCHAR NOT NULL,
+        code       TEXT NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        used       BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )
+    `);
+
     // --- Migrate: add suspended column to users if missing ---
     await db.execute(sql`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended BOOLEAN NOT NULL DEFAULT FALSE
