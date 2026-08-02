@@ -799,6 +799,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  /**
+   * GET /api/admin/hot-wallet/disperse/:id/status
+   * Polls TRON on-chain for a "broadcast" dispersal and, if settled,
+   * updates the DB row to "confirmed" or "failed" automatically.
+   * Task #45 — on-chain settlement verification.
+   */
+  app.get("/api/admin/hot-wallet/disperse/:id/status", requireRole("ADMIN"), async (req, res) => {
+    try {
+      const rowId = parseInt(req.params.id, 10);
+      if (isNaN(rowId)) return res.status(400).json({ error: "ID inválido" });
+
+      const [row] = await db
+        .select()
+        .from(hotWalletDispersions)
+        .where(eq(hotWalletDispersions.id, rowId))
+        .limit(1);
+
+      if (!row) return res.status(404).json({ error: "Dispersión no encontrada" });
+      if (!row.txid) return res.status(400).json({ error: "Sin txid — la TX no fue enviada" });
+
+      // Already resolved — no need to re-query TRON
+      if (row.status === "confirmed" || row.status === "failed") {
+        return res.json({ id: row.id, status: row.status, txid: row.txid, onChain: null });
+      }
+
+      const onChain = await TronClient.getTransaction(row.txid);
+
+      // Auto-resolve if TRON has finalized the TX
+      if (onChain.status === "SUCCESS" || onChain.status === "FAILED") {
+        const newStatus = onChain.status === "SUCCESS" ? "confirmed" : "failed";
+        await db.update(hotWalletDispersions)
+          .set({ status: newStatus })
+          .where(eq(hotWalletDispersions.id, row.id));
+        return res.json({ id: row.id, status: newStatus, txid: row.txid, onChain });
+      }
+
+      // Still pending on-chain
+      return res.json({ id: row.id, status: "broadcast", txid: row.txid, onChain });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.patch("/api/admin/user-crypto/:userId/:asset", requireRole("ADMIN"), async (req, res) => {
     const assetParam = req.params.asset as string;
     if (!CRYPTO_ASSETS.includes(assetParam as CryptoAsset)) {
