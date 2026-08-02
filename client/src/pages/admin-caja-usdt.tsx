@@ -148,6 +148,9 @@ interface Dispersion {
 
 // ── Dispersal Widget ──────────────────────────────────────────────────────────
 
+// Task #46: TRON base58 address regex — must start with T and be exactly 34 chars
+const TRON_ADDR_RE = /^T[a-zA-Z0-9]{33}$/;
+
 function DisperseWidget() {
   const [toAddress,  setToAddress]  = useState("");
   const [amount,     setAmount]     = useState("");
@@ -160,6 +163,17 @@ function DisperseWidget() {
   const [history,    setHistory]    = useState<Dispersion[]>([]);
   const [histLoading, setHistLoading] = useState(true);
   const [maxUsdt,    setMaxUsdt]    = useState<number>(5000);
+  // Task #45: track which row IDs are being verified on-chain
+  const [verifying,  setVerifying]  = useState<Set<number>>(new Set());
+
+  // Task #46: live address validation derived from input
+  const addrTouched  = toAddress.length > 0;
+  const addrValid    = TRON_ADDR_RE.test(toAddress);
+  const addrError    = addrTouched && !addrValid
+    ? toAddress.startsWith("0x")
+      ? "Dirección Ethereum detectada — use una dirección TRON (TRC-20) que empiece con T"
+      : "Dirección inválida — debe empezar con T y tener exactamente 34 caracteres"
+    : null;
 
   const fetchHistory = async () => {
     try {
@@ -184,11 +198,12 @@ function DisperseWidget() {
 
   function openConfirm() {
     setError(null);
-    const amt = parseFloat(amount);
-    if (!toAddress.match(/^T[a-zA-Z0-9]{33}$/)) {
-      setError("Dirección TRON inválida (debe empezar con T y tener 34 caracteres)");
+    // Task #46: guard — addrValid is already computed, but double-check before opening dialog
+    if (!addrValid) {
+      setError(addrError ?? "Dirección TRON inválida");
       return;
     }
+    const amt = parseFloat(amount);
     if (!amt || amt <= 0) { setError("Monto inválido"); return; }
     if (amt > maxUsdt) {
       setError(`El monto excede el límite máximo por operación: $${fmt(maxUsdt)} USDT`);
@@ -196,6 +211,21 @@ function DisperseWidget() {
     }
     setPassword("");
     setShowDialog(true);
+  }
+
+  // Task #45: poll TRON on-chain for a broadcast row and update history
+  async function verifyOnChain(id: number) {
+    setVerifying(prev => new Set(prev).add(id));
+    try {
+      const res  = await fetch(`/api/admin/hot-wallet/disperse/${id}/status`);
+      const json = await res.json();
+      if (res.ok && json.status) {
+        setHistory(prev => prev.map(d => d.id === id ? { ...d, status: json.status } : d));
+      }
+    } catch { /* silent — history refresh will pick it up */ }
+    finally {
+      setVerifying(prev => { const s = new Set(prev); s.delete(id); return s; });
+    }
   }
 
   async function executeDisperse() {
@@ -234,6 +264,12 @@ function DisperseWidget() {
     if (status === "failed") return (
       <Badge className="text-[10px] bg-red-100 text-red-700 border-red-200 no-default-active-elevate gap-1">
         <XCircle className="w-2.5 h-2.5" />Fallido
+      </Badge>
+    );
+    // Task #45: "broadcast" = accepted by network, not yet confirmed on-chain
+    if (status === "broadcast") return (
+      <Badge className="text-[10px] bg-blue-100 text-blue-700 border-blue-200 no-default-active-elevate gap-1">
+        <Zap className="w-2.5 h-2.5" />En cadena…
       </Badge>
     );
     return (
@@ -326,14 +362,34 @@ function DisperseWidget() {
 
           {/* Form */}
           <div className="grid gap-3">
+            {/* Task #46: address field with live inline validation */}
             <div className="space-y-1">
               <Label className="text-xs">Dirección TRON destino</Label>
-              <Input
-                placeholder="T… (dirección TRC-20)"
-                value={toAddress}
-                onChange={e => setToAddress(e.target.value)}
-                className="font-mono text-xs"
-              />
+              <div className="relative">
+                <Input
+                  placeholder="T… (dirección TRC-20)"
+                  value={toAddress}
+                  onChange={e => setToAddress(e.target.value)}
+                  className={`font-mono text-xs pr-7 ${addrTouched ? addrValid ? "border-green-400 focus-visible:ring-green-400" : "border-red-400 focus-visible:ring-red-400" : ""}`}
+                />
+                {addrTouched && (
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2">
+                    {addrValid
+                      ? <CheckCircle className="w-3.5 h-3.5 text-green-500" />
+                      : <AlertCircle className="w-3.5 h-3.5 text-red-500" />}
+                  </span>
+                )}
+              </div>
+              {addrError && (
+                <p className="text-[10px] text-red-600 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3 flex-shrink-0" />{addrError}
+                </p>
+              )}
+              {addrTouched && addrValid && (
+                <p className="text-[10px] text-green-600 flex items-center gap-1">
+                  <CheckCircle className="w-3 h-3" />Dirección TRON válida
+                </p>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
@@ -373,10 +429,13 @@ function DisperseWidget() {
                 <AlertCircle className="w-3 h-3" />{error}
               </p>
             )}
+            {/* Task #46: button disabled until address passes validation */}
             <Button
               onClick={openConfirm}
-              className="bg-[#c8322b] hover:bg-[#a82820] text-white w-full sm:w-auto self-end"
+              className="bg-[#c8322b] hover:bg-[#a82820] text-white w-full sm:w-auto self-end disabled:opacity-50"
               size="sm"
+              disabled={addrTouched && !addrValid}
+              title={addrTouched && !addrValid ? "Corrige la dirección TRON antes de continuar" : undefined}
             >
               <Send className="w-3.5 h-3.5 mr-1.5" />
               Revisar y enviar
@@ -409,6 +468,19 @@ function DisperseWidget() {
                             ${parseFloat(d.amountUsdt).toFixed(2)} USDT
                           </span>
                           {statusBadge(d.status)}
+                          {/* Task #45: "Verificar en cadena" button for broadcast rows */}
+                          {d.status === "broadcast" && d.txid && (
+                            <button
+                              onClick={() => verifyOnChain(d.id)}
+                              disabled={verifying.has(d.id)}
+                              className="inline-flex items-center gap-1 text-[10px] text-blue-600 hover:text-blue-800 disabled:opacity-50 font-medium"
+                              title="Consultar estado on-chain en TRON"
+                            >
+                              {verifying.has(d.id)
+                                ? <><Loader2 className="w-2.5 h-2.5 animate-spin" />Verificando…</>
+                                : <><RefreshCw className="w-2.5 h-2.5" />Verificar en cadena</>}
+                            </button>
+                          )}
                         </div>
                         <p className="text-[11px] font-mono text-muted-foreground truncate mt-0.5">{d.toAddress}</p>
                         {d.txid && (
