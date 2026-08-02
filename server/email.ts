@@ -1,26 +1,23 @@
 /**
- * Banxico Plus LLC — Email Service (Resend)
+ * Banxico Plus LLC — Email Service (Resend via Replit Connectors)
  *
- * Sends transactional emails via Resend API.
- * Dev fallback: if RESEND_API_KEY is missing, logs the OTP to the console.
+ * Sends transactional emails via Resend API using the Replit Connectors SDK.
+ * The SDK handles authentication automatically — no API key needed in env.
  *
- * Required env var:
- *   RESEND_API_KEY  — from resend.com dashboard
- *   RESEND_FROM     — verified sender, e.g. "Banxico Plus <noreply@yourdomain.com>"
- *                     defaults to onboarding@resend.dev for quick testing
+ * Optional env var:
+ *   RESEND_FROM — verified sender address
+ *                 defaults to onboarding@resend.dev (Resend's shared test sender)
  */
 
-import { Resend } from "resend";
+import { ReplitConnectors } from "@replit/connectors-sdk";
 
-const RESEND_API_KEY = process.env.RESEND_API_KEY ?? "";
-const RESEND_FROM    = process.env.RESEND_FROM    ?? "Banxico Plus <onboarding@resend.dev>";
+const RESEND_FROM = process.env.RESEND_FROM ?? "Banxico Plus <onboarding@resend.dev>";
 
-const isConfigured = Boolean(RESEND_API_KEY);
-let client: Resend | null = null;
+let connectors: ReplitConnectors | null = null;
 
-function getClient(): Resend {
-  if (!client) client = new Resend(RESEND_API_KEY);
-  return client;
+function getConnectors(): ReplitConnectors {
+  if (!connectors) connectors = new ReplitConnectors();
+  return connectors;
 }
 
 // ── Banxico+ SVG logo (inline, white on dark) ─────────────────────────────────
@@ -152,23 +149,31 @@ export async function sendOtpEmail(params: {
 }): Promise<{ sent: boolean; devCode?: string }> {
   const { toEmail, fullName, code } = params;
 
-  if (!isConfigured) {
-    console.log(`\n[2FA DEV] OTP for ${toEmail}: ${code}\n`);
-    return { sent: false, devCode: code };
+  let response: Response;
+  try {
+    response = await getConnectors().proxy("resend", "/emails", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from:    RESEND_FROM,
+        to:      [toEmail],
+        subject: `${code} — Your Banxico Plus verification code`,
+        html:    buildOtpHtml(fullName, code),
+        text:    `Your Banxico Plus verification code is: ${code}\n\nThis code expires in 10 minutes.\nIf you did not request this, ignore this email.\n\n— Banxico Plus LLC, Evolution Road`,
+      }),
+    });
+  } catch (err: any) {
+    console.error("[Email 2FA] Connector proxy error:", err?.message ?? err);
+    throw err;
   }
 
-  const { error } = await getClient().emails.send({
-    from:    RESEND_FROM,
-    to:      toEmail,
-    subject: `${code} — Your Banxico Plus verification code`,
-    html:    buildOtpHtml(fullName, code),
-    text:    `Your Banxico Plus verification code is: ${code}\n\nThis code expires in 10 minutes.\n\nIf you did not request this, ignore this email.\n\n— Banxico Plus LLC, Evolution Road`,
-  });
-
-  if (error) {
-    console.error("[Email 2FA] Resend error:", error);
-    throw new Error(error.message ?? "Resend delivery failed");
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    console.error(`[Email 2FA] Resend API ${response.status}:`, body);
+    throw new Error(`Resend returned ${response.status}: ${body}`);
   }
 
+  const data = await response.json().catch(() => ({}));
+  console.log("[Email 2FA] Sent OK →", data?.id ?? "no-id", "to", toEmail);
   return { sent: true };
 }
