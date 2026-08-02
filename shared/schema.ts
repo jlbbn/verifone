@@ -480,6 +480,17 @@ export const hotWalletDispersions = pgTable("hot_wallet_dispersions", {
 });
 export type HotWalletDispersion = typeof hotWalletDispersions.$inferSelect;
 
+// ─── OKX Webhook Events audit log ────────────────────────────────────────────
+export const okxWebhookEvents = pgTable("okx_webhook_events", {
+  id:         varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  eventType:  text("event_type").notNull(),   // "deposit" | "withdrawal" | "order" | "unknown"
+  okxId:      text("okx_id"),                 // withdrawal wdId / deposit depId / order ordId
+  payload:    jsonb("payload").notNull(),
+  verified:   boolean("verified").notNull().default(false),
+  receivedAt: timestamp("received_at").defaultNow().notNull(),
+});
+export type OkxWebhookEvent = typeof okxWebhookEvents.$inferSelect;
+
 // ─── OTP para autenticación de dos factores ───────────────────────────────────
 export const otpCodes = pgTable("otp_codes", {
   id:        varchar("id").primaryKey().default(sql`gen_random_uuid()`),

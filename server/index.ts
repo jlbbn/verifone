@@ -25,12 +25,30 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 
 const app = express();
 
+// Trust the Replit/Heroku-style reverse proxy so req.ip reflects the real
+// client IP (set from X-Forwarded-For by the trusted infrastructure layer).
+// This is required for the OKX webhook IP allowlist to work correctly.
+app.set("trust proxy", true);
+
 app.use(
   helmet({
     contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false,
   }),
 );
+
+// ── OKX Webhook — before body parsers (needs raw body for HMAC) ──────────────
+import { rawBodyCapture, okxIpAllowlist, okxWebhookHandler } from "./crypto/okx-webhook.js";
+
+if (!process.env.OKX_WEBHOOK_SECRET) {
+  console.warn("[OKX-WH] ⚠ OKX_WEBHOOK_SECRET is not set — webhook signatures cannot be verified");
+}
+
+app.post("/api/okx/webhook", rawBodyCapture, okxIpAllowlist, (req, res) => {
+  okxWebhookHandler(req, res).catch(err => {
+    console.error("[OKX-WH] Unhandled error:", err);
+  });
+});
 
 // ── Mercado Pago IPN — before auth middleware ─────────────────────────────────
 app.get("/api/mp/ipn", async (req: Request, res: Response) => {
