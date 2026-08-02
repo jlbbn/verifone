@@ -213,6 +213,14 @@ export class DatabaseStorage implements IStorage {
         received_at TIMESTAMP NOT NULL DEFAULT NOW()
       )
     `);
+    // Partial unique index: deduplicates events that have an okx_id.
+    // NULLs are excluded (NULL != NULL) so events without an id can still
+    // be stored multiple times (e.g. unknown/malformed payloads).
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_okx_webhook_events_dedup
+        ON okx_webhook_events (event_type, okx_id)
+        WHERE okx_id IS NOT NULL
+    `);
 
     // --- Migrate: create otp_codes table ---
     await db.execute(sql`
