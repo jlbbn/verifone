@@ -104,15 +104,44 @@ function verifyOkxWebhook(req: Request): boolean {
   }
 }
 
-// ─── Persist webhook event ────────────────────────────────────────────────────
-async function saveEvent(eventType: string, okxId: string | null, payload: unknown, verified: boolean) {
+// ─── Persist webhook event (idempotent upsert) ───────────────────────────────
+// OKX guarantees at-least-once delivery — the same event can arrive more than
+// once. We upsert on (event_type, okx_id) for events that carry an id so a
+// duplicate delivery updates the row rather than creating a second one.
+// Returns true if this is the FIRST time we've seen this event (new row).
+async function saveEvent(
+  eventType: string,
+  okxId: string | null,
+  payload: unknown,
+  verified: boolean,
+): Promise<boolean> {
   try {
-    await db.execute(sql`
-      INSERT INTO okx_webhook_events (event_type, okx_id, payload, verified)
-      VALUES (${eventType}, ${okxId}, ${JSON.stringify(payload)}::jsonb, ${verified})
-    `);
+    if (okxId) {
+      // Upsert: on conflict update payload/verified but do NOT reset received_at
+      // so the original arrival timestamp is preserved.
+      const result = await db.execute(sql`
+        INSERT INTO okx_webhook_events (event_type, okx_id, payload, verified)
+        VALUES (${eventType}, ${okxId}, ${JSON.stringify(payload)}::jsonb, ${verified})
+        ON CONFLICT (event_type, okx_id) WHERE okx_id IS NOT NULL
+        DO UPDATE SET
+          payload  = EXCLUDED.payload,
+          verified = EXCLUDED.verified
+        RETURNING (xmax = 0) AS is_new_row
+      `);
+      // xmax = 0 means it was an INSERT (new row); xmax != 0 means UPDATE (duplicate)
+      const row = (result.rows ?? result)?.[0] as any;
+      return row?.is_new_row === true || row?.is_new_row === "true";
+    } else {
+      // No okx_id — always insert (unknown/malformed events)
+      await db.execute(sql`
+        INSERT INTO okx_webhook_events (event_type, okx_id, payload, verified)
+        VALUES (${eventType}, ${okxId}, ${JSON.stringify(payload)}::jsonb, ${verified})
+      `);
+      return true;
+    }
   } catch (e: any) {
     log(`[OKX-WH] Failed to save event: ${e.message}`);
+    return false;
   }
 }
 
@@ -124,10 +153,10 @@ async function handleDeposit(data: any, verified: boolean) {
   const amt    = data?.amt    ?? "?";
   const state  = Number(data?.state ?? -1);
 
-  await saveEvent("deposit", depId, data, verified);
+  const isNew = await saveEvent("deposit", depId, data, verified);
 
-  if (state === 2 && verified) {
-    // Deposit confirmed — notify admin
+  // Only fire side-effects on the FIRST delivery — OKX may re-send the same event.
+  if (isNew && state === 2 && verified) {
     await storage.createNotification({
       type:      "info",
       title:     "OKX Depósito Confirmado",
@@ -137,7 +166,7 @@ async function handleDeposit(data: any, verified: boolean) {
     });
   }
 
-  log(`[OKX-WH] deposit event — id=${depId} ccy=${ccy} amt=${amt} state=${state} verified=${verified}`);
+  log(`[OKX-WH] deposit event — id=${depId} ccy=${ccy} amt=${amt} state=${state} verified=${verified} isNew=${isNew}`);
 }
 
 async function handleWithdrawal(data: any, verified: boolean) {
@@ -146,9 +175,10 @@ async function handleWithdrawal(data: any, verified: boolean) {
   const amt    = data?.amt   ?? "?";
   const state  = Number(data?.state ?? -1);
 
-  await saveEvent("withdrawal", wdId, data, verified);
+  const isNew = await saveEvent("withdrawal", wdId, data, verified);
 
-  if (verified && (state === 2 || state === 4)) {
+  // Only fire side-effects on the FIRST delivery — OKX may re-send the same event.
+  if (isNew && verified && (state === 2 || state === 4)) {
     const isComplete = state === 2;
     await storage.createNotification({
       type:      isComplete ? "info" : "warning",
@@ -159,7 +189,7 @@ async function handleWithdrawal(data: any, verified: boolean) {
     });
   }
 
-  log(`[OKX-WH] withdrawal event — id=${wdId} ccy=${ccy} amt=${amt} state=${state} verified=${verified}`);
+  log(`[OKX-WH] withdrawal event — id=${wdId} ccy=${ccy} amt=${amt} state=${state} verified=${verified} isNew=${isNew}`);
 }
 
 async function handleOrder(data: any, verified: boolean) {
