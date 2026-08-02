@@ -202,6 +202,18 @@ export class DatabaseStorage implements IStorage {
       WHERE username = 'Admin'
     `);
 
+    // --- Migrate: create okx_webhook_events table ---
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS okx_webhook_events (
+        id          VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        event_type  TEXT NOT NULL,
+        okx_id      TEXT,
+        payload     JSONB NOT NULL DEFAULT '{}',
+        verified    BOOLEAN NOT NULL DEFAULT FALSE,
+        received_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+
     // --- Migrate: create otp_codes table ---
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS otp_codes (

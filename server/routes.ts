@@ -1584,6 +1584,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  /** GET /api/admin/okx-webhooks — last 20 inbound OKX webhook events */
+  app.get("/api/admin/okx-webhooks", requireSession, requireRole("ADMIN"), async (_req, res) => {
+    try {
+      const result = await db.execute(sql`
+        SELECT id, event_type, okx_id, payload, verified, received_at
+        FROM okx_webhook_events
+        ORDER BY received_at DESC
+        LIMIT 20
+      `);
+      res.json(result.rows ?? result);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // ====================================================================
   // HISTORIAL RECIENTE EXCHANGE / DISPERSION
   // ====================================================================
