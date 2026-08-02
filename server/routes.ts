@@ -1339,7 +1339,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         type: "transfer",
         amount: fiatAmount.toFixed(2),
         currency: fiatCurrency,
-        status: "completed",
+        status: "processing",
         fromAccount: `EXCHANGE · POS VIRTUAL · ${fiatCurrency}`,
         toAccount: destWallet,
         description: `Dispersión y conversión ${fiatAmount.toFixed(2)} ${fiatCurrency} ≈ ${cryptoAmount.toFixed(8)} ${(cryptoSymbol ?? cryptoAsset).toUpperCase()} → Wallet ${destWallet.slice(0, 10)}…`,
@@ -1348,8 +1348,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.createTransactionLog({
         transactionId: transaction.id,
         action: "DISPERSION",
-        status: "completed",
-        message: `Dispersión ejecutada: ${fiatAmount.toFixed(2)} ${fiatCurrency} → ${cryptoAmount.toFixed(8)} ${cryptoAsset.toUpperCase()}`,
+        status: "processing",
+        message: `Dispersión enviada a verificación OKX: ${fiatAmount.toFixed(2)} ${fiatCurrency} → ${cryptoAmount.toFixed(8)} ${cryptoAsset.toUpperCase()} · Pendiente confirmación on-chain`,
       });
 
       res.json({ balance, transaction });

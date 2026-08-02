@@ -415,7 +415,7 @@ export default function ExchangePage() {
   });
 
   const totalDispersado = userTxs
-    .filter(t => t.status === "completed" && t.transactionId.startsWith("DSP-") && (t.currency ?? "USD") === "USD")
+    .filter(t => (t.status === "completed" || t.status === "processing") && t.transactionId.startsWith("DSP-") && (t.currency ?? "USD") === "USD")
     .reduce((sum, t) => sum + parseFloat(t.amount || "0"), 0);
 
   // Para usuarios con porcentaje de margen, su saldo = su parte del pool - lo ya dispersado
@@ -436,7 +436,7 @@ export default function ExchangePage() {
     .filter(t => t.status === "completed" && !t.transactionId.startsWith("DSP-") && t.currency === "EUR")
     .reduce((sum, t) => sum + parseFloat(t.amount || "0"), 0);
   const totalDispersadoEUR = userTxs
-    .filter(t => t.status === "completed" && t.transactionId.startsWith("DSP-") && t.currency === "EUR")
+    .filter(t => (t.status === "completed" || t.status === "processing") && t.transactionId.startsWith("DSP-") && t.currency === "EUR")
     .reduce((sum, t) => sum + parseFloat(t.amount || "0"), 0);
   const availableEUR = Math.max(0, totalIngresadoEUR - totalDispersadoEUR);
 
@@ -553,8 +553,8 @@ export default function ExchangePage() {
       queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/crypto-balances"] });
       toast({
-        title: "Dispersión enviada",
-        description: `${amount} ${dispFiat} → ${crypto.toFixed(8)} ${symbol} — wallet registrada`,
+        title: "Dispersión en revisión",
+        description: `${amount} ${dispFiat} → ${crypto.toFixed(8)} ${symbol} · Verifica el estado en OKX antes de confirmar`,
       });
       setDispAmount("");
     },
@@ -1602,9 +1602,17 @@ export default function ExchangePage() {
                           {isExchange ? "Swap" : "Dispersión"}
                         </p>
                         <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-sm ${
-                          tx.status === "completed" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
+                          tx.status === "completed"
+                            ? "bg-green-100 text-green-700"
+                            : isDispersion && tx.status === "processing"
+                              ? "bg-orange-100 text-orange-700"
+                              : "bg-amber-100 text-amber-700"
                         }`}>
-                          {tx.status === "completed" ? "✓" : "…"} {tx.status}
+                          {tx.status === "completed"
+                            ? "✓ completado"
+                            : isDispersion && tx.status === "processing"
+                              ? "⏳ Verificar OKX"
+                              : `… ${tx.status}`}
                         </span>
                       </div>
                       <p className="text-[10px] text-muted-foreground truncate leading-relaxed mt-0.5">
