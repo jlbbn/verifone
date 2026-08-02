@@ -480,6 +480,16 @@ export const hotWalletDispersions = pgTable("hot_wallet_dispersions", {
 });
 export type HotWalletDispersion = typeof hotWalletDispersions.$inferSelect;
 
+// ─── OTP para autenticación de dos factores ───────────────────────────────────
+export const otpCodes = pgTable("otp_codes", {
+  id:        varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId:    varchar("user_id").notNull(),
+  code:      text("code").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  used:      boolean("used").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // ─── Persistencia de configuración del sistema ───────────────────────────────
 // Tabla de fila única: id siempre = 1
 export const systemSettingsTable = pgTable("system_settings_store", {
