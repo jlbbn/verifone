@@ -283,7 +283,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ====================================================================
 
   // Lista las notificaciones del usuario actual (admin recibe también las "ADMIN").
-  app.get("/api/notifications", async (req, res) => {
+  app.get("/api/notifications", requireSession, async (req, res) => {
     try {
       const user = req.currentUser!;
       const isAdmin = user.role === "ADMIN";
@@ -297,7 +297,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Crea una solicitud de configuración de POS dirigida al administrador.
-  app.post("/api/notifications/pos-request", async (req, res) => {
+  app.post("/api/notifications/pos-request", requireSession, async (req, res) => {
     try {
       const user = req.currentUser!;
       const alreadyPending = await storage.hasPendingPosRequest(user.username);
@@ -334,7 +334,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Marca una notificación como leída (solo del propio usuario / admin).
-  app.patch("/api/notifications/:id/read", async (req, res) => {
+  app.patch("/api/notifications/:id/read", requireSession, async (req, res) => {
     try {
       const user = req.currentUser!;
       const isAdmin = user.role === "ADMIN";
@@ -356,7 +356,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Marca todas las notificaciones del usuario como leídas.
-  app.post("/api/notifications/read-all", async (req, res) => {
+  app.post("/api/notifications/read-all", requireSession, async (req, res) => {
     try {
       const user = req.currentUser!;
       const count = await storage.markAllNotificationsRead(user.username, user.role === "ADMIN");
@@ -404,7 +404,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ====================================================================
 
   // Lista de terminales: admin → todas; usuario → las propias
-  app.get("/api/terminals", async (req, res) => {
+  app.get("/api/terminals", requireSession, async (req, res) => {
     try {
       const user = req.currentUser!;
       const terminals = user.role === "ADMIN"
@@ -417,7 +417,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Terminales solo del usuario autenticado
-  app.get("/api/terminals/mine", async (req, res) => {
+  app.get("/api/terminals/mine", requireSession, async (req, res) => {
     try {
       const terminals = await storage.getTerminalsByOwner(req.currentUser!.username);
       res.json(terminals);
@@ -1058,7 +1058,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // PROTOCOLOS BANCARIOS
   // ====================================================================
   
-  app.get("/api/protocols", async (_req, res) => {
+  app.get("/api/protocols", requireSession, async (_req, res) => {
     try {
       const protocols = await storage.getAllProtocols();
       res.json(protocols);
@@ -1067,7 +1067,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/protocols/:code", async (req, res) => {
+  app.get("/api/protocols/:code", requireSession, async (req, res) => {
     try {
       const protocol = await storage.getProtocol(req.params.code);
       if (!protocol) {
@@ -1180,7 +1180,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // SALDOS CRIPTO INTERNOS (persistidos por usuario/activo — sin blockchain real)
   // ====================================================================
 
-  app.get("/api/crypto-balances", async (req, res) => {
+  app.get("/api/crypto-balances", requireSession, async (req, res) => {
     try {
       const rows = await storage.getCryptoBalances(req.currentUser!.id);
       const byAsset = new Map(rows.map(r => [r.asset, r.balance]));
@@ -1202,7 +1202,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     rate: z.number().optional(),
   });
 
-  app.post("/api/crypto/exchange", async (req, res) => {
+  app.post("/api/crypto/exchange", requireSession, async (req, res) => {
     const parsed = exchangeSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ error: "Datos de intercambio inválidos", details: parsed.error.flatten() });
@@ -1267,7 +1267,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     destWallet: z.string().min(1),
   });
 
-  app.post("/api/crypto/dispersion", async (req, res) => {
+  app.post("/api/crypto/dispersion", requireSession, async (req, res) => {
     const parsed = dispersionSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ error: "Datos de dispersión inválidos", details: parsed.error.flatten() });
@@ -1444,7 +1444,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     transactionId: z.string().optional(),
   });
 
-  app.post("/api/transactions", async (req, res) => {
+  app.post("/api/transactions", requireSession, async (req, res) => {
     try {
       const parsed = genericTxSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -1479,7 +1479,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/transactions", async (req, res) => {
+  app.get("/api/transactions", requireSession, async (req, res) => {
     try {
       const user = req.currentUser!;
       // ADMIN ve todas; cada USER solo las suyas.
@@ -1511,7 +1511,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/transactions/:id", async (req, res) => {
+  app.get("/api/transactions/:id", requireSession, async (req, res) => {
     try {
       const transaction = await storage.getTransaction(req.params.id);
       // 404 (no 403) si no existe o no es del usuario: evita revelar existencia.
@@ -1580,7 +1580,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // MÉTODOS DE PAGO
   // ====================================================================
   
-  app.post("/api/payment-methods", async (req, res) => {
+  app.post("/api/payment-methods", requireSession, async (req, res) => {
     try {
       const parsed = insertPaymentMethodSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -1600,7 +1600,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/payment-methods/:id", async (req, res) => {
+  app.get("/api/payment-methods/:id", requireSession, async (req, res) => {
     try {
       const paymentMethod = await storage.getPaymentMethod(req.params.id);
       const parent = paymentMethod
@@ -1620,7 +1620,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // TOKENS DE SEGURIDAD
   // ====================================================================
   
-  app.post("/api/security-tokens", async (req, res) => {
+  app.post("/api/security-tokens", requireSession, async (req, res) => {
     try {
       // El token debe colgar de una transacción del propio usuario.
       const parent = await storage.getTransaction(req.body.transactionId);
