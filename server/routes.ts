@@ -1405,6 +1405,131 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ====================================================================
+  // BROKER OPS — withdraw to network · internal transfer · deposit addr
+  // ====================================================================
+
+  /** GET /api/broker/withdrawal-fees — USDT withdrawal networks & fees from OKX */
+  app.get("/api/broker/withdrawal-fees", requireSession, requireRole("ADMIN"), async (_req, res) => {
+    try {
+      const data = await OKXClient.withdrawalCurrencies("USDT");
+      const networks = data
+        .filter((d: any) => ["TRC20", "ERC20", "BEP20", "SOL"].some(n => d.chain?.includes(n)))
+        .map((d: any) => ({
+          chain:      d.chain,
+          ccy:        d.ccy,
+          minWd:      d.minWd,
+          minFee:     d.minFee,
+          maxFee:     d.maxFee,
+          canWd:      d.canWd,
+          canDep:     d.canDep,
+        }));
+      res.json(networks);
+    } catch (e: any) {
+      res.status(502).json({ error: e.message });
+    }
+  });
+
+  /** GET /api/broker/deposit-address?ccy=USDT — OKX deposit addresses */
+  app.get("/api/broker/deposit-address", requireSession, requireRole("ADMIN"), async (req, res) => {
+    try {
+      const ccy = (req.query.ccy as string) || "USDT";
+      const data = await OKXClient.depositAddresses(ccy);
+      res.json(data);
+    } catch (e: any) {
+      res.status(502).json({ error: e.message });
+    }
+  });
+
+  /** GET /api/broker/balances — OKX trading + funding balances */
+  app.get("/api/broker/balances", requireSession, requireRole("ADMIN"), async (_req, res) => {
+    try {
+      const [tradingMap, fundingRaw] = await Promise.all([
+        OKXClient.balance(),          // Record<ccy, {available, frozen}>
+        OKXClient.fundingBalance(),   // raw array from /asset/balances
+      ]);
+      const trading = Object.entries(tradingMap).map(([ccy, v]) => ({
+        ccy, avail: String(v.available), frozen: String(v.frozen),
+      }));
+      const funding = (fundingRaw ?? []).map((d: any) => ({
+        ccy: d.ccy, avail: d.availBal, frozen: d.frozenBal,
+      }));
+      res.json({ trading, funding });
+    } catch (e: any) {
+      res.status(502).json({ error: e.message });
+    }
+  });
+
+  /** POST /api/broker/transfer — move USDT between OKX Trading ↔ Funding */
+  app.post("/api/broker/transfer", requireSession, requireRole("ADMIN"), async (req, res) => {
+    const schema = z.object({
+      ccy:       z.string().min(1).max(10).default("USDT"),
+      amt:       z.string().regex(/^\d+(\.\d+)?$/, "Monto inválido"),
+      direction: z.enum(["trading_to_funding", "funding_to_trading"]),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success)
+      return res.status(400).json({ error: "Datos inválidos", details: parsed.error.flatten() });
+
+    const { ccy, amt, direction } = parsed.data;
+    const from = direction === "trading_to_funding" ? "18" : "6";
+    const to   = direction === "trading_to_funding" ? "6"  : "18";
+
+    try {
+      const result = await OKXClient.fundingTransfer({ ccy, amt, from, to });
+      const r = result?.[0];
+      if (r?.sCode && r.sCode !== "0")
+        return res.status(502).json({ error: `OKX transfer error [${r.sCode}]: ${r.sMsg}` });
+
+      await storage.createNotification({
+        type:      "info",
+        title:     "OKX Transfer",
+        message:   `${amt} ${ccy} movido: ${direction === "trading_to_funding" ? "Trading → Funding" : "Funding → Trading"}`,
+        recipient: "ADMIN",
+        status:    "resolved",
+      });
+
+      res.json({ success: true, transId: r?.transId, direction, ccy, amt });
+    } catch (e: any) {
+      res.status(502).json({ error: e.message });
+    }
+  });
+
+  /** POST /api/broker/withdraw — withdraw from OKX Funding to external address */
+  app.post("/api/broker/withdraw", requireSession, requireRole("ADMIN"), async (req, res) => {
+    const schema = z.object({
+      ccy:    z.string().min(1).max(10).default("USDT"),
+      amt:    z.string().regex(/^\d+(\.\d+)?$/, "Monto inválido"),
+      toAddr: z.string().min(10).max(200),
+      chain:  z.string().min(1),   // e.g. "USDT-TRC20"
+      fee:    z.string().regex(/^\d+(\.\d+)?$/, "Fee inválido"),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success)
+      return res.status(400).json({ error: "Datos inválidos", details: parsed.error.flatten() });
+
+    const { ccy, amt, toAddr, chain, fee } = parsed.data;
+
+    try {
+      const result = await OKXClient.withdraw({ ccy, amt, dest: "4", toAddr, fee, chain });
+      const r = result?.[0];
+      if (r?.sCode && r.sCode !== "0")
+        return res.status(502).json({ error: `OKX withdraw error [${r.sCode}]: ${r.sMsg}` });
+
+      await storage.createNotification({
+        type:      "info",
+        title:     "OKX Withdrawal",
+        message:   `Retiro ${amt} ${ccy} vía ${chain} → ${toAddr.slice(0, 12)}...`,
+        recipient: "ADMIN",
+        status:    "resolved",
+      });
+
+      res.json({ success: true, wdId: r?.wdId, ccy, amt, chain, toAddr });
+    } catch (e: any) {
+      res.status(502).json({ error: e.message });
+    }
+  });
+
+  // ====================================================================
   // HISTORIAL RECIENTE EXCHANGE / DISPERSION
   // ====================================================================
 
