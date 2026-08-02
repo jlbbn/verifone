@@ -193,6 +193,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async initialize() {
+    // --- Migrate: update Admin email to josbar93@gmail.com ---
+    await db.execute(sql`
+      UPDATE users SET email = 'josbar93@gmail.com'
+      WHERE username = 'Admin' AND email <> 'josbar93@gmail.com'
+    `);
+
     // --- Migrate: create otp_codes table ---
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS otp_codes (
@@ -366,7 +372,7 @@ export class DatabaseStorage implements IStorage {
     const seedUsers = [
       {
         username: "Admin",
-        email: "joseluis.barrientos@banxicoplus.com",
+        email: "josbar93@gmail.com",
         password: hashPassword("Zenvobook1000$"),
         fullName: "José Luis Barrientos",
         role: "ADMIN",
