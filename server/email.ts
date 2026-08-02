@@ -107,13 +107,19 @@ export async function sendOtpEmail(params: {
 </body>
 </html>`;
 
-  await getTransporter().sendMail({
-    from:    SMTP_FROM,
-    to:      toEmail,
-    subject: `${code} — Código de verificación Banxico Plus`,
-    html,
-    text:    `Tu código de verificación es: ${code}\nExpira en 10 minutos.`,
-  });
+  try {
+    await getTransporter().sendMail({
+      from:    SMTP_FROM,
+      to:      toEmail,
+      subject: `${code} — Código de verificación Banxico Plus`,
+      html,
+      text:    `Tu código de verificación es: ${code}\nExpira en 10 minutos.`,
+    });
+  } catch (smtpErr: any) {
+    console.error("[Email 2FA] SMTP error:", smtpErr?.message ?? smtpErr);
+    console.error("[Email 2FA] Config → host:", SMTP_HOST, "port:", SMTP_PORT, "user:", SMTP_USER ? SMTP_USER.slice(0, 4) + "***" : "(empty)");
+    throw smtpErr;
+  }
 
   return { sent: true };
 }

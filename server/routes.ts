@@ -216,11 +216,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // ── Step 1 complete: generate & send OTP, do NOT create session yet ──
         try {
           const code = await storage.createOtp(user.id);
-          const emailResult = await sendOtpEmail({
-            toEmail:  user.email,
-            fullName: user.fullName,
-            code,
-          });
+          let devCode: string | undefined;
+
+          try {
+            const emailResult = await sendOtpEmail({
+              toEmail:  user.email,
+              fullName: user.fullName,
+              code,
+            });
+            if (emailResult.devCode) devCode = emailResult.devCode;
+          } catch (emailErr: any) {
+            // SMTP failed — fall back to showing code on screen so the user isn't locked out
+            console.error("[2FA] SMTP falló, usando fallback de pantalla:", emailErr.message);
+            devCode = code;
+          }
 
           // Store pending user in session (not yet authenticated)
           req.session.pendingUserId = user.id;
@@ -235,12 +244,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           res.json({
             step: "otp",
             maskedEmail,
-            // devCode only present when SMTP is not configured (dev mode)
-            ...(emailResult.devCode ? { devCode: emailResult.devCode } : {}),
+            ...(devCode ? { devCode } : {}),
           });
         } catch (emailErr: any) {
-          console.error("OTP generation/email error:", emailErr.message);
-          res.status(500).json({ error: "Error al enviar código de verificación" });
+          console.error("OTP generation error:", emailErr.message);
+          res.status(500).json({ error: "Error al generar código de verificación" });
         }
       } else {
         res.status(401).json({ error: "Credenciales inválidas" });
