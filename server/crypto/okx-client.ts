@@ -133,6 +133,8 @@ function sign(timestamp: string, method: string, path: string, body = ""): strin
   return createHmac("sha256", API_SECRET).update(msg).digest("base64");
 }
 
+const BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
+
 async function privateGet<T = unknown>(path: string, params?: Record<string, string>): Promise<T> {
   await rateGuard();
   const qs   = params ? "?" + new URLSearchParams(params).toString() : "";
@@ -143,6 +145,8 @@ async function privateGet<T = unknown>(path: string, params?: Record<string, str
   const res  = await fetch(url, {
     headers: {
       Accept:                 "application/json",
+      "Content-Type":         "application/json",
+      "User-Agent":           BROWSER_UA,
       "OK-ACCESS-KEY":        API_KEY,
       "OK-ACCESS-SIGN":       sig,
       "OK-ACCESS-TIMESTAMP":  ts,
@@ -168,6 +172,7 @@ async function privatePost<T = unknown>(path: string, body: Record<string, unkno
     headers: {
       "Content-Type":         "application/json",
       Accept:                 "application/json",
+      "User-Agent":           BROWSER_UA,
       "OK-ACCESS-KEY":        API_KEY,
       "OK-ACCESS-SIGN":       sig,
       "OK-ACCESS-TIMESTAMP":  ts,
