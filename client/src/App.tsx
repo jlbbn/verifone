@@ -67,22 +67,6 @@ function AppLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // ── Suspensión de cuenta — solo mensaje, sin acceso a ninguna función ──
-  if (user?.email === "ovidiohdez@gmail.com") {
-    return (
-      <div className="flex h-screen w-full flex-col items-center justify-center bg-white">
-        <div className="max-w-md w-full mx-auto px-6 text-center">
-          <div className="w-16 h-16 rounded-full bg-[#c8322b]/10 flex items-center justify-center mx-auto mb-6">
-            <CreditCard className="w-8 h-8 text-[#c8322b]" />
-          </div>
-          <p className="text-gray-900 text-base font-normal leading-relaxed">
-            Proceso de reembolso con fecha dictada al 11 de julio
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="flex h-screen w-full flex-col md:flex-row">
       <AppSidebar />

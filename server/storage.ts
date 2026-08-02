@@ -444,16 +444,6 @@ export class DatabaseStorage implements IStorage {
         subscriptionStart: new Date("2026-06-24T00:00:00Z"),
       },
       {
-        username: "ovidiohdez@gmail.com",
-        email: "ovidiohdez@gmail.com",
-        password: hashPassword("Keylog100$"),
-        fullName: "Ovidio Hdez",
-        role: "USER",
-        position: "Suscriptor",
-        avatar: null,
-        subscriptionStart: new Date("2026-06-24T00:00:00Z"),
-      },
-      {
         username: "avoexport03@gmail.com",
         email: "avoexport03@gmail.com",
         password: hashPassword("Keylog100$"),
