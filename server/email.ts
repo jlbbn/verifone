@@ -174,6 +174,7 @@ export async function sendOtpEmail(params: {
   }
 
   const data = await response.json().catch(() => ({}));
-  console.log("[Email 2FA] Sent OK →", data?.id ?? "no-id", "to", toEmail);
+  const masked = toEmail.replace(/(.{2}).+(@.+)/, "$1***$2");
+  console.log("[Email 2FA] Sent OK →", data?.id ?? "no-id", "to", masked);
   return { sent: true };
 }
