@@ -395,3 +395,27 @@ export async function getWsToken(): Promise<string> {
   const data: any[] = await privatePost("/api/v5/users/generate-one-time-token", {});
   return data?.[0]?.token ?? "";
 }
+
+/**
+ * Transfer funds between OKX accounts:
+ *   type "0" = transfer within account (Trading ↔ Funding)
+ *   from/to: "6" = funding account, "18" = trading account (unified)
+ */
+export async function fundingTransfer(params: {
+  ccy:   string;   // e.g. "USDT"
+  amt:   string;   // amount as string
+  from:  "6" | "18"; // "6"=funding, "18"=trading
+  to:    "6" | "18";
+}): Promise<any[]> {
+  return privatePost("/api/v5/asset/transfer", { type: "0", ...params });
+}
+
+/** Get currency details including withdrawal fees and network info */
+export async function withdrawalCurrencies(ccy?: string): Promise<any[]> {
+  return privateGet("/api/v5/asset/currencies", ccy ? { ccy } : {});
+}
+
+/** Get funding account balance */
+export async function fundingBalance(ccy?: string): Promise<any[]> {
+  return privateGet("/api/v5/asset/balances", ccy ? { ccy } : {});
+}

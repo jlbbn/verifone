@@ -40,7 +40,17 @@ import {
   Lock,
   XCircle,
   Loader2,
+  ArrowDownUp,
+  Network,
+  Building2,
+  ChevronDown,
+  ArrowRight,
 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/hooks/use-toast";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
 const WALLET_ADDRESS = "0x5293790F2C49A1B11B3d3b2AcB8583946B20f735";
 const WALLET_NETWORK = "ETHEREUM (ERC20)";
@@ -567,6 +577,292 @@ function HotWalletWidget() {
   );
 }
 
+// ── Broker Ops Panel ──────────────────────────────────────────────────────────
+
+const OKX_NETWORKS = [
+  { chain: "USDT-TRC20",   label: "TRON (TRC-20)",   fee: "2.2",  minWd: "2"  },
+  { chain: "USDT-ERC20",   label: "Ethereum (ERC-20)",fee: "0.081",minWd: "2"  },
+  { chain: "USDT-BSC",     label: "BNB Chain (BEP-20)",fee:"0.8", minWd: "5"  },
+  { chain: "USDT-Solana",  label: "Solana (SPL)",     fee: "1",    minWd: "2"  },
+  { chain: "USDT-Polygon", label: "Polygon (PoS)",    fee: "1",    minWd: "2"  },
+];
+
+function BrokerOpsPanel() {
+  const { toast } = useToast();
+
+  // Balances
+  const { data: balances, refetch: refetchBal, isFetching: loadingBal } = useQuery<{
+    trading: { ccy: string; avail: string; frozen: string }[];
+    funding: { ccy: string; avail: string; frozen: string }[];
+  }>({
+    queryKey: ["/api/broker/balances"],
+    refetchInterval: 30_000,
+  });
+
+  // Broker status
+  const { data: brokers, isFetching: loadingBrokers } = useQuery<any[]>({
+    queryKey: ["/api/broker-status"],
+    refetchInterval: 60_000,
+  });
+
+  // ── Send to network (withdraw) ────────────────────────────────────────────
+  const [wdAddr, setWdAddr]     = useState("");
+  const [wdAmt, setWdAmt]       = useState("");
+  const [wdChain, setWdChain]   = useState(OKX_NETWORKS[0].chain);
+  const [wdConfirm, setWdConfirm] = useState(false);
+
+  const selectedNet = OKX_NETWORKS.find(n => n.chain === wdChain) ?? OKX_NETWORKS[0];
+
+  const withdrawMut = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/broker/withdraw", {
+      ccy: "USDT", amt: wdAmt, toAddr: wdAddr, chain: wdChain, fee: selectedNet.fee,
+    }),
+    onSuccess: (data: any) => {
+      toast({ title: "✅ Retiro enviado", description: `ID: ${data.wdId ?? "—"} · ${wdAmt} USDT vía ${selectedNet.label}` });
+      setWdAddr(""); setWdAmt(""); setWdConfirm(false);
+      refetchBal();
+    },
+    onError: (e: any) => toast({ variant: "destructive", title: "Error retiro", description: e.message }),
+  });
+
+  // ── Internal transfer (Trading ↔ Funding) ────────────────────────────────
+  const [trAmt, setTrAmt]         = useState("");
+  const [trDir, setTrDir]         = useState<"trading_to_funding" | "funding_to_trading">("trading_to_funding");
+
+  const transferMut = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/broker/transfer", {
+      ccy: "USDT", amt: trAmt, direction: trDir,
+    }),
+    onSuccess: (data: any) => {
+      toast({ title: "✅ Transferencia completada", description: `${trAmt} USDT · ID: ${data.transId ?? "—"}` });
+      setTrAmt(""); refetchBal();
+    },
+    onError: (e: any) => toast({ variant: "destructive", title: "Error transferencia", description: e.message }),
+  });
+
+  const okxBroker = brokers?.find((b: any) => b.id === "okx");
+  const tradingUsdt = balances?.trading?.find(b => b.ccy === "USDT");
+  const fundingUsdt = balances?.funding?.find(b => b.ccy === "USDT");
+
+  return (
+    <Card>
+      <CardContent className="px-5 py-4 space-y-4">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Building2 className="w-4 h-4 text-[#c8322b]" />
+            <span className="text-sm font-semibold">OKX Broker Operations</span>
+          </div>
+          <Button size="sm" variant="ghost" onClick={() => refetchBal()} disabled={loadingBal}
+            className="h-7 gap-1 text-xs">
+            <RefreshCw className={`w-3 h-3 ${loadingBal ? "animate-spin" : ""}`} />
+            Actualizar
+          </Button>
+        </div>
+
+        {/* Broker status + balances */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {/* OKX ping status */}
+          <div className="bg-muted/40 rounded-lg p-3 space-y-1">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Estado OKX</p>
+            {loadingBrokers ? (
+              <div className="flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /><span className="text-xs">Verificando…</span></div>
+            ) : okxBroker ? (
+              <div className="flex items-center gap-1.5">
+                <span className={`w-2 h-2 rounded-full ${okxBroker.pingStatus === "online" ? "bg-green-500" : okxBroker.pingStatus === "restricted" ? "bg-yellow-500" : "bg-red-500"}`} />
+                <span className="text-xs font-medium capitalize">{okxBroker.pingStatus}</span>
+                {okxBroker.latencyMs && <span className="text-[10px] text-muted-foreground ml-auto">{okxBroker.latencyMs}ms</span>}
+              </div>
+            ) : <span className="text-xs text-muted-foreground">—</span>}
+            <p className="text-[10px] text-muted-foreground">Prioridad {okxBroker?.priority ?? "—"} · Activo</p>
+          </div>
+
+          {/* Trading balance */}
+          <div className="bg-muted/40 rounded-lg p-3 space-y-1">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Trading Account</p>
+            <p className="text-base font-bold font-mono">
+              {loadingBal ? "—" : `${parseFloat(tradingUsdt?.avail ?? "0").toFixed(4)}`}
+              <span className="text-[10px] font-normal text-muted-foreground ml-1">USDT</span>
+            </p>
+            <p className="text-[10px] text-muted-foreground">Para órdenes / swaps</p>
+          </div>
+
+          {/* Funding balance */}
+          <div className="bg-muted/40 rounded-lg p-3 space-y-1">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Funding Wallet</p>
+            <p className="text-base font-bold font-mono">
+              {loadingBal ? "—" : `${parseFloat(fundingUsdt?.avail ?? "0").toFixed(4)}`}
+              <span className="text-[10px] font-normal text-muted-foreground ml-1">USDT</span>
+            </p>
+            <p className="text-[10px] text-muted-foreground">Para retiros / depósitos</p>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <Tabs defaultValue="withdraw">
+          <TabsList className="w-full h-8">
+            <TabsTrigger value="withdraw" className="flex-1 text-xs gap-1.5">
+              <Network className="w-3 h-3" />Enviar a red
+            </TabsTrigger>
+            <TabsTrigger value="transfer" className="flex-1 text-xs gap-1.5">
+              <ArrowDownUp className="w-3 h-3" />Transferencia interna
+            </TabsTrigger>
+          </TabsList>
+
+          {/* ── Send to network ── */}
+          <TabsContent value="withdraw" className="space-y-3 pt-2">
+            <div className="space-y-1">
+              <Label className="text-xs">Red de destino</Label>
+              <Select value={wdChain} onValueChange={setWdChain}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {OKX_NETWORKS.map(n => (
+                    <SelectItem key={n.chain} value={n.chain} className="text-xs">
+                      {n.label} — fee {n.fee} USDT · mín {n.minWd} USDT
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs">Dirección destino</Label>
+              <Input
+                placeholder="Pega la dirección del wallet receptor"
+                value={wdAddr}
+                onChange={e => setWdAddr(e.target.value)}
+                className="h-8 text-xs font-mono"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs">Monto USDT</Label>
+              <div className="relative">
+                <Input
+                  type="number"
+                  placeholder={`Mín ${selectedNet.minWd} USDT`}
+                  value={wdAmt}
+                  onChange={e => setWdAmt(e.target.value)}
+                  className="h-8 text-xs pr-12"
+                />
+                <span className="absolute right-3 top-1.5 text-[10px] text-muted-foreground">USDT</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Comisión de red: {selectedNet.fee} USDT · Recibirá: {wdAmt && parseFloat(wdAmt) > 0 ? Math.max(0, parseFloat(wdAmt) - parseFloat(selectedNet.fee)).toFixed(4) : "—"} USDT
+              </p>
+            </div>
+
+            {!wdConfirm ? (
+              <Button
+                size="sm" className="w-full h-8 text-xs gap-1.5"
+                disabled={!wdAddr.trim() || !wdAmt || parseFloat(wdAmt) < parseFloat(selectedNet.minWd)}
+                onClick={() => setWdConfirm(true)}
+              >
+                <Send className="w-3.5 h-3.5" />
+                Continuar retiro
+              </Button>
+            ) : (
+              <div className="space-y-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-xs font-semibold text-yellow-800 flex items-center gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  ¿Confirmar retiro irreversible?
+                </p>
+                <p className="text-[11px] text-yellow-700">
+                  <strong>{wdAmt} USDT</strong> vía <strong>{selectedNet.label}</strong><br />
+                  → <span className="font-mono break-all">{wdAddr}</span>
+                </p>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" className="flex-1 h-7 text-xs" onClick={() => setWdConfirm(false)}>
+                    Cancelar
+                  </Button>
+                  <Button size="sm" className="flex-1 h-7 text-xs bg-[#c8322b] hover:bg-[#b02a24] gap-1"
+                    disabled={withdrawMut.isPending}
+                    onClick={() => withdrawMut.mutate()}>
+                    {withdrawMut.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                    Enviar
+                  </Button>
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
+          {/* ── Internal transfer ── */}
+          <TabsContent value="transfer" className="space-y-3 pt-2">
+            <div className="space-y-1">
+              <Label className="text-xs">Dirección</Label>
+              <Select value={trDir} onValueChange={v => setTrDir(v as typeof trDir)}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="trading_to_funding" className="text-xs">
+                    Trading Account → Funding Wallet
+                  </SelectItem>
+                  <SelectItem value="funding_to_trading" className="text-xs">
+                    Funding Wallet → Trading Account
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground">
+                {trDir === "trading_to_funding"
+                  ? "Mueve fondos del cuenta trading (swaps) a funding (retiros)"
+                  : "Mueve fondos de funding (depósitos) a trading (swaps)"}
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs">Monto USDT</Label>
+              <div className="relative">
+                <Input
+                  type="number"
+                  placeholder="0.00"
+                  value={trAmt}
+                  onChange={e => setTrAmt(e.target.value)}
+                  className="h-8 text-xs pr-12"
+                />
+                <span className="absolute right-3 top-1.5 text-[10px] text-muted-foreground">USDT</span>
+              </div>
+              <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                <span>Disponible en {trDir === "trading_to_funding" ? "Trading" : "Funding"}:</span>
+                <span className="font-mono font-medium">
+                  {trDir === "trading_to_funding"
+                    ? parseFloat(tradingUsdt?.avail ?? "0").toFixed(4)
+                    : parseFloat(fundingUsdt?.avail ?? "0").toFixed(4)} USDT
+                </span>
+              </div>
+            </div>
+
+            {/* Visual flow */}
+            <div className="flex items-center gap-2 p-2 bg-muted/30 rounded-md text-[10px] text-muted-foreground">
+              <span className={`font-medium ${trDir === "trading_to_funding" ? "text-foreground" : ""}`}>
+                Trading
+              </span>
+              <ArrowRight className="w-3 h-3 flex-shrink-0" />
+              <span className={`font-medium ${trDir === "funding_to_trading" ? "text-foreground" : ""}`}>
+                Funding
+              </span>
+              <span className="ml-auto text-[10px]">Sin comisión · instantáneo</span>
+            </div>
+
+            <Button
+              size="sm" className="w-full h-8 text-xs gap-1.5"
+              disabled={!trAmt || parseFloat(trAmt) <= 0 || transferMut.isPending}
+              onClick={() => transferMut.mutate()}
+            >
+              {transferMut.isPending
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                : <ArrowDownUp className="w-3.5 h-3.5" />}
+              Transferir {trAmt ? `${trAmt} USDT` : ""}
+            </Button>
+          </TabsContent>
+        </Tabs>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function AdminCajaUSDT() {
   const [copied, setCopied] = useState(false);
   const [expandedUser, setExpandedUser] = useState<number | null>(null);
@@ -600,6 +896,9 @@ export default function AdminCajaUSDT() {
 
       {/* ── Dispersar USDT ── */}
       <DisperseWidget />
+
+      {/* ── Broker OKX — envío a red + transferencia interna ── */}
+      <BrokerOpsPanel />
 
       {/* ── Nota pago anual ── */}
       <Card className="border-blue-200 bg-blue-50/60">
