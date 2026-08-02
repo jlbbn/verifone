@@ -676,6 +676,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Fix #5: Single source of truth for the Socemro TRON dispersal wallet.
+  // Previously this address was duplicated at the /api/subscription endpoint AND
+  // inside MARGIN_PARTICIPANTS — two sites that could fall out of sync on update.
+  const SOCEMRO_TRON_WALLET = "TGMmVL7uG4bS6TDE9Jn5VwqLf4NbRxTX6p";
+
   // ── Hot wallet TRON (saldo USDT en tiempo real) ─────────────────────────
   app.get("/api/admin/hot-wallet/balance", requireRole("ADMIN"), async (_req, res) => {
     try {
@@ -708,7 +713,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ── Dispersar USDT desde la hot wallet ──────────────────────────────────
   app.post("/api/admin/hot-wallet/disperse", requireRole("ADMIN"), async (req, res) => {
     const schema = z.object({
-      toAddress:  z.string().min(30),
+      // Fix #2: tightened from min(30) to a proper base58 length range;
+      // isValidAddress() performs the real validation below.
+      toAddress:  z.string().min(34).max(34),
       amountUsdt: z.number().positive().finite(),
       password:   z.string().min(1),
       note:       z.string().optional(),
@@ -722,6 +729,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(401).json({ error: "Contraseña incorrecta" });
     }
 
+    // Fix #2: Validate TRON base58 address BEFORE touching the DB or blockchain.
+    // An invalid address would burn TRX fees with no recovery path.
+    if (!TronClient.isValidAddress(parsed.data.toAddress)) {
+      return res.status(400).json({
+        error: "Dirección TRON inválida — debe ser una dirección base58 válida (empieza con 'T')",
+        code: "INVALID_TRON_ADDRESS",
+      });
+    }
+
     // Validate against configurable max dispersal limit
     const settings = await storage.getSettings();
     const maxUsdt = settings.maxDispersalUsdt ?? 5000;
@@ -733,12 +749,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
 
+    // Fix #6: Check wallet config BEFORE inserting the DB record.
+    // Previously this check happened after the insert, leaving orphan "pending"
+    // rows when the wallet was unconfigured.
     const info = TronClient.platformWalletInfo();
     if (!info.configured) {
       return res.status(503).json({ error: "Hot wallet no configurada" });
     }
 
-    // Insert pending record first — we have a txid after broadcast
+    // Insert with "pending" status — updated to "broadcast" or "failed" below.
     const [row] = await db.insert(hotWalletDispersions).values({
       adminId:    admin.id,
       toAddress:  parsed.data.toAddress,
@@ -749,11 +768,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     try {
       const result = await TronClient.transfer(parsed.data.toAddress, parsed.data.amountUsdt);
+
+      // Fix #1: Status is "broadcast" — the TX was accepted by the TRON network
+      // but on-chain confirmation is asynchronous. Poll getTransaction(txid) to
+      // verify final "SUCCESS" | "FAILED" settlement before treating as confirmed.
       await db.update(hotWalletDispersions)
-        .set({ txid: result.txid, status: "confirmed" })
+        .set({ txid: result.txid, status: "broadcast" })
         .where(eq(hotWalletDispersions.id, row.id));
 
-      return res.json({ success: true, txid: result.txid, id: row.id });
+      return res.json({ success: true, txid: result.txid, id: row.id, status: "broadcast" });
     } catch (err: any) {
       await db.update(hotWalletDispersions)
         .set({ status: "failed", note: (parsed.data.note ?? "") + " | ERR: " + err.message })
@@ -2827,7 +2850,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         restricted:       false,
         routingLocked:    false,
         paymentWarning:   null,
-        walletAddress:    "TGMmVL7uG4bS6TDE9Jn5VwqLf4NbRxTX6p",
+        walletAddress:    SOCEMRO_TRON_WALLET,
         walletNetwork:    "TRON (TRC-20)",
         walletToken:      "USDT",
         marginPercentage: 50,
@@ -2930,7 +2953,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ─── Margen Operacional — pool global ───────────────────────────────────────
   const MARGIN_PARTICIPANTS = [
     { name: "Banxico Plus LLC",username: null,                     pct: 50, wallet: null,                                         network: "Platform",         token: null   },
-    { name: "Socemro",            username: "socemro2@gmail.com",     pct: 50,   wallet: "TGMmVL7uG4bS6TDE9Jn5VwqLf4NbRxTX6p", network: "TRON (TRC-20)", token: "USDT" },
+    { name: "Socemro",            username: "socemro2@gmail.com",     pct: 50,   wallet: SOCEMRO_TRON_WALLET, network: "TRON (TRC-20)", token: "USDT" },
     { name: "Emiliano Maldonado", username: null,                     pct: 11.5, wallet: "TUZ4MGYkec7LYSJJEy6iJDr2Ko6gxmDzvi",  network: "TRON (TRC-20)", token: "USDT" },
   ];
 

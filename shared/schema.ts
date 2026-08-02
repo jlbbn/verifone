@@ -474,7 +474,7 @@ export const hotWalletDispersions = pgTable("hot_wallet_dispersions", {
   toAddress:   text("to_address").notNull(),
   amountUsdt:  numeric("amount_usdt", { precision: 18, scale: 6 }).notNull(),
   txid:        text("txid"),
-  status:      text("status").notNull().default("pending"),   // pending | confirmed | failed
+  status:      text("status").notNull().default("pending"),   // pending | broadcast | confirmed | failed
   note:        text("note"),
   createdAt:   timestamp("created_at").defaultNow().notNull(),
 });
