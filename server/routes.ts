@@ -2888,7 +2888,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         restricted:       false,
         routingLocked:    false,
         paymentWarning:   null,
-        walletAddress:    "TUz4MGYkec7LYSJJEy6iJDr2K06gxmDzvj",
+        walletAddress:    "TGMmVL7uG4bS6TDE9Jn5VwqLf4NbRxTX6p",
         walletNetwork:    "TRON (TRC-20)",
         walletToken:      "USDT",
         marginPercentage: 50,
@@ -2991,9 +2991,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ─── Margen Operacional — pool global ───────────────────────────────────────
   const MARGIN_PARTICIPANTS = [
     { name: "Banxico Plus LLC",username: null,                     pct: 50, wallet: null,                                         network: "Platform",         token: null   },
-    { name: "Socemro",            username: "socemro2@gmail.com",     pct: 50,   wallet: "TUz4MGYkec7LYSJJEy6iJDr2K06gxmDzvj", network: "TRON (TRC-20)", token: "USDT" },
+    { name: "Socemro",            username: "socemro2@gmail.com",     pct: 50,   wallet: "TGMmVL7uG4bS6TDE9Jn5VwqLf4NbRxTX6p", network: "TRON (TRC-20)", token: "USDT" },
     { name: "Emiliano Maldonado", username: null,                     pct: 11.5, wallet: "TUZ4MGYkec7LYSJJEy6iJDr2Ko6gxmDzvi",  network: "TRON (TRC-20)", token: "USDT" },
-    { name: "Agustin Lopez",      username: null,                     pct: 11.5, wallet: "TUZ4MGYkec7LYSJJEy6iJDr2Ko6gxmDzvj",  network: "TRON (TRC-20)", token: "USDT" },
   ];
 
   app.get("/api/margin-pool", requireSession, async (req, res) => {
