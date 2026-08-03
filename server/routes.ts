@@ -60,6 +60,17 @@ function requireRole(role: string): RequestHandler {
   };
 }
 
+// Acepta cualquiera de los roles indicados.
+function requireAnyRole(...roles: string[]): RequestHandler {
+  return (req, res, next) => {
+    if (!req.currentUser || !roles.includes(req.currentUser.role)) {
+      res.status(403).json({ error: "Acceso denegado" });
+      return;
+    }
+    next();
+  };
+}
+
 // Proyección segura del usuario (nunca expone la contraseña).
 function publicUser(user: User) {
   return {
@@ -434,7 +445,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Resuelve/atiende una solicitud (solo ADMIN) y notifica al solicitante.
-  app.patch("/api/notifications/:id/resolve", requireRole("ADMIN"), async (req, res) => {
+  app.patch("/api/notifications/:id/resolve", requireAnyRole("ADMIN", "BUSINESS_PARTNER"), async (req, res) => {
     try {
       const notification = await storage.getNotification(req.params.id);
       if (!notification) {
@@ -602,7 +613,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Lista de usuarios para el dropdown del admin (Vincular Terminal)
-  app.get("/api/users", requireRole("ADMIN"), async (req, res) => {
+  app.get("/api/users", requireAnyRole("ADMIN", "BUSINESS_PARTNER"), async (req, res) => {
     try {
       const users = await storage.getAllUsers();
       res.json(users.map(publicUser));
@@ -1082,7 +1093,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ── Routing Decisions ─────────────────────────────────────────────────────
-  app.get("/api/routing-decisions", requireSession, requireRole("ADMIN"), async (req, res) => {
+  app.get("/api/routing-decisions", requireSession, requireAnyRole("ADMIN", "BUSINESS_PARTNER"), async (req, res) => {
     try {
       const limit = Math.min(Number(req.query.limit ?? 100), 500);
       const decisions = await storage.getRoutingDecisions(limit);
@@ -1149,7 +1160,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ── Routing Analytics ─────────────────────────────────────────────────────
-  app.get("/api/routing-analytics", requireSession, requireRole("ADMIN"), async (req, res) => {
+  app.get("/api/routing-analytics", requireSession, requireAnyRole("ADMIN", "BUSINESS_PARTNER"), async (req, res) => {
     try {
       const decisions = await storage.getRoutingDecisions(500);
 
@@ -1783,24 +1794,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? await storage.getAllTransactions()
         : await storage.getTransactionsByUser(user.username);
 
-      // Socemro: incluir también transacciones asignadas por admin que aún
-      // conservan created_by = 'Admin' en entornos donde el UPDATE no se aplicó.
-      if (user.email === "socemro2@gmail.com" || user.username === "socemro2@gmail.com") {
-        const allTxs = await storage.getAllTransactions();
-        const socemroIds = new Set(transactions.map((t: Transaction) => t.id));
-        const adminTxsForSocemro = allTxs.filter((t: Transaction) =>
-          !socemroIds.has(t.id) &&
-          (t.transactionId === "SR-1784846118201-EC942E32" ||
-           (t.createdBy === "Admin" && (t.description ?? "").toLowerCase().includes("socemro")))
-        );
-        if (adminTxsForSocemro.length > 0) {
-          transactions = [...transactions, ...adminTxsForSocemro]
-            .sort((a: Transaction, b: Transaction) =>
-              new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime()
-            );
-        }
-      }
-
       res.json(transactions);
     } catch (error) {
       res.status(500).json({ error: "Error al obtener transacciones" });
@@ -1848,7 +1841,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Anota una transacción (no modifica monto ni estado — solo agrega una
   // referencia/nota a la descripción, p. ej. para conciliación con otros
   // módulos como Exchange).
-  app.patch("/api/transactions/:id/note", requireRole("ADMIN"), async (req, res) => {
+  app.patch("/api/transactions/:id/note", requireAnyRole("ADMIN", "BUSINESS_PARTNER"), async (req, res) => {
     try {
       const note = typeof req.body?.note === "string" ? req.body.note.trim() : "";
       if (!note) {

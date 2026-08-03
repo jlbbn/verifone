@@ -13,7 +13,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   Users, UserPlus, Search, Calendar, Terminal, Shield,
   User, Loader2, CheckCircle, RefreshCw, Mail, Ban, Unlock,
-  CreditCard, Monitor, Wallet, Pencil, Check, X
+  CreditCard, Monitor, Wallet, Pencil, Check, X, Briefcase
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
@@ -22,7 +22,7 @@ interface UserRecord {
   username: string;
   fullName: string;
   email: string;
-  role: "ADMIN" | "USER";
+  role: "ADMIN" | "USER" | "BUSINESS_PARTNER";
   subscriptionStart: string | null;
   suspended: boolean;
   paymentEngineAccess: boolean;
@@ -85,7 +85,7 @@ export default function AdminUsuariosPage() {
   const [formEmail, setFormEmail] = useState("");
   const [formPassword, setFormPassword] = useState("");
   const [formFullName, setFormFullName] = useState("");
-  const [formRole, setFormRole] = useState<"USER" | "ADMIN">("USER");
+  const [formRole, setFormRole] = useState<"USER" | "ADMIN" | "BUSINESS_PARTNER">("USER");
   const [formSubscription, setFormSubscription] = useState("");
   const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
   const [emailDraft, setEmailDraft] = useState("");
@@ -397,11 +397,18 @@ export default function AdminUsuariosPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-2 mb-0.5">
                         <span className={`font-bold text-base ${u.suspended ? "text-muted-foreground line-through" : ""}`}>{u.fullName}</span>
-                        <Badge className={u.role === "ADMIN"
-                          ? "bg-[#c8322b]/10 text-[#c8322b] border-[#c8322b]/20 no-default-active-elevate"
-                          : "bg-blue-100 text-blue-700 border-blue-200 no-default-active-elevate"
+                        <Badge className={
+                          u.role === "ADMIN"
+                            ? "bg-[#c8322b]/10 text-[#c8322b] border-[#c8322b]/20 no-default-active-elevate"
+                            : u.role === "BUSINESS_PARTNER"
+                              ? "bg-purple-100 text-purple-700 border-purple-200 no-default-active-elevate"
+                              : "bg-blue-100 text-blue-700 border-blue-200 no-default-active-elevate"
                         }>
-                          {u.role === "ADMIN" ? <><Shield className="w-3 h-3 mr-1" />ADMIN</> : <><User className="w-3 h-3 mr-1" />USER</>}
+                          {u.role === "ADMIN"
+                            ? <><Shield className="w-3 h-3 mr-1" />ADMIN</>
+                            : u.role === "BUSINESS_PARTNER"
+                              ? <><Briefcase className="w-3 h-3 mr-1" />PARTNER</>
+                              : <><User className="w-3 h-3 mr-1" />USER</>}
                         </Badge>
                         {u.suspended && (
                           <Badge className="bg-red-100 text-red-700 border-red-200 no-default-active-elevate gap-1">
@@ -754,12 +761,13 @@ export default function AdminUsuariosPage() {
 
             <div className="space-y-1.5">
               <Label htmlFor="u-role">Rol</Label>
-              <Select value={formRole} onValueChange={v => setFormRole(v as "USER" | "ADMIN")}>
+              <Select value={formRole} onValueChange={v => setFormRole(v as "USER" | "ADMIN" | "BUSINESS_PARTNER")}>
                 <SelectTrigger id="u-role" data-testid="select-user-role">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="USER">Usuario estándar</SelectItem>
+                  <SelectItem value="BUSINESS_PARTNER">Business Partner</SelectItem>
                   <SelectItem value="ADMIN">Administrador</SelectItem>
                 </SelectContent>
               </Select>

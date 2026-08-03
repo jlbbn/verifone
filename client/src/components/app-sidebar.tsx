@@ -89,12 +89,13 @@ export function AppSidebar() {
   const [location] = useLocation();
   const { user, logout, isLoggingOut } = useAuth();
   const isAdmin = user?.role === "ADMIN";
+  const isBusinessPartner = user?.role === "BUSINESS_PARTNER";
 
   const { data: subData } = useQuery<{ restricted?: boolean }>({
     queryKey: ["/api/subscription"],
-    enabled: !!user && !isAdmin,
+    enabled: !!user && !isAdmin && !isBusinessPartner,
   });
-  const isRestricted = !isAdmin && !!(subData?.restricted);
+  const isRestricted = !isAdmin && !isBusinessPartner && !!(subData?.restricted);
 
   const visibleMenuItems = isRestricted
     ? menuItems.filter(item => ALLOWED_RESTRICTED.includes(item.url))
@@ -137,8 +138,14 @@ export function AppSidebar() {
                 <p className="font-semibold text-sm leading-tight truncate">{user?.fullName ?? "—"}</p>
                 <p className="text-xs text-muted-foreground truncate">{user?.email ?? "sin correo"}</p>
                 <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                  <Badge className="text-[10px] bg-[#c8322b]/10 text-[#c8322b] border-[#c8322b]/20 no-default-active-elevate">
-                    {user?.role ?? "—"}
+                  <Badge className={`text-[10px] no-default-active-elevate ${
+                    user?.role === "ADMIN"
+                      ? "bg-[#c8322b]/10 text-[#c8322b] border-[#c8322b]/20"
+                      : user?.role === "BUSINESS_PARTNER"
+                        ? "bg-purple-100 text-purple-700 border-purple-200"
+                        : "bg-blue-100 text-blue-700 border-blue-200"
+                  }`}>
+                    {user?.role === "BUSINESS_PARTNER" ? "PARTNER" : (user?.role ?? "—")}
                   </Badge>
                   {user?.position && (
                     <Badge variant="outline" className="text-[10px] no-default-active-elevate">
