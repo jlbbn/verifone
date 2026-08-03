@@ -89,6 +89,8 @@ export default function AdminUsuariosPage() {
   const [formSubscription, setFormSubscription] = useState("");
   const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
   const [emailDraft, setEmailDraft] = useState("");
+  const [resetPwdId, setResetPwdId] = useState<string | null>(null);
+  const [resetPwdDraft, setResetPwdDraft] = useState("");
 
   // Edición inline de la caja individual de cada usuario
   const [editingCajaId, setEditingCajaId] = useState<string | null>(null);
@@ -109,6 +111,20 @@ export default function AdminUsuariosPage() {
 
   const { data: cryptoRecords = [], isLoading: cryptoLoading } = useQuery<AdminCryptoRecord[]>({
     queryKey: ["/api/admin/crypto-balances"],
+  });
+
+  const resetPwdMutation = useMutation({
+    mutationFn: async ({ userId, password }: { userId: string; password: string }) => {
+      const res = await apiRequest("PATCH", `/api/admin/user-password/${userId}`, { password });
+      if (!res.ok) { const b = await res.json(); throw new Error(b.error ?? "Error"); }
+      return res.json();
+    },
+    onSuccess: () => {
+      setResetPwdId(null);
+      setResetPwdDraft("");
+      toast({ title: "Contraseña actualizada" });
+    },
+    onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
 
   const suspendMutation = useMutation({
@@ -489,6 +505,38 @@ export default function AdminUsuariosPage() {
                           ? "Sin terminal"
                           : `${userTerminals.length} terminal${userTerminals.length > 1 ? "es" : ""}`}
                       </span>
+                      {/* Reset contraseña — disponible para todos los usuarios */}
+                      {resetPwdId === u.id ? (
+                        <span className="flex items-center gap-1 w-full mt-0.5">
+                          <Input
+                            type="password"
+                            className="h-6 text-xs flex-1 px-1.5 py-0"
+                            placeholder="Nueva contraseña"
+                            value={resetPwdDraft}
+                            onChange={e => setResetPwdDraft(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === "Enter" && resetPwdDraft.length >= 6)
+                                resetPwdMutation.mutate({ userId: u.id, password: resetPwdDraft });
+                              if (e.key === "Escape") { setResetPwdId(null); setResetPwdDraft(""); }
+                            }}
+                            autoFocus
+                          />
+                          <button
+                            className="text-green-600 hover:text-green-700 font-bold px-1 text-xs"
+                            disabled={resetPwdDraft.length < 6 || resetPwdMutation.isPending}
+                            onClick={() => resetPwdMutation.mutate({ userId: u.id, password: resetPwdDraft })}
+                          >✓</button>
+                          <button className="text-muted-foreground hover:text-foreground px-1 text-xs"
+                            onClick={() => { setResetPwdId(null); setResetPwdDraft(""); }}>✕</button>
+                        </span>
+                      ) : (
+                        <Button size="sm" variant="outline"
+                          className="text-xs h-7 gap-1 mt-0.5 border-slate-300 text-slate-600 w-full"
+                          onClick={() => { setResetPwdId(u.id); setResetPwdDraft(""); }}
+                        >
+                          <Pencil className="w-3 h-3" /> Reset contraseña
+                        </Button>
+                      )}
                       {u.role !== "ADMIN" && (
                         <Button
                           size="sm"

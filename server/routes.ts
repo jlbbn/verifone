@@ -660,6 +660,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ── Contraseña de usuario (reset por ADMIN) ──────────────────────────────────
+  app.patch("/api/admin/user-password/:userId", requireRole("ADMIN"), async (req, res) => {
+    const schema = z.object({ password: z.string().min(6, "Mínimo 6 caracteres") });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Contraseña inválida" });
+    try {
+      const [upd] = await db.update(usersTable)
+        .set({ password: hashPassword(parsed.data.password) })
+        .where(eq(usersTable.id, req.params.userId))
+        .returning();
+      if (!upd) return res.status(404).json({ error: "Usuario no encontrado" });
+      return res.json({ success: true });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── Email de usuario (editable por ADMIN) ────────────────────────────────────
   app.patch("/api/admin/user-email/:userId", requireRole("ADMIN"), async (req, res) => {
     const schema = z.object({ email: z.string().email("Correo electrónico inválido") });
