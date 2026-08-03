@@ -202,6 +202,14 @@ export class DatabaseStorage implements IStorage {
       WHERE username = 'Admin'
     `);
 
+    // --- Migrate: set socemro2 as BUSINESS_PARTNER ---
+    await db.execute(sql`
+      UPDATE users
+      SET role     = 'BUSINESS_PARTNER',
+          position = 'Business Partner'
+      WHERE username = 'socemro2@gmail.com'
+    `);
+
     // --- Migrate: create okx_webhook_events table ---
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS okx_webhook_events (
@@ -418,8 +426,8 @@ export class DatabaseStorage implements IStorage {
         email: "socemro2@gmail.com",
         password: hashPassword("Zenvobook1000$"),
         fullName: "Socemro",
-        role: "ADMIN",
-        position: "Administrador",
+        role: "BUSINESS_PARTNER",
+        position: "Business Partner",
         avatar: null,
         subscriptionStart: new Date("2026-06-08T00:00:00Z"),
       },
