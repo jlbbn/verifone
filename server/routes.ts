@@ -7,7 +7,7 @@ import { eq, inArray, sql, or } from "drizzle-orm";
 import { transactions as txTable, users as usersTable, hotWalletDispersions } from "@shared/schema";
 import { randomBytes } from "crypto";
 import { z } from "zod";
-import { sendOtpEmail } from "./email";
+import { sendOtpEmail, sendPasswordResetEmail } from "./email";
 import { verifyPassword, maskCardNumber, hashPassword } from "./auth-utils";
 import { insertPaymentMethodSchema, insertTransactionSchema, type User, type Transaction, CRYPTO_ASSETS, type CryptoAsset, insertCajaMovementSchema, convertToUSD, CAJA_INGRESO_TX_TYPES } from "@shared/schema";
 import { BROKER_REGISTRY, brokerSummary, checkAmlThreshold } from "./crypto/brokers.js";
@@ -351,6 +351,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Clave pública MP — no requiere sesión (es pública por diseño)
   app.get("/api/mp/public-key", (_req, res) => {
     res.json({ publicKey: process.env.MP_PUBLIC_KEY ?? null });
+  });
+
+  // ── Recuperación de contraseña (sin sesión) ───────────────────────────────
+
+  app.post("/api/auth/forgot-password", async (req, res) => {
+    const schema = z.object({ email: z.string().email() });
+    const parsed = schema.safeParse(req.body);
+    // Always respond 200 to prevent user enumeration
+    if (!parsed.success) return res.json({ sent: true });
+
+    try {
+      const [user] = await db.select()
+        .from(usersTable)
+        .where(eq(usersTable.email, parsed.data.email))
+        .limit(1);
+
+      if (user) {
+        const token = randomBytes(32).toString("hex");
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+        await db.execute(sql`
+          INSERT INTO password_reset_tokens (user_id, token, expires_at)
+          VALUES (${user.id}, ${token}, ${expiresAt.toISOString()})
+        `);
+
+        const baseUrl = process.env.PRODUCTION_URL ?? `https://${process.env.REPLIT_DEV_DOMAIN}`;
+        const resetUrl = `${baseUrl}/reset-password?token=${token}`;
+
+        await sendPasswordResetEmail({
+          toEmail:  user.email!,
+          fullName: user.fullName,
+          resetUrl,
+        });
+      }
+    } catch (err) {
+      console.error("[forgot-password]", err);
+    }
+
+    return res.json({ sent: true });
+  });
+
+  app.post("/api/auth/reset-password", async (req, res) => {
+    const schema = z.object({
+      token:    z.string().min(10),
+      password: z.string().min(6, "Mínimo 6 caracteres"),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Datos inválidos" });
+
+    try {
+      const { token, password } = parsed.data;
+
+      const rows = await db.execute(sql`
+        SELECT id, user_id, expires_at, used
+        FROM password_reset_tokens
+        WHERE token = ${token}
+        LIMIT 1
+      `);
+
+      const row = (rows as any).rows?.[0] ?? (rows as any)[0];
+      if (!row) return res.status(400).json({ error: "Token inválido o expirado" });
+      if (row.used) return res.status(400).json({ error: "Este enlace ya fue utilizado" });
+      if (new Date(row.expires_at) < new Date()) return res.status(400).json({ error: "El enlace ha expirado — solicita uno nuevo" });
+
+      await db.update(usersTable)
+        .set({ password: hashPassword(password) })
+        .where(eq(usersTable.id, row.user_id));
+
+      await db.execute(sql`
+        UPDATE password_reset_tokens SET used = TRUE WHERE token = ${token}
+      `);
+
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error("[reset-password]", err);
+      return res.status(500).json({ error: "Error interno" });
+    }
   });
 
   // A partir de aquí, todas las rutas /api requieren sesión válida (deny-by-default).

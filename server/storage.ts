@@ -242,6 +242,18 @@ export class DatabaseStorage implements IStorage {
       )
     `);
 
+    // --- Migrate: password_reset_tokens table ---
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id         VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id    VARCHAR NOT NULL,
+        token      TEXT NOT NULL UNIQUE,
+        expires_at TIMESTAMP NOT NULL,
+        used       BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )
+    `);
+
     // --- Migrate: add suspended column to users if missing ---
     await db.execute(sql`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended BOOLEAN NOT NULL DEFAULT FALSE

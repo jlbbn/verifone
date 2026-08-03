@@ -54,7 +54,7 @@ export default function LoginPage() {
   const { toast } = useToast();
 
   // ── Step state ──────────────────────────────────────────────────────────────
-  const [step, setStep]               = useState<"credentials" | "otp">("credentials");
+  const [step, setStep]               = useState<"credentials" | "otp" | "forgot" | "forgot-sent">("credentials");
   const [maskedEmail, setMaskedEmail] = useState("");
   const [devCode, setDevCode]         = useState<string | null>(null);  // dev-mode OTP
 
@@ -125,6 +125,24 @@ export default function LoginPage() {
     setStep("credentials");
     setOtp("");
     setDevCode(null);
+  }
+
+  // ── Forgot password step ─────────────────────────────────────────────────────
+  const [forgotEmail, setForgotEmail]       = useState("");
+  const [forgotLoading, setForgotLoading]   = useState(false);
+
+  async function onForgotSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setForgotLoading(true);
+    try {
+      await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: forgotEmail }),
+      });
+    } catch { /* silent — we always show "sent" */ }
+    setForgotLoading(false);
+    setStep("forgot-sent");
   }
 
   // ── Layout ──────────────────────────────────────────────────────────────────
@@ -248,6 +266,14 @@ export default function LoginPage() {
                       : "Acceder al sistema"
                     }
                   </Button>
+
+                  <button
+                    type="button"
+                    onClick={() => setStep("forgot")}
+                    className="w-full text-center text-xs text-gray-500 hover:text-gray-300 transition-colors mt-3 py-1"
+                  >
+                    ¿Olvidaste tu contraseña? Recupérala aquí
+                  </button>
                 </form>
               </Form>
             </>
@@ -325,6 +351,84 @@ export default function LoginPage() {
                 </button>
               </form>
             </>
+          )}
+
+          {/* ── STEP 3: Forgot password ── */}
+          {step === "forgot" && (
+            <>
+              <div className="mb-8">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-full bg-[#c8322b]/15 flex items-center justify-center">
+                    <KeyRound className="w-5 h-5 text-[#c8322b]" />
+                  </div>
+                  <div>
+                    <h1 className="text-white text-xl font-bold">Recuperar contraseña</h1>
+                    <p className="text-gray-500 text-xs">Te enviaremos un enlace por correo</p>
+                  </div>
+                </div>
+              </div>
+
+              <form onSubmit={onForgotSubmit} className="space-y-5">
+                <div className="space-y-1.5">
+                  <label className="text-gray-300 text-sm font-medium">Correo electrónico</label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                    <input
+                      type="email"
+                      required
+                      placeholder="tu@correo.com"
+                      value={forgotEmail}
+                      onChange={e => setForgotEmail(e.target.value)}
+                      className="w-full pl-9 h-11 rounded-md bg-white/5 border border-white/10 text-white placeholder:text-gray-600 text-sm px-3 focus:outline-none focus:border-[#c8322b]/60"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={forgotLoading || !forgotEmail}
+                  className="w-full h-11 bg-[#c8322b] text-white font-semibold text-sm rounded-md flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  {forgotLoading
+                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Enviando...</>
+                    : "Enviar enlace de recuperación"
+                  }
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setStep("credentials")}
+                  className="flex items-center gap-1.5 text-gray-500 hover:text-gray-300 text-sm transition-colors mx-auto"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  Volver al inicio de sesión
+                </button>
+              </form>
+            </>
+          )}
+
+          {/* ── STEP 4: Forgot sent ── */}
+          {step === "forgot-sent" && (
+            <div className="text-center space-y-5">
+              <div className="w-16 h-16 rounded-full bg-green-500/15 flex items-center justify-center mx-auto">
+                <Mail className="w-8 h-8 text-green-400" />
+              </div>
+              <div>
+                <h2 className="text-white text-xl font-bold mb-2">Revisa tu correo</h2>
+                <p className="text-gray-400 text-sm leading-relaxed">
+                  Si existe una cuenta asociada a <span className="text-white font-medium">{forgotEmail}</span>, recibirás un correo con el enlace para restablecer tu contraseña.
+                </p>
+                <p className="text-gray-600 text-xs mt-3">El enlace expira en 1 hora. Revisa también tu carpeta de spam.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStep("credentials")}
+                className="flex items-center gap-1.5 text-gray-500 hover:text-gray-300 text-sm transition-colors mx-auto"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                Volver al inicio de sesión
+              </button>
+            </div>
           )}
 
           {/* Security indicators */}
