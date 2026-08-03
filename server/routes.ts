@@ -214,6 +214,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (user && isValid) {
         // ── Step 1 complete: generate & send OTP, do NOT create session yet ──
+
+        // Guard: user must have a valid email to receive the OTP
+        const hasValidEmail = user.email && user.email.includes("@");
+        if (!hasValidEmail) {
+          res.status(403).json({
+            error: "Tu cuenta no tiene un correo electrónico registrado. Contacta al administrador para configurarlo antes de iniciar sesión.",
+          });
+          return;
+        }
+
         try {
           const code = await storage.createOtp(user.id);
           let devCode: string | undefined;
@@ -237,9 +247,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             req.session.save(e => e ? reject(e) : resolve())
           );
 
-          // Mask email for display: a***@domain.com
-          const [localPart, domain] = user.email.split("@");
-          const maskedEmail = localPart.slice(0, 2) + "***@" + domain;
+          // Mask email for display: ab***@domain.com
+          const atIdx = user.email.indexOf("@");
+          const localPart = user.email.slice(0, atIdx);
+          const domain = user.email.slice(atIdx);
+          const maskedEmail = localPart.slice(0, 2) + "***" + domain;
 
           res.json({
             step: "otp",
@@ -637,6 +649,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ── Email de usuario (editable por ADMIN) ────────────────────────────────────
+  app.patch("/api/admin/user-email/:userId", requireRole("ADMIN"), async (req, res) => {
+    const schema = z.object({ email: z.string().email("Correo electrónico inválido") });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Correo electrónico inválido" });
+    try {
+      const existing = await storage.getUserByEmail(parsed.data.email);
+      if (existing && String(existing.id) !== String(req.params.userId)) {
+        return res.status(409).json({ error: "Ese correo ya está registrado en otra cuenta" });
+      }
+      const [upd] = await db.update(usersTable)
+        .set({ email: parsed.data.email.toLowerCase().trim() })
+        .where(eq(usersTable.id, req.params.userId))
+        .returning();
+      if (!upd) return res.status(404).json({ error: "Usuario no encontrado" });
+      return res.json(publicUser(upd as User));
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── Caja individual de usuarios (editable por ADMIN, aparte de la caja central) ──
   app.patch("/api/admin/user-caja/:userId", requireRole("ADMIN"), async (req, res) => {
     const schema = z.object({ cajaSaldoUSD: z.number().finite() });
@@ -891,6 +924,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const bodySchema = z.object({
         username: z.string().min(3, "Mínimo 3 caracteres"),
+        email: z.string().email("Correo electrónico inválido"),
         password: z.string().min(6, "Mínimo 6 caracteres"),
         fullName: z.string().min(1, "Nombre requerido"),
         role: z.enum(["ADMIN", "USER"]).default("USER"),
@@ -906,9 +940,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(409).json({ error: "El usuario ya existe" });
         return;
       }
+      const existingEmail = await storage.getUserByEmail(parsed.data.email);
+      if (existingEmail) {
+        res.status(409).json({ error: "Ese correo ya está registrado en otra cuenta" });
+        return;
+      }
       const newUser = await storage.createUser({
         username: parsed.data.username,
-        email: parsed.data.username,
+        email: parsed.data.email.toLowerCase().trim(),
         password: parsed.data.password,
         fullName: parsed.data.fullName,
         role: parsed.data.role,
