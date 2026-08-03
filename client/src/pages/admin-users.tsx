@@ -82,10 +82,13 @@ export default function AdminUsuariosPage() {
 
   // Form state
   const [formUsername, setFormUsername] = useState("");
+  const [formEmail, setFormEmail] = useState("");
   const [formPassword, setFormPassword] = useState("");
   const [formFullName, setFormFullName] = useState("");
   const [formRole, setFormRole] = useState<"USER" | "ADMIN">("USER");
   const [formSubscription, setFormSubscription] = useState("");
+  const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
+  const [emailDraft, setEmailDraft] = useState("");
 
   // Edición inline de la caja individual de cada usuario
   const [editingCajaId, setEditingCajaId] = useState<string | null>(null);
@@ -165,9 +168,23 @@ export default function AdminUsuariosPage() {
     onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
 
+  const emailMutation = useMutation({
+    mutationFn: async ({ userId, email }: { userId: string; email: string }) => {
+      const res = await apiRequest("PATCH", `/api/admin/user-email/${userId}`, { email });
+      if (!res.ok) { const b = await res.json(); throw new Error(b.error ?? "Error al actualizar correo"); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      setEditingEmailId(null);
+      toast({ title: "Correo actualizado" });
+    },
+    onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
   const createUserMutation = useMutation({
     mutationFn: async (data: {
-      username: string; password: string; fullName: string;
+      username: string; email: string; password: string; fullName: string;
       role: string; subscriptionStart: string | null;
     }) => {
       const res = await apiRequest("POST", "/api/users", data);
@@ -189,17 +206,23 @@ export default function AdminUsuariosPage() {
   });
 
   function resetForm() {
-    setFormUsername(""); setFormPassword(""); setFormFullName("");
+    setFormUsername(""); setFormEmail(""); setFormPassword(""); setFormFullName("");
     setFormRole("USER"); setFormSubscription("");
   }
 
   function handleAddUser() {
-    if (!formUsername.trim() || !formPassword.trim() || !formFullName.trim()) {
+    if (!formUsername.trim() || !formEmail.trim() || !formPassword.trim() || !formFullName.trim()) {
       toast({ title: "Campos requeridos", description: "Completa todos los campos obligatorios.", variant: "destructive" });
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formEmail.trim())) {
+      toast({ title: "Correo inválido", description: "Ingresa un correo electrónico válido.", variant: "destructive" });
       return;
     }
     createUserMutation.mutate({
       username: formUsername.trim(),
+      email: formEmail.trim(),
       password: formPassword.trim(),
       fullName: formFullName.trim(),
       role: formRole,
@@ -387,7 +410,41 @@ export default function AdminUsuariosPage() {
                         )}
                       </div>
                       <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1"><Mail className="w-3 h-3" />{u.username}</span>
+                        {/* Email — inline edit */}
+                        {editingEmailId === u.id ? (
+                          <span className="flex items-center gap-1">
+                            <Mail className="w-3 h-3" />
+                            <Input
+                              type="email"
+                              className="h-6 text-xs w-48 px-1.5 py-0"
+                              value={emailDraft}
+                              onChange={e => setEmailDraft(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === "Enter") emailMutation.mutate({ userId: u.id, email: emailDraft });
+                                if (e.key === "Escape") setEditingEmailId(null);
+                              }}
+                              autoFocus
+                            />
+                            <button
+                              className="text-green-600 hover:text-green-700 font-bold px-1"
+                              onClick={() => emailMutation.mutate({ userId: u.id, email: emailDraft })}
+                              disabled={emailMutation.isPending}
+                            >✓</button>
+                            <button className="text-muted-foreground hover:text-foreground px-1" onClick={() => setEditingEmailId(null)}>✕</button>
+                          </span>
+                        ) : (
+                          <span
+                            className="flex items-center gap-1 cursor-pointer hover:text-foreground group"
+                            title="Clic para editar correo"
+                            onClick={() => { setEditingEmailId(u.id); setEmailDraft(u.email ?? ""); }}
+                          >
+                            <Mail className="w-3 h-3" />
+                            {u.email && u.email.includes("@") ? u.email : (
+                              <span className="text-amber-600 font-medium">Sin correo — clic para agregar</span>
+                            )}
+                            <Pencil className="w-2.5 h-2.5 opacity-0 group-hover:opacity-60" />
+                          </span>
+                        )}
                         {u.subscriptionStart && (
                           <span className="flex items-center gap-1">
                             <Calendar className="w-3 h-3" />
@@ -660,14 +717,27 @@ export default function AdminUsuariosPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="u-username">Usuario / Email <span className="text-[#c8322b]">*</span></Label>
+              <Label htmlFor="u-username">Nombre de usuario <span className="text-[#c8322b]">*</span></Label>
               <Input
                 id="u-username"
-                placeholder="usuario@dominio.com"
+                placeholder="ej. mgarcia"
                 value={formUsername}
                 onChange={e => setFormUsername(e.target.value)}
                 data-testid="input-user-username"
               />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="u-email">Correo electrónico <span className="text-[#c8322b]">*</span></Label>
+              <Input
+                id="u-email"
+                type="email"
+                placeholder="usuario@dominio.com"
+                value={formEmail}
+                onChange={e => setFormEmail(e.target.value)}
+                data-testid="input-user-email"
+              />
+              <p className="text-xs text-muted-foreground">Se usa para enviar el código 2FA al iniciar sesión.</p>
             </div>
 
             <div className="space-y-1.5">
@@ -714,7 +784,7 @@ export default function AdminUsuariosPage() {
             </Button>
             <Button
               className="bg-[#c8322b] text-white"
-              disabled={!formUsername.trim() || !formPassword.trim() || !formFullName.trim() || createUserMutation.isPending}
+              disabled={!formUsername.trim() || !formEmail.trim() || !formPassword.trim() || !formFullName.trim() || createUserMutation.isPending}
               onClick={handleAddUser}
               data-testid="button-add-user-submit"
             >
