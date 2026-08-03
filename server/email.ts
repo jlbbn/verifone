@@ -142,6 +142,79 @@ function buildOtpHtml(fullName: string, code: string): string {
 </html>`;
 }
 
+export async function sendPasswordResetEmail(params: {
+  toEmail:  string;
+  fullName: string;
+  resetUrl: string;
+}): Promise<{ sent: boolean }> {
+  const { toEmail, fullName, resetUrl } = params;
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Restablecer contraseña — Banxico Plus</title></head>
+<body style="margin:0;padding:0;background:#f2f2f2;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f2f2f2;padding:40px 0;">
+    <tr><td align="center">
+      <table width="520" cellpadding="0" cellspacing="0"
+             style="background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.10);max-width:100%;">
+        <tr>
+          <td style="background:#111111;padding:28px 36px;">
+            <span style="color:#ffffff;font-size:22px;font-weight:bold;letter-spacing:0.18em;">BANXICO</span><span style="color:#c8322b;font-size:22px;font-weight:900;">+</span>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:36px 36px 28px;">
+            <p style="margin:0 0 6px;color:#111111;font-size:18px;font-weight:700;">Hola, ${fullName}</p>
+            <p style="margin:0 0 24px;color:#555555;font-size:14px;line-height:1.7;">
+              Recibimos una solicitud para restablecer la contraseña de tu cuenta Banxico Plus.<br>
+              Este enlace es válido por <strong>1 hora</strong>. Si no lo solicitaste, ignora este correo.
+            </p>
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr><td align="center" style="padding:0 0 28px;">
+                <a href="${resetUrl}"
+                   style="display:inline-block;background:#c8322b;color:#ffffff;font-size:15px;font-weight:bold;
+                          text-decoration:none;padding:14px 36px;border-radius:8px;letter-spacing:0.04em;">
+                  Restablecer contraseña
+                </a>
+              </td></tr>
+            </table>
+            <p style="margin:0;color:#999999;font-size:11px;text-align:center;line-height:1.6;word-break:break-all;">
+              O copia este enlace en tu navegador:<br>${resetUrl}
+            </p>
+          </td>
+        </tr>
+        <tr><td style="padding:0 36px;"><div style="border-top:1px solid #eeeeee;"></div></td></tr>
+        <tr>
+          <td style="background:#f8f8f8;padding:16px 36px;border-radius:0 0 10px 10px;">
+            <p style="margin:0;color:#aaaaaa;font-size:11px;">
+              <strong style="color:#888888;">Banxico Plus LLC</strong> · Acceso restringido · Solo personal autorizado
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+
+  const response = await getConnectors().proxy("resend", "/emails", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      from:    RESEND_FROM,
+      to:      [toEmail],
+      subject: "Restablecer contraseña — Banxico Plus",
+      html,
+      text: `Hola ${fullName},\n\nRestablece tu contraseña aquí:\n${resetUrl}\n\nEste enlace expira en 1 hora.\n\n— Banxico Plus LLC`,
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(`Resend returned ${response.status}: ${body}`);
+  }
+  return { sent: true };
+}
+
 export async function sendOtpEmail(params: {
   toEmail:  string;
   fullName: string;

@@ -501,6 +501,17 @@ export const otpCodes = pgTable("otp_codes", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// ─── Tokens de reset de contraseña ───────────────────────────────────────────
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id:        varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId:    varchar("user_id").notNull(),
+  token:     text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  used:      boolean("used").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
+
 // ─── Persistencia de configuración del sistema ───────────────────────────────
 // Tabla de fila única: id siempre = 1
 export const systemSettingsTable = pgTable("system_settings_store", {

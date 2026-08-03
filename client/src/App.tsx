@@ -30,6 +30,7 @@ import SubscriptionPage from "@/pages/subscription";
 import SubscriptionPaymentPage from "@/pages/subscription-payment";
 import CompliancePage from "@/pages/compliance";
 import NotFound from "@/pages/not-found";
+import ResetPasswordPage from "@/pages/reset-password";
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading, isAuthenticated } = useAuth();
@@ -119,6 +120,7 @@ function Router() {
     <Switch>
       <Route path="/" component={LoginPage} />
       <Route path="/login" component={LoginPage} />
+      <Route path="/reset-password" component={ResetPasswordPage} />
       
       <Route path="/dashboard">
         <AppLayout><Dashboard /></AppLayout>
