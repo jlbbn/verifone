@@ -80,7 +80,7 @@ export default function LoginPage() {
 
       if (response.ok && result.step === "otp") {
         setMaskedEmail(result.maskedEmail ?? "");
-        if (result.devCode) setDevCode(result.devCode);
+        if (result.devCode) handleDevCode(result.devCode);
         setStep("otp");
       } else if (!response.ok) {
         toast({ title: "Acceso denegado", description: result.error || "Credenciales incorrectas", variant: "destructive" });
@@ -94,6 +94,12 @@ export default function LoginPage() {
   // ── OTP step ────────────────────────────────────────────────────────────────
   const [otp, setOtp]           = useState("");
   const [otpLoading, setOtpLoading] = useState(false);
+
+  // Auto-fill OTP when server returns devCode (email failed)
+  function handleDevCode(code: string) {
+    setDevCode(code);
+    setOtp(code);
+  }
 
   async function onOtpSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -298,13 +304,14 @@ export default function LoginPage() {
                   Ingrésalo a continuación.
                 </p>
                 {devCode && (
-                  <div className="mt-3 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
-                    <p className="text-yellow-400 text-xs font-medium">
-                      Modo desarrollo — SMTP no configurado
+                  <div className="mt-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/40">
+                    <p className="text-amber-400 text-xs font-semibold mb-1">
+                      ⚠ El correo no llegó — usa este código para continuar:
                     </p>
-                    <p className="text-yellow-300 text-lg font-mono font-bold tracking-widest mt-1">
+                    <p className="text-white text-2xl font-mono font-bold tracking-[0.4em] mt-1 select-all">
                       {devCode}
                     </p>
+                    <p className="text-amber-500/70 text-[10px] mt-1">Cópialo en el campo de abajo y presiona Confirmar acceso</p>
                   </div>
                 )}
               </div>
