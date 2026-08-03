@@ -1,23 +1,44 @@
 /**
- * Banxico Plus LLC — Email Service (Resend via Replit Connectors)
+ * Banxico Plus LLC — Email Service (Resend)
  *
- * Sends transactional emails via Resend API using the Replit Connectors SDK.
- * The SDK handles authentication automatically — no API key needed in env.
+ * Priority:
+ *   1. RESEND_API_KEY env var → direct Resend REST API (supports custom domains)
+ *   2. Replit Connectors SDK  → fallback (only works with onboarding@resend.dev)
  *
- * Optional env var:
- *   RESEND_FROM — verified sender address
- *                 defaults to onboarding@resend.dev (Resend's shared test sender)
+ * Required env vars:
+ *   RESEND_API_KEY — API key from resend.com (dashboard → API Keys)
+ *   RESEND_FROM    — verified sender, e.g. "Banxico Plus <noreply@banxicoplusllc.org>"
  */
 
 import { ReplitConnectors } from "@replit/connectors-sdk";
 
 const RESEND_FROM = process.env.RESEND_FROM ?? "Banxico Plus <onboarding@resend.dev>";
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
 
 let connectors: ReplitConnectors | null = null;
 
 function getConnectors(): ReplitConnectors {
   if (!connectors) connectors = new ReplitConnectors();
   return connectors;
+}
+
+/** Unified send — uses direct API key if available, falls back to connector */
+async function resendSend(payload: object): Promise<Response> {
+  if (RESEND_API_KEY) {
+    return fetch("https://api.resend.com/emails", {
+      method:  "POST",
+      headers: {
+        "Content-Type":  "application/json",
+        "Authorization": `Bearer ${RESEND_API_KEY}`,
+      },
+      body: JSON.stringify(payload),
+    });
+  }
+  return getConnectors().proxy("resend", "/emails", {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify(payload),
+  });
 }
 
 // ── Banxico+ SVG logo (inline, white on dark) ─────────────────────────────────
@@ -196,16 +217,12 @@ export async function sendPasswordResetEmail(params: {
   </table>
 </body></html>`;
 
-  const response = await getConnectors().proxy("resend", "/emails", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      from:    RESEND_FROM,
-      to:      [toEmail],
-      subject: "Restablecer contraseña — Banxico Plus",
-      html,
-      text: `Hola ${fullName},\n\nRestablece tu contraseña aquí:\n${resetUrl}\n\nEste enlace expira en 1 hora.\n\n— Banxico Plus LLC`,
-    }),
+  const response = await resendSend({
+    from:    RESEND_FROM,
+    to:      [toEmail],
+    subject: "Restablecer contraseña — Banxico Plus",
+    html,
+    text: `Hola ${fullName},\n\nRestablece tu contraseña aquí:\n${resetUrl}\n\nEste enlace expira en 1 hora.\n\n— Banxico Plus LLC`,
   });
 
   if (!response.ok) {
@@ -224,16 +241,12 @@ export async function sendOtpEmail(params: {
 
   let response: Response;
   try {
-    response = await getConnectors().proxy("resend", "/emails", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        from:    RESEND_FROM,
-        to:      [toEmail],
-        subject: `${code} — Your Banxico Plus verification code`,
-        html:    buildOtpHtml(fullName, code),
-        text:    `Your Banxico Plus verification code is: ${code}\n\nThis code expires in 10 minutes.\nIf you did not request this, ignore this email.\n\n— Banxico Plus LLC, Evolution Road`,
-      }),
+    response = await resendSend({
+      from:    RESEND_FROM,
+      to:      [toEmail],
+      subject: `${code} — Tu código de verificación Banxico Plus`,
+      html:    buildOtpHtml(fullName, code),
+      text:    `Tu código de verificación Banxico Plus es: ${code}\n\nExpira en 10 minutos.\n\n— Banxico Plus LLC`,
     });
   } catch (err: any) {
     console.error("[Email 2FA] Connector proxy error:", err?.message ?? err);
