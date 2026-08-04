@@ -215,7 +215,7 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <SidebarProvider style={style as React.CSSProperties}>
+        <SidebarProvider style={style as React.CSSProperties} defaultOpen={false}>
           <Router />
         </SidebarProvider>
         <Toaster />
