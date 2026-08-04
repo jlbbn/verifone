@@ -424,288 +424,241 @@ export async function sendCybridAnnouncementEmail(params: {
 
   const body = `
     <tr>
-      <td style="padding:36px 36px 28px;">
+      <td style="padding:40px 40px 36px;font-family:Arial,Helvetica,sans-serif;">
+
         ${approvalNote}
 
-        <p style="margin:0 0 5px;color:#111111;font-size:19px;font-weight:700;
-                   font-family:Arial,sans-serif;">
-          Hola, ${fullName}
+        <!-- Intro -->
+        <p style="margin:0 0 8px;font-size:20px;font-weight:700;color:#111111;line-height:1.3;">
+          Integración Cybrid
         </p>
-        <p style="margin:0 0 24px;color:#666666;font-size:14px;line-height:1.75;
-                   font-family:Arial,sans-serif;">
-          Te compartimos el resumen ejecutivo sobre la integración de
-          <strong style="color:#111111;">Cybrid</strong> como proveedor de infraestructura
-          bancaria para <strong style="color:#111111;">Banxico Plus LLC</strong>.
+        <p style="margin:0 0 32px;font-size:14px;color:#666666;line-height:1.7;">
+          Banxico Plus LLC ha completado la adquisición de licencia e inicia la integración
+          técnica con <strong style="color:#111111;">Cybrid</strong> como proveedor de
+          infraestructura bancaria.
         </p>
 
-        <!-- Cybrid logo + license acquired -->
+        <!-- Partner line -->
         <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
-               style="margin-bottom:24px;border:1px solid #c7d7f5;border-radius:8px;
-                      overflow:hidden;">
-          <!-- Cybrid brand bar — light blue bg so dark logo renders correctly -->
+               style="margin-bottom:32px;">
           <tr>
-            <td style="background:#eef3ff;padding:18px 20px;
-                        border-left:4px solid #1a56db;">
+            <td style="border-top:1px solid #e0e0e0;padding-top:16px;">
               <table cellpadding="0" cellspacing="0" role="presentation">
                 <tr>
-                  <td style="vertical-align:middle;padding-right:18px;">
-                    <img src="https://cdn.prod.website-files.com/691c3ed36cbe630ffe6844b3/691c658f10165e6e706920c3_Cybrid-Logo.svg"
-                         alt="Cybrid" width="116" height="30"
-                         style="display:block;border:0;outline:none;" />
+                  <td style="vertical-align:middle;padding-right:14px;">
+                    <span style="font-size:10px;font-weight:700;color:#888888;
+                                 letter-spacing:0.12em;text-transform:uppercase;">
+                      Proveedor
+                    </span>
                   </td>
-                  <td style="vertical-align:middle;border-left:1px solid #c7d7f5;
-                              padding-left:18px;">
-                    <p style="margin:0 0 2px;color:#1a56db;font-size:10px;font-weight:700;
-                               letter-spacing:0.14em;text-transform:uppercase;
-                               font-family:Arial,sans-serif;">
-                      Official Integration Partner
-                    </p>
-                    <p style="margin:0;color:#6b7fa3;font-size:10px;
-                               font-family:Arial,sans-serif;">
-                      Banxico Plus LLC
-                    </p>
+                  <td style="vertical-align:middle;padding-right:14px;
+                              border-left:1px solid #e0e0e0;padding-left:14px;">
+                    <span style="font-size:18px;font-weight:900;color:#1a56db;
+                                 letter-spacing:0.06em;font-family:Arial,sans-serif;">
+                      CYBRID
+                    </span>
+                  </td>
+                  <td style="vertical-align:middle;padding-left:14px;
+                              border-left:1px solid #e0e0e0;">
+                    <span style="font-size:11px;color:#444444;">
+                      Banking-as-a-Service (BaaS) &nbsp;&middot;&nbsp; Regulado EE.UU. / Canadá
+                    </span>
                   </td>
                 </tr>
               </table>
             </td>
           </tr>
-          <!-- Status row -->
+        </table>
+
+        <!-- License status — clean list -->
+        <p style="margin:0 0 10px;font-size:12px;font-weight:700;color:#888888;
+                   letter-spacing:0.1em;text-transform:uppercase;">
+          Estado de la licencia
+        </p>
+        <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
+               style="margin-bottom:32px;">
           <tr>
-            <td style="background:#f0faf0;padding:14px 20px;
-                        border-top:1px solid #c3e6c3;">
-              <table cellpadding="0" cellspacing="0" role="presentation"><tr>
-                <td style="vertical-align:middle;padding-right:12px;">
-                  <div style="width:20px;height:20px;background:#2e7d32;border-radius:50%;
-                               text-align:center;line-height:20px;">
-                    <span style="color:#ffffff;font-size:12px;font-weight:700;
-                                 font-family:Arial,sans-serif;">&#10003;</span>
-                  </div>
-                </td>
-                <td style="vertical-align:middle;">
-                  <p style="margin:0;color:#1b5e20;font-size:13px;font-weight:700;
-                             font-family:Arial,sans-serif;">
-                    Licencia adquirida — Credenciales de producción activas
-                  </p>
-                  <p style="margin:3px 0 0;color:#388e3c;font-size:11px;
-                             font-family:Arial,sans-serif;">
-                    Proceso KYB/AML aprobado · Contrato firmado · API lista
-                  </p>
-                </td>
-              </tr></table>
+            <td style="padding:8px 0;border-bottom:1px solid #f0f0f0;">
+              <table cellpadding="0" cellspacing="0" role="presentation" width="100%">
+                <tr>
+                  <td width="20" style="vertical-align:middle;padding-right:10px;">
+                    <div style="width:18px;height:18px;border-radius:50%;background:#1a7340;
+                                 text-align:center;line-height:18px;font-size:11px;
+                                 color:#fff;font-weight:700;">&#10003;</div>
+                  </td>
+                  <td style="font-size:13px;color:#333333;">Registro como <em>Business Customer</em></td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 0;border-bottom:1px solid #f0f0f0;">
+              <table cellpadding="0" cellspacing="0" role="presentation" width="100%">
+                <tr>
+                  <td width="20" style="vertical-align:middle;padding-right:10px;">
+                    <div style="width:18px;height:18px;border-radius:50%;background:#1a7340;
+                                 text-align:center;line-height:18px;font-size:11px;
+                                 color:#fff;font-weight:700;">&#10003;</div>
+                  </td>
+                  <td style="font-size:13px;color:#333333;">Proceso AML/KYB aprobado — documentación corporativa verificada</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 0;border-bottom:1px solid #f0f0f0;">
+              <table cellpadding="0" cellspacing="0" role="presentation" width="100%">
+                <tr>
+                  <td width="20" style="vertical-align:middle;padding-right:10px;">
+                    <div style="width:18px;height:18px;border-radius:50%;background:#1a7340;
+                                 text-align:center;line-height:18px;font-size:11px;
+                                 color:#fff;font-weight:700;">&#10003;</div>
+                  </td>
+                  <td style="font-size:13px;color:#333333;">Acuerdo de servicios y Addendum de Compliance firmados</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 0;border-bottom:1px solid #f0f0f0;">
+              <table cellpadding="0" cellspacing="0" role="presentation" width="100%">
+                <tr>
+                  <td width="20" style="vertical-align:middle;padding-right:10px;">
+                    <div style="width:18px;height:18px;border-radius:50%;background:#1a7340;
+                                 text-align:center;line-height:18px;font-size:11px;
+                                 color:#fff;font-weight:700;">&#10003;</div>
+                  </td>
+                  <td style="font-size:13px;color:#333333;">Credenciales de producción activas</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 0;">
+              <table cellpadding="0" cellspacing="0" role="presentation" width="100%">
+                <tr>
+                  <td width="20" style="vertical-align:middle;padding-right:10px;">
+                    <div style="width:18px;height:18px;border-radius:50%;background:#1a56db;
+                                 text-align:center;line-height:18px;font-size:10px;
+                                 color:#fff;font-weight:700;">&#8594;</div>
+                  </td>
+                  <td style="font-size:13px;color:#1a56db;font-weight:700;">
+                    Integración técnica en curso — ETA: 24–36 hrs por fase
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
         </table>
 
-        <!-- What is Cybrid -->
+        <!-- Divider with label -->
         <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
-               style="margin-bottom:22px;">
-          <tr><td style="border-left:3px solid #c8322b;padding:0 0 0 14px;">
-            <p style="margin:0 0 5px;color:#111111;font-size:14px;font-weight:700;
-                       font-family:Arial,sans-serif;">
-              ¿Qué es Cybrid?
-            </p>
-            <p style="margin:0;color:#555555;font-size:13px;line-height:1.75;
-                       font-family:Arial,sans-serif;">
-              Cybrid es una plataforma regulada de
-              <strong>Banking-as-a-Service (BaaS)</strong> que provee cuentas bancarias
-              virtuales, KYC/AML automatizado, transferencias ACH/Wire, y un puente
-              fiat↔crypto certificado bajo marcos regulatorios de EE.UU. y Canadá.
-              Habilita <em>cuentas reales con routing number</em> para nuestros usuarios.
-            </p>
-          </td></tr>
+               style="margin-bottom:24px;">
+          <tr>
+            <td style="border-top:1px solid #e0e0e0;padding-top:24px;">
+              <p style="margin:0 0 10px;font-size:12px;font-weight:700;color:#888888;
+                         letter-spacing:0.1em;text-transform:uppercase;">
+                Descripcion del proveedor
+              </p>
+              <p style="margin:0;font-size:13px;color:#444444;line-height:1.8;">
+                Cybrid es una plataforma regulada de <strong>Banking-as-a-Service (BaaS)</strong>
+                que provee cuentas bancarias virtuales, KYC/AML automatizado, transferencias
+                ACH/Wire, y un puente fiat&#8596;crypto certificado bajo marcos regulatorios de
+                EE.UU. y Canadá. Es la pieza que permite ofrecer
+                <strong>cuentas reales con routing number</strong> a los socios de Banxico Plus.
+              </p>
+            </td>
+          </tr>
         </table>
 
-        <!-- Implementation breakdown -->
-        <p style="margin:0 0 6px;color:#111111;font-size:14px;font-weight:700;
-                   font-family:Arial,sans-serif;">
-          Desglose de implementación
+        <!-- Implementation table -->
+        <p style="margin:0 0 6px;font-size:12px;font-weight:700;color:#888888;
+                   letter-spacing:0.1em;text-transform:uppercase;">
+          Desglose de implementacion
         </p>
-        <p style="margin:0 0 12px;color:#999999;font-size:11px;line-height:1.6;
-                   font-family:Arial,sans-serif;letter-spacing:0.02em;">
+        <p style="margin:0 0 14px;font-size:12px;color:#999999;line-height:1.6;">
           Estimated Transit Time from Provider — cada fase se activa desde los servidores
-          de Cybrid una vez confirmada la señal de despliegue.
+          de Cybrid al recibir la señal de despliegue.
         </p>
         <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
-               style="margin-bottom:22px;border-radius:8px;overflow:hidden;
-                      border:1px solid #eeeeee;">
-          <!-- Header row -->
-          <tr style="background:#f2f2f2;">
-            <td style="padding:9px 14px;font-size:11px;font-weight:700;color:#888888;
-                        text-transform:uppercase;letter-spacing:0.06em;
-                        font-family:Arial,sans-serif;width:18%;">Fase</td>
-            <td style="padding:9px 14px;font-size:11px;font-weight:700;color:#888888;
-                        text-transform:uppercase;letter-spacing:0.06em;
-                        font-family:Arial,sans-serif;">Alcance</td>
-            <td style="padding:9px 14px;font-size:11px;font-weight:700;color:#888888;
-                        text-transform:uppercase;letter-spacing:0.06em;
-                        font-family:Arial,sans-serif;width:20%;text-align:center;">
+               style="margin-bottom:32px;">
+          <tr style="background:#f7f7f7;">
+            <td style="padding:9px 12px;font-size:11px;font-weight:700;color:#888888;
+                        letter-spacing:0.06em;text-transform:uppercase;width:12%;">
+              Fase
+            </td>
+            <td style="padding:9px 12px;font-size:11px;font-weight:700;color:#888888;
+                        letter-spacing:0.06em;text-transform:uppercase;">
+              Alcance
+            </td>
+            <td style="padding:9px 12px;font-size:11px;font-weight:700;color:#888888;
+                        letter-spacing:0.06em;text-transform:uppercase;
+                        width:18%;text-align:right;">
               ETA
             </td>
           </tr>
-          <!-- Rows -->
           <tr style="border-top:1px solid #eeeeee;">
-            <td style="padding:10px 14px;font-size:13px;font-weight:700;color:#c8322b;
-                        font-family:Arial,sans-serif;">1</td>
-            <td style="padding:10px 14px;font-size:12px;color:#333333;line-height:1.55;
-                        font-family:Arial,sans-serif;">
-              Activación de credenciales de producción y conexión OAuth2
+            <td style="padding:11px 12px;font-size:13px;font-weight:700;color:#c8322b;">01</td>
+            <td style="padding:11px 12px;font-size:13px;color:#333333;line-height:1.5;">
+              Activación de credenciales y conexión OAuth2
             </td>
-            <td style="padding:10px 14px;font-size:12px;font-weight:700;color:#2e7d32;
-                        text-align:center;font-family:Arial,sans-serif;">24–36 hrs</td>
+            <td style="padding:11px 12px;font-size:12px;font-weight:700;color:#1a7340;
+                        text-align:right;white-space:nowrap;">24–36 hrs</td>
           </tr>
           <tr style="border-top:1px solid #eeeeee;background:#fafafa;">
-            <td style="padding:10px 14px;font-size:13px;font-weight:700;color:#c8322b;
-                        font-family:Arial,sans-serif;">2</td>
-            <td style="padding:10px 14px;font-size:12px;color:#333333;line-height:1.55;
-                        font-family:Arial,sans-serif;">
-              KYC/AML automático integrado al onboarding de Banxico+
+            <td style="padding:11px 12px;font-size:13px;font-weight:700;color:#c8322b;">02</td>
+            <td style="padding:11px 12px;font-size:13px;color:#333333;line-height:1.5;">
+              KYC/AML automático integrado al onboarding
             </td>
-            <td style="padding:10px 14px;font-size:12px;font-weight:700;color:#2e7d32;
-                        text-align:center;font-family:Arial,sans-serif;">24–36 hrs</td>
+            <td style="padding:11px 12px;font-size:12px;font-weight:700;color:#1a7340;
+                        text-align:right;white-space:nowrap;">24–36 hrs</td>
           </tr>
           <tr style="border-top:1px solid #eeeeee;">
-            <td style="padding:10px 14px;font-size:13px;font-weight:700;color:#c8322b;
-                        font-family:Arial,sans-serif;">3</td>
-            <td style="padding:10px 14px;font-size:12px;color:#333333;line-height:1.55;
-                        font-family:Arial,sans-serif;">
-              Emisión de cuentas virtuales con routing/account number real por usuario
+            <td style="padding:11px 12px;font-size:13px;font-weight:700;color:#c8322b;">03</td>
+            <td style="padding:11px 12px;font-size:13px;color:#333333;line-height:1.5;">
+              Emisión de cuentas con routing/account number real por usuario
             </td>
-            <td style="padding:10px 14px;font-size:12px;font-weight:700;color:#2e7d32;
-                        text-align:center;font-family:Arial,sans-serif;">24–36 hrs</td>
+            <td style="padding:11px 12px;font-size:12px;font-weight:700;color:#1a7340;
+                        text-align:right;white-space:nowrap;">24–36 hrs</td>
           </tr>
           <tr style="border-top:1px solid #eeeeee;background:#fafafa;">
-            <td style="padding:10px 14px;font-size:13px;font-weight:700;color:#c8322b;
-                        font-family:Arial,sans-serif;">4</td>
-            <td style="padding:10px 14px;font-size:12px;color:#333333;line-height:1.55;
-                        font-family:Arial,sans-serif;">
-              Puente fiat↔USDT: depósitos ACH → USDT y retiros USDT → ACH en tiempo real
+            <td style="padding:11px 12px;font-size:13px;font-weight:700;color:#c8322b;">04</td>
+            <td style="padding:11px 12px;font-size:13px;color:#333333;line-height:1.5;">
+              Puente fiat&#8596;USDT: depósitos ACH&#8594;USDT y retiros USDT&#8594;ACH
             </td>
-            <td style="padding:10px 14px;font-size:12px;font-weight:700;color:#2e7d32;
-                        text-align:center;font-family:Arial,sans-serif;">24–36 hrs</td>
+            <td style="padding:11px 12px;font-size:12px;font-weight:700;color:#1a7340;
+                        text-align:right;white-space:nowrap;">24–36 hrs</td>
           </tr>
           <tr style="border-top:1px solid #eeeeee;">
-            <td style="padding:10px 14px;font-size:13px;font-weight:700;color:#c8322b;
-                        font-family:Arial,sans-serif;">5</td>
-            <td style="padding:10px 14px;font-size:12px;color:#333333;line-height:1.55;
-                        font-family:Arial,sans-serif;">
-              Go-live producción completa: compliance activo y soporte 24/7
+            <td style="padding:11px 12px;font-size:13px;font-weight:700;color:#c8322b;">05</td>
+            <td style="padding:11px 12px;font-size:13px;color:#333333;line-height:1.5;">
+              Go-live producción: compliance activo y soporte 24/7
             </td>
-            <td style="padding:10px 14px;font-size:12px;font-weight:700;color:#2e7d32;
-                        text-align:center;font-family:Arial,sans-serif;">24–36 hrs</td>
+            <td style="padding:11px 12px;font-size:12px;font-weight:700;color:#1a7340;
+                        text-align:right;white-space:nowrap;">24–36 hrs</td>
           </tr>
         </table>
-
-        <!-- License status -->
-        <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
-               style="margin-bottom:22px;">
-          <tr><td style="border-left:3px solid #1565c0;padding:0 0 0 14px;">
-            <p style="margin:0 0 8px;color:#111111;font-size:14px;font-weight:700;
-                       font-family:Arial,sans-serif;">
-              Estado de la licencia Cybrid
-            </p>
-            <table cellpadding="0" cellspacing="0" role="presentation">
-              <tr>
-                <td style="vertical-align:middle;padding:4px 10px 4px 0;">
-                  <span style="display:inline-block;width:16px;height:16px;background:#2e7d32;
-                               border-radius:50%;text-align:center;line-height:16px;">
-                    <span style="color:#fff;font-size:10px;font-weight:700;">&#10003;</span>
-                  </span>
-                </td>
-                <td style="font-size:12px;color:#444444;padding:4px 0;font-family:Arial,sans-serif;">
-                  Registro de Banxico Plus LLC como <em>Business Customer</em>
-                </td>
-              </tr>
-              <tr>
-                <td style="vertical-align:middle;padding:4px 10px 4px 0;">
-                  <span style="display:inline-block;width:16px;height:16px;background:#2e7d32;
-                               border-radius:50%;text-align:center;line-height:16px;">
-                    <span style="color:#fff;font-size:10px;font-weight:700;">&#10003;</span>
-                  </span>
-                </td>
-                <td style="font-size:12px;color:#444444;padding:4px 0;font-family:Arial,sans-serif;">
-                  Proceso AML/KYB aprobado — documentación corporativa verificada
-                </td>
-              </tr>
-              <tr>
-                <td style="vertical-align:middle;padding:4px 10px 4px 0;">
-                  <span style="display:inline-block;width:16px;height:16px;background:#2e7d32;
-                               border-radius:50%;text-align:center;line-height:16px;">
-                    <span style="color:#fff;font-size:10px;font-weight:700;">&#10003;</span>
-                  </span>
-                </td>
-                <td style="font-size:12px;color:#444444;padding:4px 0;font-family:Arial,sans-serif;">
-                  Acuerdo de servicios y Addendum de Compliance firmados
-                </td>
-              </tr>
-              <tr>
-                <td style="vertical-align:middle;padding:4px 10px 4px 0;">
-                  <span style="display:inline-block;width:16px;height:16px;background:#2e7d32;
-                               border-radius:50%;text-align:center;line-height:16px;">
-                    <span style="color:#fff;font-size:10px;font-weight:700;">&#10003;</span>
-                  </span>
-                </td>
-                <td style="font-size:12px;color:#444444;padding:4px 0;font-family:Arial,sans-serif;">
-                  Credenciales de producción activas
-                </td>
-              </tr>
-              <tr>
-                <td style="vertical-align:middle;padding:4px 10px 4px 0;">
-                  <span style="display:inline-block;width:16px;height:16px;
-                               background:#1565c0;border-radius:50%;
-                               text-align:center;line-height:16px;">
-                    <span style="color:#fff;font-size:9px;font-weight:700;">→</span>
-                  </span>
-                </td>
-                <td style="font-size:12px;color:#1565c0;font-weight:700;
-                            padding:4px 0;font-family:Arial,sans-serif;">
-                  Integración técnica en curso — ETA: <strong>24–36 hrs por fase</strong>
-                </td>
-              </tr>
-            </table>
-          </td></tr>
-        </table>
-
-        <!-- System announcement preview -->
-        <div style="background:#e3f2fd;border-radius:8px;padding:16px 18px;">
-          <p style="margin:0 0 6px;color:#0d47a1;font-size:13px;font-weight:700;
-                     font-family:Arial,sans-serif;">
-            Aviso del sistema — preview del banner
-          </p>
-          <p style="margin:0;color:#1565c0;font-size:12px;line-height:1.75;
-                     font-family:Arial,sans-serif;">
-            <em>"Banxico Plus LLC se encuentra en proceso de integración con Cybrid, plataforma
-            regulada de Banking-as-a-Service. Esta mejora habilitará cuentas bancarias reales,
-            transferencias ACH/Wire y un puente directo fiat↔USDT para todos los socios."</em>
-          </p>
-        </div>
 
         <!-- Closing -->
         <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
-               style="margin-top:24px;border-top:1px solid #eeeeee;padding-top:20px;">
+               style="border-top:1px solid #e0e0e0;padding-top:24px;margin-top:8px;">
           <tr>
             <td>
-              <p style="margin:0 0 12px;color:#666666;font-size:13px;line-height:1.7;
-                         font-family:Arial,sans-serif;">
-                Para cualquier consulta sobre esta integración, contacta al equipo
-                de operaciones a través de los canales internos habituales.
+              <p style="margin:0 0 16px;font-size:13px;color:#666666;line-height:1.7;">
+                Para consultas sobre esta integración, comuníquese con el equipo
+                de operaciones a través de los canales internos.
               </p>
-              <table cellpadding="0" cellspacing="0" role="presentation">
-                <tr>
-                  <td style="border-left:3px solid #c8322b;padding:6px 0 6px 14px;">
-                    <p style="margin:0;font-size:13px;font-weight:700;color:#111111;
-                               font-family:Arial,sans-serif;letter-spacing:0.04em;">
-                      Banxico Plus System
-                    </p>
-                    <p style="margin:2px 0 0;font-size:11px;color:#999999;
-                               font-family:Arial,sans-serif;">
-                      Notificación automática del sistema · No responder directamente
-                    </p>
-                  </td>
-                </tr>
-              </table>
+              <p style="margin:0;font-size:13px;font-weight:700;color:#111111;
+                         letter-spacing:0.02em;">
+                Banxico Plus System
+              </p>
+              <p style="margin:3px 0 0;font-size:11px;color:#aaaaaa;">
+                Notificación automática — no responder a este correo
+              </p>
             </td>
           </tr>
         </table>
+
       </td>
     </tr>`;
 
