@@ -263,12 +263,24 @@ function buildOtpHtml(fullName: string, code: string): string {
         <!-- Security notice -->
         <div style="background:#fff8f8;border:1px solid #f5c5c2;border-radius:8px;
                     padding:14px 18px;">
-          <p style="margin:0;font-size:12px;color:#7a2520;line-height:1.65;
-                     font-family:Arial,sans-serif;">
-            🔒 <strong>Never share this code.</strong>
-            Banxico Plus will never ask for your verification code by phone, chat, or email.
-            If you did not request this, your account may be at risk — contact support immediately.
-          </p>
+          <table cellpadding="0" cellspacing="0" role="presentation"><tr>
+            <td style="vertical-align:top;padding-right:10px;">
+              <span style="display:inline-block;background:#c8322b;color:#ffffff;
+                           font-size:9px;font-weight:700;letter-spacing:0.08em;
+                           padding:2px 6px;border-radius:3px;font-family:Arial,sans-serif;
+                           white-space:nowrap;">
+                SECURITY
+              </span>
+            </td>
+            <td style="vertical-align:top;">
+              <p style="margin:0;font-size:12px;color:#7a2520;line-height:1.65;
+                         font-family:Arial,sans-serif;">
+                <strong>Never share this code.</strong>
+                Banxico Plus will never ask for your verification code by phone, chat, or email.
+                If you did not request this, your account may be at risk — contact support immediately.
+              </p>
+            </td>
+          </tr></table>
         </div>
       </td>
     </tr>`;
@@ -331,12 +343,24 @@ export async function sendPasswordResetEmail(params: {
         <!-- Security warning -->
         <div style="margin-top:20px;background:#fff8f8;border:1px solid #f5c5c2;
                     border-radius:8px;padding:14px 18px;">
-          <p style="margin:0;font-size:12px;color:#7a2520;line-height:1.65;
-                     font-family:Arial,sans-serif;">
-            🔒 <strong>¿No solicitaste esto?</strong>
-            Alguien pudo haber ingresado tu correo por error. Tu contraseña actual no cambia
-            hasta que uses este enlace. Puedes ignorar este correo.
-          </p>
+          <table cellpadding="0" cellspacing="0" role="presentation"><tr>
+            <td style="vertical-align:top;padding-right:10px;">
+              <span style="display:inline-block;background:#c8322b;color:#ffffff;
+                           font-size:9px;font-weight:700;letter-spacing:0.08em;
+                           padding:2px 6px;border-radius:3px;font-family:Arial,sans-serif;
+                           white-space:nowrap;">
+                AVISO
+              </span>
+            </td>
+            <td style="vertical-align:top;">
+              <p style="margin:0;font-size:12px;color:#7a2520;line-height:1.65;
+                         font-family:Arial,sans-serif;">
+                <strong>¿No solicitaste esto?</strong>
+                Alguien pudo haber ingresado tu correo por error. Tu contraseña actual no cambia
+                hasta que uses este enlace. Puedes ignorar este correo.
+              </p>
+            </td>
+          </tr></table>
         </div>
       </td>
     </tr>`;
@@ -371,19 +395,31 @@ export async function sendCybridAnnouncementEmail(params: {
   const subject      = `Integración Cybrid — Desglose y Adquisición de Licencia${subjectTag}`;
 
   const approvalNote = isApprovalRequest
-    ? `<div style="background:#fff8e1;border:1px solid #f9a825;border-radius:8px;
-                   padding:14px 18px;margin-bottom:24px;">
-        <p style="margin:0;color:#e65100;font-size:13px;font-weight:700;
-                   font-family:Arial,sans-serif;">
-          ⚠ Este correo requiere tu aprobación antes de enviarse a los socios.
-        </p>
-        <p style="margin:6px 0 0;color:#6d4c00;font-size:12px;line-height:1.6;
-                   font-family:Arial,sans-serif;">
-          Revisa el contenido. Si deseas ajustarlo, edita el anuncio en
-          <strong>Configuración → Anuncios</strong> y usa el botón "Enviar correo" para
-          mandarlo a Socemro.
-        </p>
-      </div>`
+    ? `<table width="100%" cellpadding="0" cellspacing="0" role="presentation"
+              style="margin-bottom:24px;background:#fff8e1;border:1px solid #f9a825;
+                     border-radius:8px;overflow:hidden;">
+        <tr>
+          <td style="background:#f9a825;padding:8px 14px;width:1%;white-space:nowrap;
+                      vertical-align:top;">
+            <span style="color:#ffffff;font-size:10px;font-weight:700;
+                         letter-spacing:0.1em;font-family:Arial,sans-serif;">
+              PENDIENTE
+            </span>
+          </td>
+          <td style="padding:10px 14px;">
+            <p style="margin:0 0 4px;color:#e65100;font-size:13px;font-weight:700;
+                       font-family:Arial,sans-serif;">
+              Este correo requiere tu aprobación antes de enviarse a los socios.
+            </p>
+            <p style="margin:0;color:#6d4c00;font-size:12px;line-height:1.6;
+                       font-family:Arial,sans-serif;">
+              Revisa el contenido. Si deseas ajustarlo, edita el anuncio en
+              <strong>Configuración → Anuncios</strong> y usa el botón "Enviar correo"
+              para mandarlo a Socemro.
+            </p>
+          </td>
+        </tr>
+      </table>`
     : "";
 
   const body = `
@@ -402,25 +438,58 @@ export async function sendCybridAnnouncementEmail(params: {
           bancaria para <strong style="color:#111111;">Banxico Plus LLC</strong>.
         </p>
 
-        <!-- License acquired badge -->
-        <div style="background:#e8f5e9;border:1px solid #66bb6a;border-radius:8px;
-                    padding:14px 18px;margin-bottom:24px;
-                    display:flex;align-items:center;gap:12px;">
-          <table cellpadding="0" cellspacing="0" role="presentation"><tr>
-            <td style="vertical-align:middle;padding-right:12px;font-size:22px;">✅</td>
-            <td style="vertical-align:middle;">
-              <p style="margin:0;color:#1b5e20;font-size:14px;font-weight:700;
-                         font-family:Arial,sans-serif;">
-                Licencia Cybrid — ADQUIRIDA
-              </p>
-              <p style="margin:4px 0 0;color:#2e7d32;font-size:12px;line-height:1.6;
-                         font-family:Arial,sans-serif;">
-                Banxico Plus LLC ha completado el proceso de acreditación, KYB/AML y firma de
-                contrato. Las credenciales de producción están activas.
-              </p>
+        <!-- Cybrid logo + license acquired -->
+        <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
+               style="margin-bottom:24px;border:1px solid #dddddd;border-radius:8px;
+                      overflow:hidden;">
+          <!-- Cybrid brand bar -->
+          <tr>
+            <td style="background:#0a0a0a;padding:16px 20px;">
+              <table cellpadding="0" cellspacing="0" role="presentation">
+                <tr>
+                  <td style="vertical-align:middle;padding-right:16px;">
+                    <img src="https://cdn.prod.website-files.com/691c3ed36cbe630ffe6844b3/691c658f10165e6e706920c3_Cybrid-Logo.svg"
+                         alt="Cybrid" width="108" height="28"
+                         style="display:block;border:0;outline:none;" />
+                  </td>
+                  <td style="vertical-align:middle;border-left:1px solid #333333;
+                              padding-left:16px;">
+                    <p style="margin:0;color:#aaaaaa;font-size:10px;
+                               letter-spacing:0.12em;text-transform:uppercase;
+                               font-family:Arial,sans-serif;">
+                      Official Integration Partner
+                    </p>
+                  </td>
+                </tr>
+              </table>
             </td>
-          </tr></table>
-        </div>
+          </tr>
+          <!-- Status row -->
+          <tr>
+            <td style="background:#f0faf0;padding:14px 20px;
+                        border-top:1px solid #c3e6c3;">
+              <table cellpadding="0" cellspacing="0" role="presentation"><tr>
+                <td style="vertical-align:middle;padding-right:12px;">
+                  <div style="width:20px;height:20px;background:#2e7d32;border-radius:50%;
+                               text-align:center;line-height:20px;">
+                    <span style="color:#ffffff;font-size:12px;font-weight:700;
+                                 font-family:Arial,sans-serif;">&#10003;</span>
+                  </div>
+                </td>
+                <td style="vertical-align:middle;">
+                  <p style="margin:0;color:#1b5e20;font-size:13px;font-weight:700;
+                             font-family:Arial,sans-serif;">
+                    Licencia adquirida — Credenciales de producción activas
+                  </p>
+                  <p style="margin:3px 0 0;color:#388e3c;font-size:11px;
+                             font-family:Arial,sans-serif;">
+                    Proceso KYB/AML aprobado · Contrato firmado · API lista
+                  </p>
+                </td>
+              </tr></table>
+            </td>
+          </tr>
+        </table>
 
         <!-- What is Cybrid -->
         <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
@@ -529,17 +598,64 @@ export async function sendCybridAnnouncementEmail(params: {
                        font-family:Arial,sans-serif;">
               Estado de la licencia Cybrid
             </p>
-            <table cellpadding="0" cellspacing="4" role="presentation">
-              <tr><td style="font-size:12px;color:#444444;padding:2px 0;
-                              font-family:Arial,sans-serif;">✅ &nbsp;Registro de Banxico Plus LLC como <em>Business Customer</em></td></tr>
-              <tr><td style="font-size:12px;color:#444444;padding:2px 0;
-                              font-family:Arial,sans-serif;">✅ &nbsp;Proceso AML/KYB aprobado — documentación corporativa verificada</td></tr>
-              <tr><td style="font-size:12px;color:#444444;padding:2px 0;
-                              font-family:Arial,sans-serif;">✅ &nbsp;Acuerdo de servicios y Addendum de Compliance firmados</td></tr>
-              <tr><td style="font-size:12px;color:#444444;padding:2px 0;
-                              font-family:Arial,sans-serif;">✅ &nbsp;Credenciales de producción activas</td></tr>
-              <tr><td style="font-size:12px;color:#2e7d32;font-weight:700;padding:2px 0;
-                              font-family:Arial,sans-serif;">🔄 &nbsp;Integración técnica en curso — ETA: <strong>24–36 hrs por fase</strong></td></tr>
+            <table cellpadding="0" cellspacing="0" role="presentation">
+              <tr>
+                <td style="vertical-align:middle;padding:4px 10px 4px 0;">
+                  <span style="display:inline-block;width:16px;height:16px;background:#2e7d32;
+                               border-radius:50%;text-align:center;line-height:16px;">
+                    <span style="color:#fff;font-size:10px;font-weight:700;">&#10003;</span>
+                  </span>
+                </td>
+                <td style="font-size:12px;color:#444444;padding:4px 0;font-family:Arial,sans-serif;">
+                  Registro de Banxico Plus LLC como <em>Business Customer</em>
+                </td>
+              </tr>
+              <tr>
+                <td style="vertical-align:middle;padding:4px 10px 4px 0;">
+                  <span style="display:inline-block;width:16px;height:16px;background:#2e7d32;
+                               border-radius:50%;text-align:center;line-height:16px;">
+                    <span style="color:#fff;font-size:10px;font-weight:700;">&#10003;</span>
+                  </span>
+                </td>
+                <td style="font-size:12px;color:#444444;padding:4px 0;font-family:Arial,sans-serif;">
+                  Proceso AML/KYB aprobado — documentación corporativa verificada
+                </td>
+              </tr>
+              <tr>
+                <td style="vertical-align:middle;padding:4px 10px 4px 0;">
+                  <span style="display:inline-block;width:16px;height:16px;background:#2e7d32;
+                               border-radius:50%;text-align:center;line-height:16px;">
+                    <span style="color:#fff;font-size:10px;font-weight:700;">&#10003;</span>
+                  </span>
+                </td>
+                <td style="font-size:12px;color:#444444;padding:4px 0;font-family:Arial,sans-serif;">
+                  Acuerdo de servicios y Addendum de Compliance firmados
+                </td>
+              </tr>
+              <tr>
+                <td style="vertical-align:middle;padding:4px 10px 4px 0;">
+                  <span style="display:inline-block;width:16px;height:16px;background:#2e7d32;
+                               border-radius:50%;text-align:center;line-height:16px;">
+                    <span style="color:#fff;font-size:10px;font-weight:700;">&#10003;</span>
+                  </span>
+                </td>
+                <td style="font-size:12px;color:#444444;padding:4px 0;font-family:Arial,sans-serif;">
+                  Credenciales de producción activas
+                </td>
+              </tr>
+              <tr>
+                <td style="vertical-align:middle;padding:4px 10px 4px 0;">
+                  <span style="display:inline-block;width:16px;height:16px;
+                               background:#1565c0;border-radius:50%;
+                               text-align:center;line-height:16px;">
+                    <span style="color:#fff;font-size:9px;font-weight:700;">→</span>
+                  </span>
+                </td>
+                <td style="font-size:12px;color:#1565c0;font-weight:700;
+                            padding:4px 0;font-family:Arial,sans-serif;">
+                  Integración técnica en curso — ETA: <strong>24–36 hrs por fase</strong>
+                </td>
+              </tr>
             </table>
           </td></tr>
         </table>
@@ -548,7 +664,7 @@ export async function sendCybridAnnouncementEmail(params: {
         <div style="background:#e3f2fd;border-radius:8px;padding:16px 18px;">
           <p style="margin:0 0 6px;color:#0d47a1;font-size:13px;font-weight:700;
                      font-family:Arial,sans-serif;">
-            📢 Aviso del sistema (preview del banner)
+            Aviso del sistema — preview del banner
           </p>
           <p style="margin:0;color:#1565c0;font-size:12px;line-height:1.75;
                      font-family:Arial,sans-serif;">
