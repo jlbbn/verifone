@@ -349,3 +349,8 @@
     inset: -1px;
   }
 }
+/* ── Financial Ticker CSS animation ── */
+@keyframes tickerScroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-25%); }
+}
