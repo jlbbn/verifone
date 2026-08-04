@@ -41,9 +41,9 @@ async function resendSend(payload: object): Promise<Response> {
   });
 }
 
-// ── Banxico+ SVG logo (inline, white on dark) ─────────────────────────────────
+// ── Banxico+ SVG logo (inline, white on dark) ──────────────────────────────
 const LOGO_SVG = `
-<svg viewBox="0 0 52 60" width="40" height="48" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg viewBox="0 0 52 60" width="36" height="44" fill="none" xmlns="http://www.w3.org/2000/svg">
   <rect x="20" y="0"  width="5" height="8" rx="1" fill="#c8322b"/>
   <rect x="30" y="0"  width="5" height="8" rx="1" fill="#c8322b"/>
   <rect x="20" y="52" width="5" height="8" rx="1" fill="#c8322b"/>
@@ -53,106 +53,154 @@ const LOGO_SVG = `
   <path d="M18 24h15c3.5 0 5.5 1.8 5.5 5s-2 5-5.5 5H18V24z" fill="white"/>
 </svg>`;
 
-function buildOtpHtml(fullName: string, code: string): string {
+// ── Shared email shell builders ────────────────────────────────────────────
+
+/**
+ * Wraps content in the standard Banxico+ email chrome.
+ * @param body   The inner HTML content (between header and footer)
+ * @param lang   "es" | "en"
+ */
+function buildEmailHtml(body: string, lang: "es" | "en" = "es"): string {
+  const sentLabel  = lang === "en" ? "Sent"    : "Enviado";
+  const sentAt     = new Date().toLocaleString(lang === "en" ? "en-US" : "es-MX", {
+    dateStyle: "long", timeStyle: "short",
+  });
+  const restricted = lang === "en"
+    ? "Restricted access · Authorized personnel only"
+    : "Acceso restringido · Solo personal autorizado";
+  const confidential = lang === "en"
+    ? "This message contains confidential information. If you received it in error, please delete it immediately."
+    : "Este mensaje contiene información confidencial. Si lo recibiste por error, elimínalo de inmediato.";
+
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${lang}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Your Banxico Plus Verification Code</title>
+  <meta name="color-scheme" content="light">
 </head>
-<body style="margin:0;padding:0;background:#f2f2f2;font-family:Arial,Helvetica,sans-serif;">
+<body style="margin:0;padding:0;background:#e8e8e8;font-family:Arial,Helvetica,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
-         style="background:#f2f2f2;padding:40px 0;">
+         style="background:#e8e8e8;padding:40px 16px;">
     <tr><td align="center">
-      <table width="520" cellpadding="0" cellspacing="0" role="presentation"
-             style="background:#ffffff;border-radius:10px;overflow:hidden;
-                    box-shadow:0 4px 16px rgba(0,0,0,0.10);max-width:100%;">
+      <table width="560" cellpadding="0" cellspacing="0" role="presentation"
+             style="background:#ffffff;border-radius:12px;overflow:hidden;
+                    box-shadow:0 8px 32px rgba(0,0,0,0.13);max-width:100%;">
+
+        <!-- ── Top accent stripe ── -->
+        <tr>
+          <td style="background:linear-gradient(90deg,#c8322b 0%,#8b1a15 100%);
+                     height:5px;font-size:0;line-height:0;">&nbsp;</td>
+        </tr>
 
         <!-- ── Header ── -->
         <tr>
-          <td style="background:#111111;padding:28px 36px;">
-            <table cellpadding="0" cellspacing="0" role="presentation">
-              <tr>
-                <td style="vertical-align:middle;padding-right:12px;">
-                  ${LOGO_SVG}
-                </td>
-                <td style="vertical-align:middle;">
-                  <span style="color:#ffffff;font-size:22px;font-weight:bold;
-                               letter-spacing:0.18em;font-family:Arial,sans-serif;">
-                    BANXICO
-                  </span><span style="color:#c8322b;font-size:22px;font-weight:900;">+</span>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-
-        <!-- ── Body ── -->
-        <tr>
-          <td style="padding:36px 36px 28px;">
-            <p style="margin:0 0 6px;color:#111111;font-size:18px;font-weight:700;">
-              Hello, ${fullName}
-            </p>
-            <p style="margin:0 0 28px;color:#555555;font-size:14px;line-height:1.7;">
-              We received a sign-in request for your Banxico Plus account.
-              Use the verification code below to complete your login.
-              This code is valid for <strong>10 minutes</strong>.
-            </p>
-
-            <!-- OTP box -->
+          <td style="background:#111111;padding:26px 36px;">
             <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
               <tr>
-                <td align="center" style="padding:0 0 28px;">
-                  <div style="display:inline-block;background:#f7f7f7;
-                              border:1px solid #e0e0e0;border-radius:10px;
-                              padding:20px 48px;">
-                    <span style="font-family:'Courier New',Courier,monospace;
-                                 font-size:40px;font-weight:bold;color:#c8322b;
-                                 letter-spacing:0.35em;">
-                      ${code}
-                    </span>
+                <td style="vertical-align:middle;">
+                  <table cellpadding="0" cellspacing="0" role="presentation">
+                    <tr>
+                      <td style="vertical-align:middle;padding-right:14px;">${LOGO_SVG}</td>
+                      <td style="vertical-align:middle;">
+                        <div style="font-size:22px;font-weight:900;letter-spacing:0.16em;
+                                    color:#ffffff;font-family:Arial,sans-serif;line-height:1;">
+                          BANXICO<span style="color:#c8322b;">+</span>
+                        </div>
+                        <div style="font-size:9px;letter-spacing:0.22em;color:#777777;
+                                    margin-top:3px;text-transform:uppercase;font-family:Arial,sans-serif;">
+                          Secure Financial Platform
+                        </div>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+                <td align="right" style="vertical-align:middle;">
+                  <div style="width:38px;height:38px;border-radius:50%;
+                              background:rgba(200,50,43,0.18);
+                              border:1px solid rgba(200,50,43,0.35);
+                              display:table-cell;vertical-align:middle;text-align:center;">
+                    <span style="color:#c8322b;font-size:15px;font-weight:900;
+                                 font-family:Arial,sans-serif;">B+</span>
                   </div>
                 </td>
               </tr>
             </table>
-
-            <p style="margin:0;color:#999999;font-size:12px;text-align:center;line-height:1.6;">
-              If you did not request this code, you can safely ignore this email.<br>
-              Never share this code with anyone — Banxico Plus will never ask for it.
-            </p>
           </td>
         </tr>
 
-        <!-- ── Divider ── -->
+        <!-- ── Body (injected) ── -->
+        ${body}
+
+        <!-- ── Red divider ── -->
         <tr>
           <td style="padding:0 36px;">
-            <div style="border-top:1px solid #eeeeee;"></div>
+            <div style="height:2px;background:linear-gradient(90deg,#c8322b 0%,#e8e8e8 100%);
+                        border-radius:2px;"></div>
           </td>
         </tr>
 
         <!-- ── Footer ── -->
         <tr>
-          <td style="background:#f8f8f8;padding:20px 36px;border-radius:0 0 10px 10px;">
+          <td style="background:#f7f7f7;padding:20px 36px 22px;border-radius:0 0 12px 12px;">
             <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
               <tr>
-                <td>
-                  <p style="margin:0 0 4px;color:#aaaaaa;font-size:11px;">
-                    <strong style="color:#888888;">Banxico Plus LLC</strong>
+                <td style="vertical-align:top;">
+                  <!-- Company name + address -->
+                  <p style="margin:0 0 3px;font-size:11px;font-weight:700;color:#555555;
+                             font-family:Arial,sans-serif;letter-spacing:0.04em;">
+                    BANXICO PLUS LLC
                   </p>
-                  <p style="margin:0;color:#aaaaaa;font-size:11px;line-height:1.5;">
-                    Evolution Road · Internal-use financial management platform<br>
-                    Restricted access · Authorized personnel only
+                  <p style="margin:0 0 2px;font-size:10px;color:#999999;font-family:Arial,sans-serif;line-height:1.55;">
+                    Evolution Loop, Suite 1401 · Laredo, Texas 78045 · United States
                   </p>
+                  <p style="margin:0 0 10px;font-size:10px;color:#bbbbbb;font-family:Arial,sans-serif;line-height:1.55;">
+                    The Landmark GDL · Guadalajara, Jalisco, México
+                  </p>
+                  <!-- Compliance badges -->
+                  <table cellpadding="0" cellspacing="0" role="presentation">
+                    <tr>
+                      <td style="padding-right:5px;">
+                        <span style="display:inline-block;background:#111111;color:#ffffff;
+                                     font-size:9px;font-weight:700;letter-spacing:0.06em;
+                                     padding:2px 7px;border-radius:3px;font-family:Arial,sans-serif;">
+                          EMV
+                        </span>
+                      </td>
+                      <td style="padding-right:5px;">
+                        <span style="display:inline-block;background:#1a3a5c;color:#ffffff;
+                                     font-size:9px;font-weight:700;letter-spacing:0.06em;
+                                     padding:2px 7px;border-radius:3px;font-family:Arial,sans-serif;">
+                          PCI DSS
+                        </span>
+                      </td>
+                      <td>
+                        <span style="display:inline-block;background:#c8322b;color:#ffffff;
+                                     font-size:9px;font-weight:700;letter-spacing:0.06em;
+                                     padding:2px 7px;border-radius:3px;font-family:Arial,sans-serif;">
+                          AES-256
+                        </span>
+                      </td>
+                    </tr>
+                  </table>
                 </td>
-                <td align="right" style="vertical-align:middle;">
-                  <span style="color:#c8322b;font-size:14px;font-weight:900;
-                               letter-spacing:0.1em;font-family:Arial,sans-serif;">
-                    B+
-                  </span>
+                <td align="right" style="vertical-align:top;">
+                  <p style="margin:0 0 3px;font-size:9px;color:#bbbbbb;
+                             font-family:Arial,sans-serif;white-space:nowrap;">
+                    ${sentLabel}
+                  </p>
+                  <p style="margin:0;font-size:9px;color:#999999;
+                             font-family:Arial,sans-serif;text-align:right;white-space:nowrap;">
+                    ${sentAt}
+                  </p>
                 </td>
               </tr>
             </table>
+            <!-- Confidentiality notice -->
+            <p style="margin:12px 0 0;font-size:9px;color:#cccccc;font-family:Arial,sans-serif;
+                       line-height:1.6;border-top:1px solid #eeeeee;padding-top:10px;">
+              ${confidential}
+            </p>
           </td>
         </tr>
 
@@ -163,66 +211,144 @@ function buildOtpHtml(fullName: string, code: string): string {
 </html>`;
 }
 
+// ── OTP Email ──────────────────────────────────────────────────────────────
+
+function buildOtpHtml(fullName: string, code: string): string {
+  // Split code into individual digit cells
+  const digits = code.split("").map(d =>
+    `<td style="padding:0 4px;">
+       <div style="width:42px;height:54px;background:#f7f7f7;
+                   border:2px solid #e0e0e0;border-radius:8px;
+                   display:table-cell;vertical-align:middle;text-align:center;">
+         <span style="font-family:'Courier New',Courier,monospace;
+                      font-size:28px;font-weight:bold;color:#c8322b;
+                      line-height:54px;display:block;">
+           ${d}
+         </span>
+       </div>
+     </td>`
+  ).join("");
+
+  const body = `
+    <tr>
+      <td style="padding:36px 36px 28px;">
+        <p style="margin:0 0 5px;color:#111111;font-size:19px;font-weight:700;
+                   font-family:Arial,sans-serif;">
+          Hello, ${fullName}
+        </p>
+        <p style="margin:0 0 28px;color:#666666;font-size:14px;line-height:1.75;
+                   font-family:Arial,sans-serif;">
+          We received a sign-in request for your Banxico Plus account.
+          Use the verification code below — it's valid for
+          <strong style="color:#111111;">10 minutes</strong> and can only be used once.
+        </p>
+
+        <!-- Individual digit boxes -->
+        <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+          <tr>
+            <td align="center" style="padding-bottom:10px;">
+              <table cellpadding="0" cellspacing="0" role="presentation">
+                <tr>${digits}</tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+
+        <!-- Helper label -->
+        <p style="margin:0 0 28px;color:#aaaaaa;font-size:11px;text-align:center;
+                   font-family:Arial,sans-serif;letter-spacing:0.05em;">
+          VERIFICATION CODE
+        </p>
+
+        <!-- Security notice -->
+        <div style="background:#fff8f8;border:1px solid #f5c5c2;border-radius:8px;
+                    padding:14px 18px;">
+          <p style="margin:0;font-size:12px;color:#7a2520;line-height:1.65;
+                     font-family:Arial,sans-serif;">
+            🔒 <strong>Never share this code.</strong>
+            Banxico Plus will never ask for your verification code by phone, chat, or email.
+            If you did not request this, your account may be at risk — contact support immediately.
+          </p>
+        </div>
+      </td>
+    </tr>`;
+
+  return buildEmailHtml(body, "en");
+}
+
+// ── Password Reset Email ───────────────────────────────────────────────────
+
 export async function sendPasswordResetEmail(params: {
   toEmail:  string;
   fullName: string;
   resetUrl: string;
 }): Promise<{ sent: boolean }> {
   const { toEmail, fullName, resetUrl } = params;
-  const html = `<!DOCTYPE html>
-<html lang="es">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Restablecer contraseña — Banxico Plus</title></head>
-<body style="margin:0;padding:0;background:#f2f2f2;font-family:Arial,Helvetica,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f2f2f2;padding:40px 0;">
-    <tr><td align="center">
-      <table width="520" cellpadding="0" cellspacing="0"
-             style="background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.10);max-width:100%;">
-        <tr>
-          <td style="background:#111111;padding:28px 36px;">
-            <span style="color:#ffffff;font-size:22px;font-weight:bold;letter-spacing:0.18em;">BANXICO</span><span style="color:#c8322b;font-size:22px;font-weight:900;">+</span>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:36px 36px 28px;">
-            <p style="margin:0 0 6px;color:#111111;font-size:18px;font-weight:700;">Hola, ${fullName}</p>
-            <p style="margin:0 0 24px;color:#555555;font-size:14px;line-height:1.7;">
-              Recibimos una solicitud para restablecer la contraseña de tu cuenta Banxico Plus.<br>
-              Este enlace es válido por <strong>1 hora</strong>. Si no lo solicitaste, ignora este correo.
-            </p>
-            <table width="100%" cellpadding="0" cellspacing="0">
-              <tr><td align="center" style="padding:0 0 28px;">
-                <a href="${resetUrl}"
-                   style="display:inline-block;background:#c8322b;color:#ffffff;font-size:15px;font-weight:bold;
-                          text-decoration:none;padding:14px 36px;border-radius:8px;letter-spacing:0.04em;">
-                  Restablecer contraseña
-                </a>
-              </td></tr>
-            </table>
-            <p style="margin:0;color:#999999;font-size:11px;text-align:center;line-height:1.6;word-break:break-all;">
-              O copia este enlace en tu navegador:<br>${resetUrl}
-            </p>
-          </td>
-        </tr>
-        <tr><td style="padding:0 36px;"><div style="border-top:1px solid #eeeeee;"></div></td></tr>
-        <tr>
-          <td style="background:#f8f8f8;padding:16px 36px;border-radius:0 0 10px 10px;">
-            <p style="margin:0;color:#aaaaaa;font-size:11px;">
-              <strong style="color:#888888;">Banxico Plus LLC</strong> · Acceso restringido · Solo personal autorizado
-            </p>
-          </td>
-        </tr>
-      </table>
-    </td></tr>
-  </table>
-</body></html>`;
+
+  const body = `
+    <tr>
+      <td style="padding:36px 36px 28px;">
+        <p style="margin:0 0 5px;color:#111111;font-size:19px;font-weight:700;
+                   font-family:Arial,sans-serif;">
+          Hola, ${fullName}
+        </p>
+        <p style="margin:0 0 24px;color:#666666;font-size:14px;line-height:1.75;
+                   font-family:Arial,sans-serif;">
+          Recibimos una solicitud para restablecer la contraseña de tu cuenta
+          <strong style="color:#111111;">Banxico Plus</strong>.<br>
+          Este enlace es válido por <strong style="color:#111111;">1 hora</strong>.
+          Si no lo solicitaste, puedes ignorar este correo con seguridad.
+        </p>
+
+        <!-- CTA button -->
+        <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+          <tr><td align="center" style="padding-bottom:24px;">
+            <a href="${resetUrl}"
+               style="display:inline-block;background:#c8322b;color:#ffffff;
+                      font-size:14px;font-weight:700;text-decoration:none;
+                      padding:15px 42px;border-radius:8px;letter-spacing:0.06em;
+                      text-transform:uppercase;
+                      box-shadow:0 4px 14px rgba(200,50,43,0.35);
+                      font-family:Arial,sans-serif;">
+              Restablecer contraseña
+            </a>
+          </td></tr>
+        </table>
+
+        <!-- Fallback URL -->
+        <div style="background:#f7f7f7;border-radius:6px;padding:12px 16px;
+                    border:1px solid #e8e8e8;">
+          <p style="margin:0 0 4px;font-size:10px;color:#aaaaaa;font-family:Arial,sans-serif;
+                     letter-spacing:0.05em;text-transform:uppercase;">
+            O copia este enlace:
+          </p>
+          <p style="margin:0;font-size:11px;color:#666666;word-break:break-all;
+                     font-family:'Courier New',Courier,monospace;line-height:1.55;">
+            ${resetUrl}
+          </p>
+        </div>
+
+        <!-- Security warning -->
+        <div style="margin-top:20px;background:#fff8f8;border:1px solid #f5c5c2;
+                    border-radius:8px;padding:14px 18px;">
+          <p style="margin:0;font-size:12px;color:#7a2520;line-height:1.65;
+                     font-family:Arial,sans-serif;">
+            🔒 <strong>¿No solicitaste esto?</strong>
+            Alguien pudo haber ingresado tu correo por error. Tu contraseña actual no cambia
+            hasta que uses este enlace. Puedes ignorar este correo.
+          </p>
+        </div>
+      </td>
+    </tr>`;
+
+  const html = buildEmailHtml(body, "es");
 
   const response = await resendSend({
     from:    RESEND_FROM,
     to:      [toEmail],
     subject: "Restablecer contraseña — Banxico Plus",
     html,
-    text: `Hola ${fullName},\n\nRestablece tu contraseña aquí:\n${resetUrl}\n\nEste enlace expira en 1 hora.\n\n— Banxico Plus LLC`,
+    text: `Hola ${fullName},\n\nRestablece tu contraseña aquí:\n${resetUrl}\n\nEste enlace expira en 1 hora.\n\n— Banxico Plus LLC · Evolution Loop Suite 1401, Laredo TX`,
   });
 
   if (!response.ok) {
@@ -231,6 +357,8 @@ export async function sendPasswordResetEmail(params: {
   }
   return { sent: true };
 }
+
+// ── Cybrid Announcement Email ──────────────────────────────────────────────
 
 export async function sendCybridAnnouncementEmail(params: {
   toEmail:   string;
@@ -241,168 +369,216 @@ export async function sendCybridAnnouncementEmail(params: {
 
   const subjectTag   = isApprovalRequest ? " [REQUIERE APROBACIÓN]" : "";
   const subject      = `Integración Cybrid — Desglose y Adquisición de Licencia${subjectTag}`;
+
   const approvalNote = isApprovalRequest
-    ? `<div style="background:#fff8e1;border:1px solid #f9a825;border-radius:8px;padding:14px 18px;margin-bottom:24px;">
-        <p style="margin:0;color:#e65100;font-size:13px;font-weight:700;">⚠ Este correo requiere tu aprobación antes de enviarse a los socios.</p>
-        <p style="margin:6px 0 0;color:#6d4c00;font-size:12px;line-height:1.6;">
-          Revisa el contenido. Si deseas ajustarlo, edita el anuncio en <strong>Configuración → Anuncios</strong> y luego usa el botón "Enviar correo" para enviarlo a Socemro.
+    ? `<div style="background:#fff8e1;border:1px solid #f9a825;border-radius:8px;
+                   padding:14px 18px;margin-bottom:24px;">
+        <p style="margin:0;color:#e65100;font-size:13px;font-weight:700;
+                   font-family:Arial,sans-serif;">
+          ⚠ Este correo requiere tu aprobación antes de enviarse a los socios.
+        </p>
+        <p style="margin:6px 0 0;color:#6d4c00;font-size:12px;line-height:1.6;
+                   font-family:Arial,sans-serif;">
+          Revisa el contenido. Si deseas ajustarlo, edita el anuncio en
+          <strong>Configuración → Anuncios</strong> y usa el botón "Enviar correo" para
+          mandarlo a Socemro.
         </p>
       </div>`
     : "";
 
-  const html = `<!DOCTYPE html>
-<html lang="es">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${subject}</title></head>
-<body style="margin:0;padding:0;background:#f2f2f2;font-family:Arial,Helvetica,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f2f2f2;padding:40px 0;">
-    <tr><td align="center">
-      <table width="560" cellpadding="0" cellspacing="0"
-             style="background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.10);max-width:100%;">
+  const body = `
+    <tr>
+      <td style="padding:36px 36px 28px;">
+        ${approvalNote}
 
-        <!-- Header -->
-        <tr>
-          <td style="background:#111111;padding:28px 36px;">
-            <span style="color:#ffffff;font-size:22px;font-weight:bold;letter-spacing:0.18em;">BANXICO</span><span style="color:#c8322b;font-size:22px;font-weight:900;">+</span>
-            <span style="color:#aaaaaa;font-size:12px;margin-left:16px;letter-spacing:0.08em;">COMUNICADO INTERNO</span>
-          </td>
-        </tr>
+        <p style="margin:0 0 5px;color:#111111;font-size:19px;font-weight:700;
+                   font-family:Arial,sans-serif;">
+          Hola, ${fullName}
+        </p>
+        <p style="margin:0 0 24px;color:#666666;font-size:14px;line-height:1.75;
+                   font-family:Arial,sans-serif;">
+          Te compartimos el resumen ejecutivo sobre la integración de
+          <strong style="color:#111111;">Cybrid</strong> como proveedor de infraestructura
+          bancaria para <strong style="color:#111111;">Banxico Plus LLC</strong>.
+        </p>
 
-        <!-- Body -->
-        <tr>
-          <td style="padding:36px 36px 0;">
-            ${approvalNote}
-            <p style="margin:0 0 4px;color:#111111;font-size:18px;font-weight:700;">Hola, ${fullName}</p>
-            <p style="margin:0 0 24px;color:#555555;font-size:14px;line-height:1.7;">
-              Te compartimos el resumen ejecutivo sobre la próxima integración de <strong>Cybrid</strong> como
-              proveedor de infraestructura bancaria para <strong>Banxico Plus LLC</strong>.
+        <!-- License acquired badge -->
+        <div style="background:#e8f5e9;border:1px solid #66bb6a;border-radius:8px;
+                    padding:14px 18px;margin-bottom:24px;
+                    display:flex;align-items:center;gap:12px;">
+          <table cellpadding="0" cellspacing="0" role="presentation"><tr>
+            <td style="vertical-align:middle;padding-right:12px;font-size:22px;">✅</td>
+            <td style="vertical-align:middle;">
+              <p style="margin:0;color:#1b5e20;font-size:14px;font-weight:700;
+                         font-family:Arial,sans-serif;">
+                Licencia Cybrid — ADQUIRIDA
+              </p>
+              <p style="margin:4px 0 0;color:#2e7d32;font-size:12px;line-height:1.6;
+                         font-family:Arial,sans-serif;">
+                Banxico Plus LLC ha completado el proceso de acreditación, KYB/AML y firma de
+                contrato. Las credenciales de producción están activas.
+              </p>
+            </td>
+          </tr></table>
+        </div>
+
+        <!-- What is Cybrid -->
+        <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
+               style="margin-bottom:22px;">
+          <tr><td style="border-left:3px solid #c8322b;padding:0 0 0 14px;">
+            <p style="margin:0 0 5px;color:#111111;font-size:14px;font-weight:700;
+                       font-family:Arial,sans-serif;">
+              ¿Qué es Cybrid?
             </p>
-
-            <!-- License acquired badge -->
-            <div style="background:#e8f5e9;border:1px solid #66bb6a;border-radius:8px;padding:12px 18px;margin-bottom:22px;display:flex;align-items:center;gap:10px;">
-              <span style="font-size:18px;">✅</span>
-              <div>
-                <p style="margin:0;color:#1b5e20;font-size:14px;font-weight:700;">Licencia Cybrid — ADQUIRIDA</p>
-                <p style="margin:4px 0 0;color:#2e7d32;font-size:12px;line-height:1.6;">
-                  Banxico Plus LLC ha completado el proceso de acreditación y firma de contrato con Cybrid.
-                  Las credenciales de producción están activas y la integración está en proceso de despliegue.
-                </p>
-              </div>
-            </div>
-
-            <!-- Section: Qué es Cybrid -->
-            <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:22px;">
-              <tr><td style="border-left:3px solid #c8322b;padding:0 0 0 14px;">
-                <p style="margin:0 0 6px;color:#111111;font-size:15px;font-weight:700;">¿Qué es Cybrid?</p>
-                <p style="margin:0;color:#444444;font-size:13px;line-height:1.75;">
-                  Cybrid es una plataforma regulada de <strong>Banking-as-a-Service (BaaS)</strong> que provee
-                  cuentas bancarias virtuales, KYC/AML automatizado, transferencias ACH/Wire, y un puente
-                  fiat↔crypto certificado bajo marcos regulatorios de EE.UU. y Canadá.
-                  Es la pieza que nos permite ofrecer <em>cuentas reales con IBAN/routing number</em> a nuestros usuarios.
-                </p>
-              </td></tr>
-            </table>
-
-            <!-- Section: Desglose de implementación -->
-            <p style="margin:0 0 10px;color:#111111;font-size:15px;font-weight:700;">Desglose de implementación</p>
-            <p style="margin:0 0 12px;color:#666666;font-size:12px;line-height:1.6;">
-              Los tiempos reflejan el <em>Estimated Transit Time from Provider</em> — cada fase se procesa directamente desde los servidores de Cybrid una vez confirmada la señal de activación.
+            <p style="margin:0;color:#555555;font-size:13px;line-height:1.75;
+                       font-family:Arial,sans-serif;">
+              Cybrid es una plataforma regulada de
+              <strong>Banking-as-a-Service (BaaS)</strong> que provee cuentas bancarias
+              virtuales, KYC/AML automatizado, transferencias ACH/Wire, y un puente
+              fiat↔crypto certificado bajo marcos regulatorios de EE.UU. y Canadá.
+              Habilita <em>cuentas reales con routing number</em> para nuestros usuarios.
             </p>
-            <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:22px;">
-              <tr style="background:#f8f8f8;">
-                <td style="padding:8px 12px;font-size:12px;font-weight:700;color:#888888;text-transform:uppercase;letter-spacing:0.05em;width:22%;">Fase</td>
-                <td style="padding:8px 12px;font-size:12px;font-weight:700;color:#888888;text-transform:uppercase;letter-spacing:0.05em;">Alcance</td>
-                <td style="padding:8px 12px;font-size:12px;font-weight:700;color:#888888;text-transform:uppercase;letter-spacing:0.05em;width:22%;text-align:center;">ETA (proveedor)</td>
-              </tr>
-              <tr style="border-top:1px solid #eeeeee;">
-                <td style="padding:10px 12px;font-size:13px;font-weight:700;color:#c8322b;">Fase 1</td>
-                <td style="padding:10px 12px;font-size:13px;color:#333333;line-height:1.5;">Activación de credenciales de producción y conexión OAuth2 con endpoints de identidad</td>
-                <td style="padding:10px 12px;font-size:13px;color:#2e7d32;font-weight:700;text-align:center;">24–36 hrs</td>
-              </tr>
-              <tr style="border-top:1px solid #eeeeee;background:#fafafa;">
-                <td style="padding:10px 12px;font-size:13px;font-weight:700;color:#c8322b;">Fase 2</td>
-                <td style="padding:10px 12px;font-size:13px;color:#333333;line-height:1.5;">KYC/AML automático: verificación de identidad de usuarios integrada al onboarding de Banxico+</td>
-                <td style="padding:10px 12px;font-size:13px;color:#2e7d32;font-weight:700;text-align:center;">24–36 hrs</td>
-              </tr>
-              <tr style="border-top:1px solid #eeeeee;">
-                <td style="padding:10px 12px;font-size:13px;font-weight:700;color:#c8322b;">Fase 3</td>
-                <td style="padding:10px 12px;font-size:13px;color:#333333;line-height:1.5;">Emisión de cuentas virtuales con routing/account number real asignado por usuario</td>
-                <td style="padding:10px 12px;font-size:13px;color:#2e7d32;font-weight:700;text-align:center;">24–36 hrs</td>
-              </tr>
-              <tr style="border-top:1px solid #eeeeee;background:#fafafa;">
-                <td style="padding:10px 12px;font-size:13px;font-weight:700;color:#c8322b;">Fase 4</td>
-                <td style="padding:10px 12px;font-size:13px;color:#333333;line-height:1.5;">Puente fiat↔USDT: depósitos ACH → USDT y retiros USDT → ACH en tiempo real</td>
-                <td style="padding:10px 12px;font-size:13px;color:#2e7d32;font-weight:700;text-align:center;">24–36 hrs</td>
-              </tr>
-              <tr style="border-top:1px solid #eeeeee;">
-                <td style="padding:10px 12px;font-size:13px;font-weight:700;color:#c8322b;">Fase 5</td>
-                <td style="padding:10px 12px;font-size:13px;color:#333333;line-height:1.5;">Go-live producción completa: monitoreo de compliance activo y soporte 24/7</td>
-                <td style="padding:10px 12px;font-size:13px;color:#2e7d32;font-weight:700;text-align:center;">24–36 hrs</td>
-              </tr>
-            </table>
+          </td></tr>
+        </table>
 
-            <!-- Section: Licencia -->
-            <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:22px;">
-              <tr><td style="border-left:3px solid #1565c0;padding:0 0 0 14px;">
-                <p style="margin:0 0 6px;color:#111111;font-size:15px;font-weight:700;">Estado de la licencia Cybrid</p>
-                <p style="margin:0 0 10px;color:#444444;font-size:13px;line-height:1.75;">
-                  El proceso de adquisición de licencia ha sido completado exitosamente:
-                </p>
-                <ol style="margin:0;padding-left:18px;color:#444444;font-size:13px;line-height:2;">
-                  <li>✅ Registro de <strong>Banxico Plus LLC</strong> como <em>Business Customer</em> en Cybrid</li>
-                  <li>✅ Proceso AML/KYB aprobado — documentación corporativa verificada</li>
-                  <li>✅ Acuerdo de servicios y Addendum de Compliance firmados</li>
-                  <li>✅ Credenciales de producción activas</li>
-                  <li>🔄 Integración técnica en curso — despliegue estimado: <strong>24–36 hrs por fase</strong></li>
-                </ol>
-              </td></tr>
-            </table>
+        <!-- Implementation breakdown -->
+        <p style="margin:0 0 6px;color:#111111;font-size:14px;font-weight:700;
+                   font-family:Arial,sans-serif;">
+          Desglose de implementación
+        </p>
+        <p style="margin:0 0 12px;color:#999999;font-size:11px;line-height:1.6;
+                   font-family:Arial,sans-serif;letter-spacing:0.02em;">
+          Estimated Transit Time from Provider — cada fase se activa desde los servidores
+          de Cybrid una vez confirmada la señal de despliegue.
+        </p>
+        <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
+               style="margin-bottom:22px;border-radius:8px;overflow:hidden;
+                      border:1px solid #eeeeee;">
+          <!-- Header row -->
+          <tr style="background:#f2f2f2;">
+            <td style="padding:9px 14px;font-size:11px;font-weight:700;color:#888888;
+                        text-transform:uppercase;letter-spacing:0.06em;
+                        font-family:Arial,sans-serif;width:18%;">Fase</td>
+            <td style="padding:9px 14px;font-size:11px;font-weight:700;color:#888888;
+                        text-transform:uppercase;letter-spacing:0.06em;
+                        font-family:Arial,sans-serif;">Alcance</td>
+            <td style="padding:9px 14px;font-size:11px;font-weight:700;color:#888888;
+                        text-transform:uppercase;letter-spacing:0.06em;
+                        font-family:Arial,sans-serif;width:20%;text-align:center;">
+              ETA
+            </td>
+          </tr>
+          <!-- Rows -->
+          <tr style="border-top:1px solid #eeeeee;">
+            <td style="padding:10px 14px;font-size:13px;font-weight:700;color:#c8322b;
+                        font-family:Arial,sans-serif;">1</td>
+            <td style="padding:10px 14px;font-size:12px;color:#333333;line-height:1.55;
+                        font-family:Arial,sans-serif;">
+              Activación de credenciales de producción y conexión OAuth2
+            </td>
+            <td style="padding:10px 14px;font-size:12px;font-weight:700;color:#2e7d32;
+                        text-align:center;font-family:Arial,sans-serif;">24–36 hrs</td>
+          </tr>
+          <tr style="border-top:1px solid #eeeeee;background:#fafafa;">
+            <td style="padding:10px 14px;font-size:13px;font-weight:700;color:#c8322b;
+                        font-family:Arial,sans-serif;">2</td>
+            <td style="padding:10px 14px;font-size:12px;color:#333333;line-height:1.55;
+                        font-family:Arial,sans-serif;">
+              KYC/AML automático integrado al onboarding de Banxico+
+            </td>
+            <td style="padding:10px 14px;font-size:12px;font-weight:700;color:#2e7d32;
+                        text-align:center;font-family:Arial,sans-serif;">24–36 hrs</td>
+          </tr>
+          <tr style="border-top:1px solid #eeeeee;">
+            <td style="padding:10px 14px;font-size:13px;font-weight:700;color:#c8322b;
+                        font-family:Arial,sans-serif;">3</td>
+            <td style="padding:10px 14px;font-size:12px;color:#333333;line-height:1.55;
+                        font-family:Arial,sans-serif;">
+              Emisión de cuentas virtuales con routing/account number real por usuario
+            </td>
+            <td style="padding:10px 14px;font-size:12px;font-weight:700;color:#2e7d32;
+                        text-align:center;font-family:Arial,sans-serif;">24–36 hrs</td>
+          </tr>
+          <tr style="border-top:1px solid #eeeeee;background:#fafafa;">
+            <td style="padding:10px 14px;font-size:13px;font-weight:700;color:#c8322b;
+                        font-family:Arial,sans-serif;">4</td>
+            <td style="padding:10px 14px;font-size:12px;color:#333333;line-height:1.55;
+                        font-family:Arial,sans-serif;">
+              Puente fiat↔USDT: depósitos ACH → USDT y retiros USDT → ACH en tiempo real
+            </td>
+            <td style="padding:10px 14px;font-size:12px;font-weight:700;color:#2e7d32;
+                        text-align:center;font-family:Arial,sans-serif;">24–36 hrs</td>
+          </tr>
+          <tr style="border-top:1px solid #eeeeee;">
+            <td style="padding:10px 14px;font-size:13px;font-weight:700;color:#c8322b;
+                        font-family:Arial,sans-serif;">5</td>
+            <td style="padding:10px 14px;font-size:12px;color:#333333;line-height:1.55;
+                        font-family:Arial,sans-serif;">
+              Go-live producción completa: compliance activo y soporte 24/7
+            </td>
+            <td style="padding:10px 14px;font-size:12px;font-weight:700;color:#2e7d32;
+                        text-align:center;font-family:Arial,sans-serif;">24–36 hrs</td>
+          </tr>
+        </table>
 
-            <!-- Section: Anuncio del sistema -->
-            <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:22px;">
-              <tr><td style="background:#e3f2fd;border-radius:8px;padding:16px 18px;">
-                <p style="margin:0 0 6px;color:#0d47a1;font-size:14px;font-weight:700;">📢 Aviso del sistema (preview del banner)</p>
-                <p style="margin:0;color:#1565c0;font-size:13px;line-height:1.75;">
-                  <em>"Banxico Plus LLC se encuentra en proceso de integración con Cybrid, plataforma regulada de
-                  Banking-as-a-Service. Esta mejora habilitará cuentas bancarias reales, transferencias ACH/Wire
-                  y un puente directo fiat↔USDT para todos los socios. Se anticipa disponibilidad en producción
-                  en los próximos 60–90 días."</em>
-                </p>
-              </td></tr>
-            </table>
-
-            <p style="margin:0 0 8px;color:#444444;font-size:13px;line-height:1.7;">
-              Cualquier pregunta o ajuste al plan, por favor responde directamente a este correo
-              o contáctame por el canal habitual.
+        <!-- License status -->
+        <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
+               style="margin-bottom:22px;">
+          <tr><td style="border-left:3px solid #1565c0;padding:0 0 0 14px;">
+            <p style="margin:0 0 8px;color:#111111;font-size:14px;font-weight:700;
+                       font-family:Arial,sans-serif;">
+              Estado de la licencia Cybrid
             </p>
-            <p style="margin:0;color:#444444;font-size:13px;">Saludos,<br><strong>José Barrientos</strong><br>Banxico Plus LLC</p>
-          </td>
-        </tr>
+            <table cellpadding="0" cellspacing="4" role="presentation">
+              <tr><td style="font-size:12px;color:#444444;padding:2px 0;
+                              font-family:Arial,sans-serif;">✅ &nbsp;Registro de Banxico Plus LLC como <em>Business Customer</em></td></tr>
+              <tr><td style="font-size:12px;color:#444444;padding:2px 0;
+                              font-family:Arial,sans-serif;">✅ &nbsp;Proceso AML/KYB aprobado — documentación corporativa verificada</td></tr>
+              <tr><td style="font-size:12px;color:#444444;padding:2px 0;
+                              font-family:Arial,sans-serif;">✅ &nbsp;Acuerdo de servicios y Addendum de Compliance firmados</td></tr>
+              <tr><td style="font-size:12px;color:#444444;padding:2px 0;
+                              font-family:Arial,sans-serif;">✅ &nbsp;Credenciales de producción activas</td></tr>
+              <tr><td style="font-size:12px;color:#2e7d32;font-weight:700;padding:2px 0;
+                              font-family:Arial,sans-serif;">🔄 &nbsp;Integración técnica en curso — ETA: <strong>24–36 hrs por fase</strong></td></tr>
+            </table>
+          </td></tr>
+        </table>
 
-        <!-- Divider -->
-        <tr><td style="padding:24px 36px 0;"><div style="border-top:1px solid #eeeeee;"></div></td></tr>
+        <!-- System announcement preview -->
+        <div style="background:#e3f2fd;border-radius:8px;padding:16px 18px;">
+          <p style="margin:0 0 6px;color:#0d47a1;font-size:13px;font-weight:700;
+                     font-family:Arial,sans-serif;">
+            📢 Aviso del sistema (preview del banner)
+          </p>
+          <p style="margin:0;color:#1565c0;font-size:12px;line-height:1.75;
+                     font-family:Arial,sans-serif;">
+            <em>"Banxico Plus LLC se encuentra en proceso de integración con Cybrid, plataforma
+            regulada de Banking-as-a-Service. Esta mejora habilitará cuentas bancarias reales,
+            transferencias ACH/Wire y un puente directo fiat↔USDT para todos los socios."</em>
+          </p>
+        </div>
 
-        <!-- Footer -->
-        <tr>
-          <td style="background:#f8f8f8;padding:16px 36px;border-radius:0 0 10px 10px;">
-            <p style="margin:0;color:#aaaaaa;font-size:11px;line-height:1.6;">
-              <strong style="color:#888888;">Banxico Plus LLC</strong> · Comunicado interno · Solo personal autorizado<br>
-              Este correo contiene información confidencial de la empresa.
-            </p>
-          </td>
-        </tr>
+        <p style="margin:22px 0 6px;color:#555555;font-size:13px;line-height:1.7;
+                   font-family:Arial,sans-serif;">
+          Cualquier pregunta o ajuste al plan, responde directamente a este correo o
+          contáctame por el canal habitual.
+        </p>
+        <p style="margin:0;color:#555555;font-size:13px;font-family:Arial,sans-serif;">
+          Saludos,<br>
+          <strong style="color:#111111;">José Barrientos</strong><br>
+          Banxico Plus LLC
+        </p>
+      </td>
+    </tr>`;
 
-      </table>
-    </td></tr>
-  </table>
-</body></html>`;
+  const html = buildEmailHtml(body, "es");
 
   const response = await resendSend({
     from:    RESEND_FROM,
     to:      [toEmail],
     subject,
     html,
-    text: `Hola ${fullName},\n\nIntegración Cybrid — Desglose y Adquisición de Licencia\n\n¿Qué es Cybrid?\nCybrid es una plataforma regulada de Banking-as-a-Service (BaaS) que provee cuentas bancarias virtuales, KYC/AML automatizado, transferencias ACH/Wire, y un puente fiat↔crypto.\n\nFases de implementación:\n- Fase 1: Sandbox (1–2 sem.)\n- Fase 2: KYC automático (2–3 sem.)\n- Fase 3: Cuentas virtuales (3–4 sem.)\n- Fase 4: Puente fiat↔USDT (4–6 sem.)\n- Fase 5: Go-live producción (2–4 sem.)\n\nAdquisición de licencia: Registro en cybrid.xyz, proceso AML/KYB, firma de contrato, sandbox → producción.\n\n— Banxico Plus LLC`,
+    text: `Hola ${fullName},\n\nIntegración Cybrid — Licencia adquirida.\n\nFases 1–5: 24–36 hrs ETA por fase (Estimated Transit Time from Provider)\n\nEstado: ✅ KYB/AML aprobado · ✅ Contrato firmado · ✅ Credenciales activas · 🔄 Integración en curso\n\n— Banxico Plus LLC · Evolution Loop Suite 1401, Laredo TX`,
   });
 
   if (!response.ok) {
@@ -411,6 +587,8 @@ export async function sendCybridAnnouncementEmail(params: {
   }
   return { sent: true };
 }
+
+// ── OTP / 2FA Email ────────────────────────────────────────────────────────
 
 export async function sendOtpEmail(params: {
   toEmail:  string;
@@ -426,7 +604,7 @@ export async function sendOtpEmail(params: {
       to:      [toEmail],
       subject: `${code} — Tu código de verificación Banxico Plus`,
       html:    buildOtpHtml(fullName, code),
-      text:    `Tu código de verificación Banxico Plus es: ${code}\n\nExpira en 10 minutos.\n\n— Banxico Plus LLC`,
+      text:    `Tu código de verificación Banxico Plus es: ${code}\n\nExpira en 10 minutos. Nunca compartas este código.\n\n— Banxico Plus LLC · Evolution Loop Suite 1401, Laredo TX`,
     });
   } catch (err: any) {
     console.error("[Email 2FA] Connector proxy error:", err?.message ?? err);
