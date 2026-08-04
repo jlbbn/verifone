@@ -424,66 +424,43 @@ export async function sendCybridAnnouncementEmail(params: {
 
   const body = `
     <tr>
-      <td style="padding:40px 40px 36px;font-family:Arial,Helvetica,sans-serif;">
+      <td style="padding:36px 36px 32px;font-family:Arial,Helvetica,sans-serif;">
 
         ${approvalNote}
 
         <!-- Intro -->
-        <p style="margin:0 0 8px;font-size:20px;font-weight:700;color:#111111;line-height:1.3;">
+        <p style="margin:0 0 6px;font-size:20px;font-weight:700;color:#111111;line-height:1.3;">
           Integración Cybrid
         </p>
-        <p style="margin:0 0 32px;font-size:14px;color:#666666;line-height:1.7;">
+        <p style="margin:0 0 28px;font-size:14px;color:#666666;line-height:1.7;">
           Banxico Plus LLC ha completado la adquisición de licencia e inicia la integración
           técnica con <strong style="color:#111111;">Cybrid</strong> como proveedor de
           infraestructura bancaria.
         </p>
 
-        <!-- Partner badge — CYBRID × Banxico Plus LLC -->
+        <!-- Partner badge -->
         <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
-               style="margin-bottom:32px;border:1px solid #e0e0e0;border-radius:8px;
+               style="margin-bottom:28px;border:1px solid #e0e0e0;border-radius:8px;
                       overflow:hidden;">
           <tr>
-            <td style="padding:16px 20px;background:#ffffff;">
-              <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
-                <tr>
-                  <td style="vertical-align:middle;">
-                    <!-- CYBRID wordmark -->
-                    <span style="font-size:16px;font-weight:900;color:#111111;
-                                 letter-spacing:0.04em;font-family:Arial,sans-serif;">
-                      CYBRID
-                    </span>
-                    <!-- × separator -->
-                    <span style="font-size:14px;color:#aaaaaa;margin:0 10px;
-                                 font-family:Arial,sans-serif;">
-                      &times;
-                    </span>
-                    <!-- Banxico Plus -->
-                    <span style="font-size:14px;font-weight:700;color:#1a56db;
-                                 font-family:Arial,sans-serif;">
-                      Banxico Plus LLC
-                    </span>
-                  </td>
-                  <td align="right" style="vertical-align:middle;">
-                    <!-- Verification badge -->
-                    <span style="display:inline-block;background:#ecfdf5;
-                                 border:1px solid #6ee7b7;border-radius:20px;
-                                 padding:4px 12px;font-size:11px;font-weight:700;
-                                 color:#065f46;font-family:Arial,sans-serif;
-                                 white-space:nowrap;">
-                      &#10003;&nbsp; Licencia Activa
-                    </span>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-          <tr>
-            <td style="background:#f8f9ff;padding:10px 20px;
-                        border-top:1px solid #e0e0e0;">
-              <span style="font-size:11px;color:#6b7280;font-family:Arial,sans-serif;">
-                Banking-as-a-Service (BaaS) &nbsp;&middot;&nbsp; Regulado EE.UU. / Canadá
-                &nbsp;&middot;&nbsp; KYC/AML &nbsp;&middot;&nbsp; ACH/Wire &nbsp;&middot;&nbsp; fiat&#8596;crypto
-              </span>
+            <td style="padding:14px 18px;background:#ffffff;border-left:4px solid #1a56db;">
+              <p style="margin:0 0 4px;">
+                <span style="font-size:17px;font-weight:900;color:#111111;
+                             letter-spacing:0.06em;font-family:Arial,sans-serif;">CYBRID</span>
+                <span style="font-size:13px;color:#cccccc;margin:0 8px;
+                             font-family:Arial,sans-serif;">&times;</span>
+                <span style="font-size:14px;font-weight:700;color:#1a56db;
+                             font-family:Arial,sans-serif;">Banxico Plus LLC</span>
+                <span style="display:inline-block;background:#ecfdf5;border:1px solid #6ee7b7;
+                             border-radius:12px;padding:2px 10px;font-size:10px;font-weight:700;
+                             color:#065f46;font-family:Arial,sans-serif;margin-left:10px;
+                             vertical-align:middle;">
+                  &#10003; Licencia Activa
+                </span>
+              </p>
+              <p style="margin:0;font-size:11px;color:#9ca3af;font-family:Arial,sans-serif;">
+                Banking-as-a-Service &middot; Regulado EE.UU. / Canadá &middot; KYC/AML &middot; ACH/Wire &middot; fiat&#8596;crypto
+              </p>
             </td>
           </tr>
         </table>
@@ -604,21 +581,22 @@ export async function sendCybridAnnouncementEmail(params: {
 
         </table>
 
-        <!-- Divider with label -->
+        <!-- What is Cybrid -->
         <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
                style="margin-bottom:24px;">
           <tr>
-            <td style="border-top:1px solid #e0e0e0;padding-top:24px;">
-              <p style="margin:0 0 10px;font-size:12px;font-weight:700;color:#888888;
-                         letter-spacing:0.1em;text-transform:uppercase;">
-                Descripcion del proveedor
+            <td style="border-left:3px solid #c8322b;padding:0 0 0 14px;">
+              <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:#111111;
+                         font-family:Arial,sans-serif;">
+                ¿Qué es Cybrid?
               </p>
-              <p style="margin:0;font-size:13px;color:#444444;line-height:1.8;">
+              <p style="margin:0;font-size:13px;color:#555555;line-height:1.8;
+                         font-family:Arial,sans-serif;">
                 Cybrid es una plataforma regulada de <strong>Banking-as-a-Service (BaaS)</strong>
                 que provee cuentas bancarias virtuales, KYC/AML automatizado, transferencias
                 ACH/Wire, y un puente fiat&#8596;crypto certificado bajo marcos regulatorios de
-                EE.UU. y Canadá. Es la pieza que permite ofrecer
-                <strong>cuentas reales con routing number</strong> a los socios de Banxico Plus.
+                EE.UU. y Canadá. Es la pieza que nos permite ofrecer
+                <strong>cuentas reales con routing number</strong> a nuestros usuarios.
               </p>
             </td>
           </tr>
