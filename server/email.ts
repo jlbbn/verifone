@@ -94,38 +94,38 @@ function buildEmailHtml(body: string, lang: "es" | "en" = "es"): string {
         </tr>
 
         <!-- ── Header ── -->
+        <!-- ── Header ── -->
         <tr>
-          <td style="background:#111111;padding:26px 36px;">
+          <td style="background:#0a0a0a;padding:20px 32px;">
             <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
               <tr>
                 <td style="vertical-align:middle;">
-                  <table cellpadding="0" cellspacing="0" role="presentation">
+                  <table cellpadding="0" cellspacing="0" role="presentation"
+                         style="display:inline-table;vertical-align:middle;margin-right:12px;">
                     <tr>
-                      <td style="vertical-align:middle;padding-right:14px;">${LOGO_SVG}</td>
-                      <td style="vertical-align:middle;">
-                        <div style="font-size:22px;font-weight:900;letter-spacing:0.16em;
-                                    color:#ffffff;font-family:Arial,sans-serif;line-height:1;">
-                          BANXICO<span style="color:#c8322b;">+</span>
-                        </div>
-                        <div style="font-size:9px;letter-spacing:0.22em;color:#777777;
-                                    margin-top:3px;text-transform:uppercase;font-family:Arial,sans-serif;">
-                          Payment Processor
-                        </div>
-                      </td>
+                      <td style="width:8px;height:8px;background:#c8322b;font-size:0;line-height:0;"></td>
+                      <td style="width:3px;font-size:0;line-height:0;"></td>
+                      <td style="width:8px;height:8px;background:#c8322b;font-size:0;line-height:0;"></td>
+                    </tr>
+                    <tr><td colspan="3" style="height:3px;font-size:0;line-height:0;"></td></tr>
+                    <tr>
+                      <td style="width:8px;height:8px;background:#c8322b;font-size:0;line-height:0;"></td>
+                      <td style="width:3px;font-size:0;line-height:0;"></td>
+                      <td style="width:8px;height:8px;background:#c8322b;font-size:0;line-height:0;"></td>
                     </tr>
                   </table>
+                  <span style="font-size:17px;font-weight:900;letter-spacing:0.12em;color:#ffffff;font-family:Arial,sans-serif;vertical-align:middle;">BANXICO<span style="color:#c8322b;">+</span></span>
                 </td>
                 <td align="right" style="vertical-align:middle;">
-                  <div style="width:38px;height:38px;border-radius:50%;
-                              background:rgba(200,50,43,0.18);
-                              border:1px solid rgba(200,50,43,0.35);
-                              display:table-cell;vertical-align:middle;text-align:center;">
-                    <span style="color:#c8322b;font-size:15px;font-weight:900;
-                                 font-family:Arial,sans-serif;">B+</span>
-                  </div>
+                  <span style="font-size:9px;letter-spacing:0.18em;color:#444444;text-transform:uppercase;font-family:Arial,sans-serif;">Payment Processor</span>
                 </td>
               </tr>
             </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#0a0a0a;padding:0;">
+            <div style="height:1px;background:linear-gradient(90deg,#c8322b 0%,#1a0505 100%);"></div>
           </td>
         </tr>
 
@@ -425,53 +425,36 @@ export async function sendCybridAnnouncementEmail(params: {
   const body = `
     <!-- DARK HERO -->
     <tr>
-      <td style="background:#111111;padding:36px 36px 32px;font-family:Arial,Helvetica,sans-serif;">
-        \${approvalNote}
-        <table cellpadding="0" cellspacing="0" role="presentation" style="margin-bottom:22px;">
-          <tr>
-            <td style="vertical-align:middle;padding-right:8px;">
-              <span style="font-size:13px;font-weight:900;color:#ffffff;letter-spacing:0.1em;font-family:Arial,sans-serif;">CYBRID</span>
-            </td>
-            <td style="vertical-align:middle;padding-right:8px;">
-              <span style="color:#444444;font-size:12px;font-family:Arial,sans-serif;">&times;</span>
-            </td>
-            <td style="vertical-align:middle;padding-right:16px;">
-              <span style="font-size:13px;font-weight:700;color:#7b9ef8;font-family:Arial,sans-serif;">Banxico Plus LLC</span>
-            </td>
-            <td style="vertical-align:middle;">
-              <span style="display:inline-block;border:1px solid #2d6a4f;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;color:#52b788;letter-spacing:0.04em;font-family:Arial,sans-serif;">&#10003;&nbsp;Licencia Activa</span>
-            </td>
-          </tr>
-        </table>
-        <p style="margin:0 0 12px;font-size:27px;font-weight:900;color:#ffffff;line-height:1.15;letter-spacing:-0.01em;font-family:Arial,sans-serif;">
-          Integración Cybrid<br><span style="color:#c8322b;">en marcha.</span>
+      <td style="background:#0a0a0a;padding:36px 32px 32px;font-family:Arial,Helvetica,sans-serif;">
+        ${approvalNote}
+        <p style="margin:0 0 20px;font-size:11px;letter-spacing:0.16em;color:#444444;text-transform:uppercase;font-family:Arial,sans-serif;">
+          CYBRID &nbsp;&times;&nbsp; BANXICO PLUS LLC
         </p>
-        <p style="margin:0;font-size:14px;color:#777777;line-height:1.75;max-width:400px;font-family:Arial,sans-serif;">
-          Banxico Plus LLC ha adquirido la licencia e inicia la integración técnica con Cybrid como proveedor de infraestructura bancaria.
+        <p style="margin:0;font-size:36px;font-weight:900;color:#ffffff;line-height:1.1;letter-spacing:-0.02em;font-family:Arial,sans-serif;">
+          Integración<br>Cybrid<br><span style="color:#c8322b;">en marcha.</span>
+        </p>
+        <p style="margin:20px 0 0;font-size:14px;color:#666666;line-height:1.75;max-width:380px;font-family:Arial,sans-serif;">
+          Banxico Plus LLC ha adquirido la licencia e inicia la integración técnica como proveedor de infraestructura bancaria.
         </p>
       </td>
     </tr>
 
-    <!-- STATS BAR -->
+    <!-- STATS ROW -->
     <tr>
-      <td style="background:#1a1a1a;border-top:1px solid #222222;padding:0;font-family:Arial,sans-serif;">
+      <td style="background:#111111;border-top:1px solid #1e1e1e;border-bottom:1px solid #1e1e1e;font-family:Arial,Helvetica,sans-serif;">
         <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
           <tr>
-            <td style="padding:14px 36px;border-right:1px solid #222222;">
-              <p style="margin:0 0 2px;font-size:9px;color:#444444;letter-spacing:0.12em;text-transform:uppercase;">Tipo</p>
-              <p style="margin:0;font-size:13px;font-weight:700;color:#cccccc;">BaaS</p>
+            <td style="padding:14px 32px;border-right:1px solid #1e1e1e;width:33%;">
+              <p style="margin:0 0 3px;font-size:9px;color:#3a3a3a;letter-spacing:0.12em;text-transform:uppercase;font-family:Arial,sans-serif;">Regulación</p>
+              <p style="margin:0;font-size:12px;font-weight:700;color:#cccccc;font-family:Arial,sans-serif;">EE.UU. / Canadá</p>
             </td>
-            <td style="padding:14px 24px;border-right:1px solid #222222;">
-              <p style="margin:0 0 2px;font-size:9px;color:#444444;letter-spacing:0.12em;text-transform:uppercase;">Regulación</p>
-              <p style="margin:0;font-size:13px;font-weight:700;color:#cccccc;">EE.UU. / Canadá</p>
+            <td style="padding:14px 24px;border-right:1px solid #1e1e1e;width:34%;">
+              <p style="margin:0 0 3px;font-size:9px;color:#3a3a3a;letter-spacing:0.12em;text-transform:uppercase;font-family:Arial,sans-serif;">ETA por fase</p>
+              <p style="margin:0;font-size:12px;font-weight:700;color:#52b788;font-family:Arial,sans-serif;">24–36 hrs</p>
             </td>
-            <td style="padding:14px 24px;border-right:1px solid #222222;">
-              <p style="margin:0 0 2px;font-size:9px;color:#444444;letter-spacing:0.12em;text-transform:uppercase;">ETA / fase</p>
-              <p style="margin:0;font-size:13px;font-weight:700;color:#52b788;">24–36 hrs</p>
-            </td>
-            <td style="padding:14px 24px;">
-              <p style="margin:0 0 2px;font-size:9px;color:#444444;letter-spacing:0.12em;text-transform:uppercase;">Fases</p>
-              <p style="margin:0;font-size:13px;font-weight:700;color:#cccccc;">5 etapas</p>
+            <td style="padding:14px 24px;width:33%;">
+              <p style="margin:0 0 3px;font-size:9px;color:#3a3a3a;letter-spacing:0.12em;text-transform:uppercase;font-family:Arial,sans-serif;">Fases</p>
+              <p style="margin:0;font-size:12px;font-weight:700;color:#cccccc;font-family:Arial,sans-serif;">5 etapas</p>
             </td>
           </tr>
         </table>
@@ -480,9 +463,8 @@ export async function sendCybridAnnouncementEmail(params: {
 
     <!-- WHITE BODY -->
     <tr>
-      <td style="background:#ffffff;padding:32px 36px;font-family:Arial,Helvetica,sans-serif;">
+      <td style="background:#ffffff;padding:30px 32px 0;font-family:Arial,Helvetica,sans-serif;">
 
-        <!-- What is Cybrid -->
         <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-bottom:26px;">
           <tr>
             <td style="border-left:3px solid #c8322b;padding-left:14px;">
@@ -494,7 +476,6 @@ export async function sendCybridAnnouncementEmail(params: {
           </tr>
         </table>
 
-        <!-- Implementation table -->
         <p style="margin:0 0 4px;font-size:14px;font-weight:700;color:#111111;font-family:Arial,sans-serif;">Desglose de implementación</p>
         <p style="margin:0 0 12px;font-size:11px;color:#aaaaaa;font-family:Arial,sans-serif;">Estimated Transit Time from Provider — cada fase se activa al recibir la señal de despliegue.</p>
         <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-bottom:26px;border:1px solid #eeeeee;border-radius:6px;overflow:hidden;">
@@ -530,12 +511,11 @@ export async function sendCybridAnnouncementEmail(params: {
           </tr>
         </table>
 
-        <!-- License status -->
         <p style="margin:0 0 12px;font-size:14px;font-weight:700;color:#111111;font-family:Arial,sans-serif;">Estado de la licencia</p>
-        <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-bottom:26px;">
+        <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-bottom:30px;">
           <tr><td style="padding:9px 0;border-bottom:1px solid #f3f4f6;">
             <table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr>
-              <td width="96" style="vertical-align:middle;padding-right:10px;">
+              <td width="100" style="vertical-align:middle;padding-right:10px;">
                 <span style="display:inline-block;background:#dcfce7;border:1px solid #86efac;border-radius:4px;padding:3px 8px;font-size:10px;font-weight:700;color:#166534;white-space:nowrap;letter-spacing:0.04em;font-family:Arial,sans-serif;">COMPLETADO</span>
               </td>
               <td style="font-size:13px;color:#111111;font-family:Arial,sans-serif;">Registro de Banxico Plus LLC como <em>Business Customer</em></td>
@@ -543,7 +523,7 @@ export async function sendCybridAnnouncementEmail(params: {
           </td></tr>
           <tr><td style="padding:9px 0;border-bottom:1px solid #f3f4f6;">
             <table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr>
-              <td width="96" style="vertical-align:middle;padding-right:10px;">
+              <td width="100" style="vertical-align:middle;padding-right:10px;">
                 <span style="display:inline-block;background:#f3f4f6;border:1px solid #d1d5db;border-radius:4px;padding:3px 8px;font-size:10px;font-weight:700;color:#9ca3af;white-space:nowrap;letter-spacing:0.04em;font-family:Arial,sans-serif;">PENDIENTE</span>
               </td>
               <td style="font-size:13px;color:#9ca3af;font-family:Arial,sans-serif;">Proceso AML/KYB — documentación corporativa</td>
@@ -551,7 +531,7 @@ export async function sendCybridAnnouncementEmail(params: {
           </td></tr>
           <tr><td style="padding:9px 0;border-bottom:1px solid #f3f4f6;">
             <table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr>
-              <td width="96" style="vertical-align:middle;padding-right:10px;">
+              <td width="100" style="vertical-align:middle;padding-right:10px;">
                 <span style="display:inline-block;background:#f3f4f6;border:1px solid #d1d5db;border-radius:4px;padding:3px 8px;font-size:10px;font-weight:700;color:#9ca3af;white-space:nowrap;letter-spacing:0.04em;font-family:Arial,sans-serif;">PENDIENTE</span>
               </td>
               <td style="font-size:13px;color:#9ca3af;font-family:Arial,sans-serif;">Acuerdo de servicios y Addendum de Compliance</td>
@@ -559,7 +539,7 @@ export async function sendCybridAnnouncementEmail(params: {
           </td></tr>
           <tr><td style="padding:9px 0;border-bottom:1px solid #f3f4f6;">
             <table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr>
-              <td width="96" style="vertical-align:middle;padding-right:10px;">
+              <td width="100" style="vertical-align:middle;padding-right:10px;">
                 <span style="display:inline-block;background:#f3f4f6;border:1px solid #d1d5db;border-radius:4px;padding:3px 8px;font-size:10px;font-weight:700;color:#9ca3af;white-space:nowrap;letter-spacing:0.04em;font-family:Arial,sans-serif;">PENDIENTE</span>
               </td>
               <td style="font-size:13px;color:#9ca3af;font-family:Arial,sans-serif;">Credenciales de producción activas</td>
@@ -567,7 +547,7 @@ export async function sendCybridAnnouncementEmail(params: {
           </td></tr>
           <tr><td style="padding:9px 0;">
             <table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr>
-              <td width="96" style="vertical-align:middle;padding-right:10px;">
+              <td width="100" style="vertical-align:middle;padding-right:10px;">
                 <span style="display:inline-block;background:#f3f4f6;border:1px solid #d1d5db;border-radius:4px;padding:3px 8px;font-size:10px;font-weight:700;color:#9ca3af;white-space:nowrap;letter-spacing:0.04em;font-family:Arial,sans-serif;">PENDIENTE</span>
               </td>
               <td style="font-size:13px;color:#9ca3af;font-family:Arial,sans-serif;">Integración técnica — 24–36 hrs por fase</td>
@@ -575,8 +555,8 @@ export async function sendCybridAnnouncementEmail(params: {
           </td></tr>
         </table>
 
-        <p style="margin:0 0 2px;font-size:13px;font-weight:700;color:#111111;font-family:Arial,sans-serif;">Banxico Plus System</p>
-        <p style="margin:0;font-size:11px;color:#aaaaaa;font-family:Arial,sans-serif;">Notificación automática &mdash; no responder a este correo</p>
+        <p style="margin:0 0 2px;font-size:12px;font-weight:700;color:#111111;font-family:Arial,sans-serif;">Banxico Plus System</p>
+        <p style="margin:0 0 30px;font-size:11px;color:#aaaaaa;font-family:Arial,sans-serif;">Notificación automática &mdash; no responder a este correo</p>
 
       </td>
     </tr>`;
