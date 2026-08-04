@@ -438,117 +438,170 @@ export async function sendCybridAnnouncementEmail(params: {
           infraestructura bancaria.
         </p>
 
-        <!-- Partner line -->
+        <!-- Partner badge — CYBRID × Banxico Plus LLC -->
         <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
-               style="margin-bottom:32px;">
+               style="margin-bottom:32px;border:1px solid #e0e0e0;border-radius:8px;
+                      overflow:hidden;">
           <tr>
-            <td style="border-top:1px solid #e0e0e0;padding-top:16px;">
-              <table cellpadding="0" cellspacing="0" role="presentation">
+            <td style="padding:16px 20px;background:#ffffff;">
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
                 <tr>
-                  <td style="vertical-align:middle;padding-right:14px;">
-                    <span style="font-size:10px;font-weight:700;color:#888888;
-                                 letter-spacing:0.12em;text-transform:uppercase;">
-                      Proveedor
-                    </span>
-                  </td>
-                  <td style="vertical-align:middle;padding-right:14px;
-                              border-left:1px solid #e0e0e0;padding-left:14px;">
-                    <span style="font-size:18px;font-weight:900;color:#1a56db;
-                                 letter-spacing:0.06em;font-family:Arial,sans-serif;">
+                  <td style="vertical-align:middle;">
+                    <!-- CYBRID wordmark -->
+                    <span style="font-size:16px;font-weight:900;color:#111111;
+                                 letter-spacing:0.04em;font-family:Arial,sans-serif;">
                       CYBRID
                     </span>
+                    <!-- × separator -->
+                    <span style="font-size:14px;color:#aaaaaa;margin:0 10px;
+                                 font-family:Arial,sans-serif;">
+                      &times;
+                    </span>
+                    <!-- Banxico Plus -->
+                    <span style="font-size:14px;font-weight:700;color:#1a56db;
+                                 font-family:Arial,sans-serif;">
+                      Banxico Plus LLC
+                    </span>
                   </td>
-                  <td style="vertical-align:middle;padding-left:14px;
-                              border-left:1px solid #e0e0e0;">
-                    <span style="font-size:11px;color:#444444;">
-                      Banking-as-a-Service (BaaS) &nbsp;&middot;&nbsp; Regulado EE.UU. / Canadá
+                  <td align="right" style="vertical-align:middle;">
+                    <!-- Verification badge -->
+                    <span style="display:inline-block;background:#ecfdf5;
+                                 border:1px solid #6ee7b7;border-radius:20px;
+                                 padding:4px 12px;font-size:11px;font-weight:700;
+                                 color:#065f46;font-family:Arial,sans-serif;
+                                 white-space:nowrap;">
+                      &#10003;&nbsp; Licencia Activa
                     </span>
                   </td>
                 </tr>
               </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#f8f9ff;padding:10px 20px;
+                        border-top:1px solid #e0e0e0;">
+              <span style="font-size:11px;color:#6b7280;font-family:Arial,sans-serif;">
+                Banking-as-a-Service (BaaS) &nbsp;&middot;&nbsp; Regulado EE.UU. / Canadá
+                &nbsp;&middot;&nbsp; KYC/AML &nbsp;&middot;&nbsp; ACH/Wire &nbsp;&middot;&nbsp; fiat&#8596;crypto
+              </span>
             </td>
           </tr>
         </table>
 
-        <!-- License status — clean list -->
-        <p style="margin:0 0 10px;font-size:12px;font-weight:700;color:#888888;
-                   letter-spacing:0.1em;text-transform:uppercase;">
+        <!-- License status — step list -->
+        <p style="margin:0 0 12px;font-size:12px;font-weight:700;color:#888888;
+                   letter-spacing:0.1em;text-transform:uppercase;font-family:Arial,sans-serif;">
           Estado de la licencia
         </p>
         <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
-               style="margin-bottom:32px;">
-          <tr>
-            <td style="padding:8px 0;border-bottom:1px solid #f0f0f0;">
-              <table cellpadding="0" cellspacing="0" role="presentation" width="100%">
+               style="margin-bottom:32px;border:1px solid #e0e0e0;border-radius:8px;
+                      overflow:hidden;">
+
+          <!-- Step 1 — COMPLETED -->
+          <tr style="border-bottom:1px solid #e0e0e0;">
+            <td style="padding:12px 16px;background:#ffffff;">
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
                 <tr>
-                  <td width="20" style="vertical-align:middle;padding-right:10px;">
-                    <div style="width:18px;height:18px;border-radius:50%;background:#1a7340;
-                                 text-align:center;line-height:18px;font-size:11px;
-                                 color:#fff;font-weight:700;">&#10003;</div>
+                  <td width="90" style="vertical-align:middle;padding-right:12px;">
+                    <span style="display:inline-block;background:#dcfce7;border:1px solid #86efac;
+                                 border-radius:4px;padding:2px 8px;font-size:10px;font-weight:700;
+                                 color:#166534;letter-spacing:0.06em;font-family:Arial,sans-serif;
+                                 white-space:nowrap;">
+                      COMPLETADO
+                    </span>
                   </td>
-                  <td style="font-size:13px;color:#333333;">Registro como <em>Business Customer</em></td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:8px 0;border-bottom:1px solid #f0f0f0;">
-              <table cellpadding="0" cellspacing="0" role="presentation" width="100%">
-                <tr>
-                  <td width="20" style="vertical-align:middle;padding-right:10px;">
-                    <div style="width:18px;height:18px;border-radius:50%;background:#1a7340;
-                                 text-align:center;line-height:18px;font-size:11px;
-                                 color:#fff;font-weight:700;">&#10003;</div>
-                  </td>
-                  <td style="font-size:13px;color:#333333;">Proceso AML/KYB aprobado — documentación corporativa verificada</td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:8px 0;border-bottom:1px solid #f0f0f0;">
-              <table cellpadding="0" cellspacing="0" role="presentation" width="100%">
-                <tr>
-                  <td width="20" style="vertical-align:middle;padding-right:10px;">
-                    <div style="width:18px;height:18px;border-radius:50%;background:#1a7340;
-                                 text-align:center;line-height:18px;font-size:11px;
-                                 color:#fff;font-weight:700;">&#10003;</div>
-                  </td>
-                  <td style="font-size:13px;color:#333333;">Acuerdo de servicios y Addendum de Compliance firmados</td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:8px 0;border-bottom:1px solid #f0f0f0;">
-              <table cellpadding="0" cellspacing="0" role="presentation" width="100%">
-                <tr>
-                  <td width="20" style="vertical-align:middle;padding-right:10px;">
-                    <div style="width:18px;height:18px;border-radius:50%;background:#1a7340;
-                                 text-align:center;line-height:18px;font-size:11px;
-                                 color:#fff;font-weight:700;">&#10003;</div>
-                  </td>
-                  <td style="font-size:13px;color:#333333;">Credenciales de producción activas</td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:8px 0;">
-              <table cellpadding="0" cellspacing="0" role="presentation" width="100%">
-                <tr>
-                  <td width="20" style="vertical-align:middle;padding-right:10px;">
-                    <div style="width:18px;height:18px;border-radius:50%;background:#1a56db;
-                                 text-align:center;line-height:18px;font-size:10px;
-                                 color:#fff;font-weight:700;">&#8594;</div>
-                  </td>
-                  <td style="font-size:13px;color:#1a56db;font-weight:700;">
-                    Integración técnica en curso — ETA: 24–36 hrs por fase
+                  <td style="font-size:13px;color:#333333;font-family:Arial,sans-serif;">
+                    Registro de Banxico Plus LLC como <em>Business Customer</em>
                   </td>
                 </tr>
               </table>
             </td>
           </tr>
+
+          <!-- Step 2 — PENDING -->
+          <tr style="border-bottom:1px solid #e0e0e0;">
+            <td style="padding:12px 16px;background:#fafafa;">
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+                <tr>
+                  <td width="90" style="vertical-align:middle;padding-right:12px;">
+                    <span style="display:inline-block;background:#f9fafb;border:1px solid #d1d5db;
+                                 border-radius:4px;padding:2px 8px;font-size:10px;font-weight:700;
+                                 color:#6b7280;letter-spacing:0.06em;font-family:Arial,sans-serif;
+                                 white-space:nowrap;">
+                      PENDIENTE
+                    </span>
+                  </td>
+                  <td style="font-size:13px;color:#9ca3af;font-family:Arial,sans-serif;">
+                    Proceso AML/KYB aprobado — documentación corporativa verificada
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Step 3 — PENDING -->
+          <tr style="border-bottom:1px solid #e0e0e0;">
+            <td style="padding:12px 16px;background:#ffffff;">
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+                <tr>
+                  <td width="90" style="vertical-align:middle;padding-right:12px;">
+                    <span style="display:inline-block;background:#f9fafb;border:1px solid #d1d5db;
+                                 border-radius:4px;padding:2px 8px;font-size:10px;font-weight:700;
+                                 color:#6b7280;letter-spacing:0.06em;font-family:Arial,sans-serif;
+                                 white-space:nowrap;">
+                      PENDIENTE
+                    </span>
+                  </td>
+                  <td style="font-size:13px;color:#9ca3af;font-family:Arial,sans-serif;">
+                    Acuerdo de servicios y Addendum de Compliance firmados
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Step 4 — PENDING -->
+          <tr style="border-bottom:1px solid #e0e0e0;">
+            <td style="padding:12px 16px;background:#fafafa;">
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+                <tr>
+                  <td width="90" style="vertical-align:middle;padding-right:12px;">
+                    <span style="display:inline-block;background:#f9fafb;border:1px solid #d1d5db;
+                                 border-radius:4px;padding:2px 8px;font-size:10px;font-weight:700;
+                                 color:#6b7280;letter-spacing:0.06em;font-family:Arial,sans-serif;
+                                 white-space:nowrap;">
+                      PENDIENTE
+                    </span>
+                  </td>
+                  <td style="font-size:13px;color:#9ca3af;font-family:Arial,sans-serif;">
+                    Credenciales de producción activas
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Step 5 — PENDING -->
+          <tr>
+            <td style="padding:12px 16px;background:#ffffff;">
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+                <tr>
+                  <td width="90" style="vertical-align:middle;padding-right:12px;">
+                    <span style="display:inline-block;background:#f9fafb;border:1px solid #d1d5db;
+                                 border-radius:4px;padding:2px 8px;font-size:10px;font-weight:700;
+                                 color:#6b7280;letter-spacing:0.06em;font-family:Arial,sans-serif;
+                                 white-space:nowrap;">
+                      PENDIENTE
+                    </span>
+                  </td>
+                  <td style="font-size:13px;color:#9ca3af;font-family:Arial,sans-serif;">
+                    Integración técnica — ETA: 24–36 hrs por fase
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
         </table>
 
         <!-- Divider with label -->
