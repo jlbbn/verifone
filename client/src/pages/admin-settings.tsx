@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect, useRef } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useSystemSettings, useUpdateSettings } from "@/hooks/use-system-settings";
 import { DEFAULT_SYSTEM_SETTINGS } from "@shared/schema";
 import { DEFAULT_TERMINAL_PARAMS } from "@/hooks/use-terminal-params";
@@ -17,12 +17,65 @@ import { PosAssignmentManager, statusBadgeClass, type TerminalRecord, type UserR
 import {
   Save, RotateCcw, Plus, Trash2, Loader2,
   Globe, Banknote, Activity, BarChart2, MonitorSmartphone,
-  Terminal, Info
+  Terminal, Info, Megaphone, Send
 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import type { SystemSettings } from "@shared/schema";
 
 function fmtUSD(n: number) {
   return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// ── Inline email sender for announcements ──────────────────────────────────
+function AnnouncementEmailSender() {
+  const { toast } = useToast();
+  const [email, setEmail] = useState("");
+  const { mutate: sendEmail, isPending } = useMutation({
+    mutationFn: async (to: string) => {
+      const res = await fetch("/api/admin/send-announcement-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? "Error al enviar");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Correo enviado", description: `El anuncio Cybrid fue enviado a ${email}.` });
+      setEmail("");
+    },
+    onError: (e: Error) => {
+      toast({ title: "Error al enviar", description: e.message, variant: "destructive" });
+    },
+  });
+
+  return (
+    <div className="flex gap-2 flex-wrap items-end">
+      <div className="flex-1 min-w-48 space-y-1">
+        <Label htmlFor="announcement-email" className="text-xs">Dirección de correo</Label>
+        <Input
+          id="announcement-email"
+          type="email"
+          placeholder="josbar93@gmail.com"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          className="h-8 text-sm"
+        />
+      </div>
+      <Button
+        size="sm"
+        disabled={!email || isPending}
+        onClick={() => sendEmail(email)}
+        className="gap-1.5"
+      >
+        {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+        Enviar correo
+      </Button>
+    </div>
+  );
 }
 
 export default function AdminSettingsPage() {
@@ -191,6 +244,9 @@ export default function AdminSettingsPage() {
           </TabsTrigger>
           <TabsTrigger value="pos-asignadas" className="gap-1.5">
             <Terminal className="w-3.5 h-3.5" />POS Asignadas
+          </TabsTrigger>
+          <TabsTrigger value="anuncios" className="gap-1.5">
+            <Megaphone className="w-3.5 h-3.5" />Anuncios
           </TabsTrigger>
         </TabsList>
 
@@ -726,6 +782,65 @@ export default function AdminSettingsPage() {
         {/* ── POS ASIGNADAS ───────────────────────────────────────────────── */}
         <TabsContent value="pos-asignadas">
           <PosAssignmentManager />
+        </TabsContent>
+
+        {/* ── ANUNCIOS ────────────────────────────────────────────────────── */}
+        <TabsContent value="anuncios">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Megaphone className="w-4 h-4 text-blue-500" />
+                Anuncio de Plataforma
+              </CardTitle>
+              <CardDescription>
+                El texto que escribas aquí aparecerá como banner azul en el dashboard de <strong>todos</strong> los usuarios.
+                Déjalo vacío para ocultarlo.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Announcement textarea */}
+              <div className="space-y-2">
+                <Label htmlFor="platformAnnouncement">Mensaje del anuncio</Label>
+                <Textarea
+                  id="platformAnnouncement"
+                  rows={5}
+                  placeholder="Ej: Estamos integrando Cybrid como proveedor de pagos bancarios. Esta mejora permitirá…"
+                  value={draft.platformAnnouncement ?? ""}
+                  onChange={e => set("platformAnnouncement", e.target.value)}
+                  className="resize-none font-mono text-sm"
+                  data-testid="textarea-platform-announcement"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Puedes usar saltos de línea. El banner aparece en la parte superior del dashboard y el usuario puede cerrarlo.
+                </p>
+              </div>
+
+              {/* Preview */}
+              {draft.platformAnnouncement && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground uppercase tracking-wide">Vista previa</Label>
+                  <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+                    <Megaphone className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-blue-800">Aviso de la plataforma</p>
+                      <p className="text-xs text-blue-700 mt-0.5 whitespace-pre-line">{draft.platformAnnouncement}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Send announcement email */}
+              <div className="border-t pt-5 space-y-3">
+                <div>
+                  <p className="text-sm font-semibold">Enviar notificación por correo</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Envía el anuncio actual por email a un usuario específico (lo que está guardado en la DB, no el borrador).
+                  </p>
+                </div>
+                <AnnouncementEmailSender />
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 

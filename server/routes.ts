@@ -3508,6 +3508,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(updated);
   });
 
+  // ── Send platform announcement email ─────────────────────────────────────
+  app.post("/api/admin/send-announcement-email", requireSession, requireRole("ADMIN"), async (req, res) => {
+    const schema = z.object({ to: z.string().email() });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Correo inválido" });
+
+    const { to } = parsed.data;
+    // Resolve name from users table if available
+    const allUsers = await storage.getUsers();
+    const recipient = allUsers.find(u => u.email === to || u.username === to);
+    const fullName = recipient?.fullName ?? to.split("@")[0];
+
+    try {
+      const { sendCybridAnnouncementEmail } = await import("./email");
+      await sendCybridAnnouncementEmail({ toEmail: to, fullName, isApprovalRequest: false });
+      console.log(`[AnnouncementEmail] Sent Cybrid announcement to ${to}`);
+      res.json({ sent: true });
+    } catch (err: any) {
+      console.error("[AnnouncementEmail] Error:", err?.message ?? err);
+      res.status(500).json({ error: err?.message ?? "Error al enviar correo" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

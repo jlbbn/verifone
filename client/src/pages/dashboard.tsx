@@ -11,7 +11,7 @@ import {
   DollarSign, Users, Activity,
   ArrowRightLeft, ShieldCheck, Zap, Bell,
   Clock, CheckCircle, XCircle, AlertTriangle, BarChart2,
-  Store, ChevronRight, Cpu, Globe, Inbox
+  Store, ChevronRight, Cpu, Globe, Inbox, Megaphone
 } from "lucide-react";
 
 const TYPE_LABEL: Record<string, string> = {
@@ -59,6 +59,7 @@ export default function Dashboard() {
   const isAdmin = user?.role === "ADMIN";
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showSubAlert, setShowSubAlert] = useState(true);
+  const [showAnnouncement, setShowAnnouncement] = useState(true);
   const { data: transactions = [] } = useQuery<Transaction[]>({ queryKey: ["/api/transactions"] });
   const { data: settings } = useSystemSettings();
   const { data: healthData } = useQuery<HealthData>({ queryKey: ["/api/health"], refetchInterval: 30000 });
@@ -165,6 +166,23 @@ export default function Dashboard() {
           </Button>
         </div>
       </div>
+
+      {/* Platform announcement banner */}
+      {settings?.platformAnnouncement && showAnnouncement && (
+        <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 px-4 py-3">
+          <Megaphone className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-blue-800 dark:text-blue-200">Aviso de la plataforma</p>
+            <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5 whitespace-pre-line">{settings.platformAnnouncement}</p>
+          </div>
+          <button
+            onClick={() => setShowAnnouncement(false)}
+            className="text-blue-400 hover:text-blue-700 dark:hover:text-blue-200 transition-colors flex-shrink-0"
+          >
+            <XCircle className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Subscription POS notice — descartable, solo Patricio cuando posLocked */}
       {posLocked && showSubAlert && (
