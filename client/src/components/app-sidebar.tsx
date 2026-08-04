@@ -64,7 +64,7 @@ const menuItems = [
   { title: "Enrutamiento POS",    url: "/pos",              icon: Store },
   { title: "POS Virtual",         url: "/pos-virtual",      icon: MonitorSmartphone },
   { title: "Decision Intelligence",url: "/pos-intelligence", icon: Zap },
-  { title: "Registros",           url: "/registros",        icon: FileText },
+  { title: "Transactions",         url: "/registros",        icon: FileText },
   { title: "Exchange Crypto",     url: "/exchange",         icon: Bitcoin },
   { title: "Claves Encriptadas",  url: "/claves",           icon: Lock },
   { title: "Cumplimiento Bancario", url: "/cumplimiento",   icon: ShieldCheck },
