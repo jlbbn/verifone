@@ -278,6 +278,18 @@ export async function sendCybridAnnouncementEmail(params: {
               proveedor de infraestructura bancaria para <strong>Banxico Plus LLC</strong>.
             </p>
 
+            <!-- License acquired badge -->
+            <div style="background:#e8f5e9;border:1px solid #66bb6a;border-radius:8px;padding:12px 18px;margin-bottom:22px;display:flex;align-items:center;gap:10px;">
+              <span style="font-size:18px;">✅</span>
+              <div>
+                <p style="margin:0;color:#1b5e20;font-size:14px;font-weight:700;">Licencia Cybrid — ADQUIRIDA</p>
+                <p style="margin:4px 0 0;color:#2e7d32;font-size:12px;line-height:1.6;">
+                  Banxico Plus LLC ha completado el proceso de acreditación y firma de contrato con Cybrid.
+                  Las credenciales de producción están activas y la integración está en proceso de despliegue.
+                </p>
+              </div>
+            </div>
+
             <!-- Section: Qué es Cybrid -->
             <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:22px;">
               <tr><td style="border-left:3px solid #c8322b;padding:0 0 0 14px;">
@@ -293,52 +305,55 @@ export async function sendCybridAnnouncementEmail(params: {
 
             <!-- Section: Desglose de implementación -->
             <p style="margin:0 0 10px;color:#111111;font-size:15px;font-weight:700;">Desglose de implementación</p>
+            <p style="margin:0 0 12px;color:#666666;font-size:12px;line-height:1.6;">
+              Los tiempos reflejan el <em>Estimated Transit Time from Provider</em> — cada fase se procesa directamente desde los servidores de Cybrid una vez confirmada la señal de activación.
+            </p>
             <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:22px;">
               <tr style="background:#f8f8f8;">
                 <td style="padding:8px 12px;font-size:12px;font-weight:700;color:#888888;text-transform:uppercase;letter-spacing:0.05em;width:22%;">Fase</td>
                 <td style="padding:8px 12px;font-size:12px;font-weight:700;color:#888888;text-transform:uppercase;letter-spacing:0.05em;">Alcance</td>
-                <td style="padding:8px 12px;font-size:12px;font-weight:700;color:#888888;text-transform:uppercase;letter-spacing:0.05em;width:20%;text-align:center;">Estimado</td>
+                <td style="padding:8px 12px;font-size:12px;font-weight:700;color:#888888;text-transform:uppercase;letter-spacing:0.05em;width:22%;text-align:center;">ETA (proveedor)</td>
               </tr>
               <tr style="border-top:1px solid #eeeeee;">
                 <td style="padding:10px 12px;font-size:13px;font-weight:700;color:#c8322b;">Fase 1</td>
-                <td style="padding:10px 12px;font-size:13px;color:#333333;line-height:1.5;">Sandbox Cybrid: credenciales, OAuth2, prueba de endpoints de identidad y cuentas</td>
-                <td style="padding:10px 12px;font-size:13px;color:#777777;text-align:center;">1–2 sem.</td>
+                <td style="padding:10px 12px;font-size:13px;color:#333333;line-height:1.5;">Activación de credenciales de producción y conexión OAuth2 con endpoints de identidad</td>
+                <td style="padding:10px 12px;font-size:13px;color:#2e7d32;font-weight:700;text-align:center;">24–36 hrs</td>
               </tr>
               <tr style="border-top:1px solid #eeeeee;background:#fafafa;">
                 <td style="padding:10px 12px;font-size:13px;font-weight:700;color:#c8322b;">Fase 2</td>
-                <td style="padding:10px 12px;font-size:13px;color:#333333;line-height:1.5;">KYC automático: verificación de identidad de usuarios al crear cuenta en Banxico+</td>
-                <td style="padding:10px 12px;font-size:13px;color:#777777;text-align:center;">2–3 sem.</td>
+                <td style="padding:10px 12px;font-size:13px;color:#333333;line-height:1.5;">KYC/AML automático: verificación de identidad de usuarios integrada al onboarding de Banxico+</td>
+                <td style="padding:10px 12px;font-size:13px;color:#2e7d32;font-weight:700;text-align:center;">24–36 hrs</td>
               </tr>
               <tr style="border-top:1px solid #eeeeee;">
                 <td style="padding:10px 12px;font-size:13px;font-weight:700;color:#c8322b;">Fase 3</td>
-                <td style="padding:10px 12px;font-size:13px;color:#333333;line-height:1.5;">Cuentas virtuales: emisión de cuentas con routing/account number real por usuario</td>
-                <td style="padding:10px 12px;font-size:13px;color:#777777;text-align:center;">3–4 sem.</td>
+                <td style="padding:10px 12px;font-size:13px;color:#333333;line-height:1.5;">Emisión de cuentas virtuales con routing/account number real asignado por usuario</td>
+                <td style="padding:10px 12px;font-size:13px;color:#2e7d32;font-weight:700;text-align:center;">24–36 hrs</td>
               </tr>
               <tr style="border-top:1px solid #eeeeee;background:#fafafa;">
                 <td style="padding:10px 12px;font-size:13px;font-weight:700;color:#c8322b;">Fase 4</td>
                 <td style="padding:10px 12px;font-size:13px;color:#333333;line-height:1.5;">Puente fiat↔USDT: depósitos ACH → USDT y retiros USDT → ACH en tiempo real</td>
-                <td style="padding:10px 12px;font-size:13px;color:#777777;text-align:center;">4–6 sem.</td>
+                <td style="padding:10px 12px;font-size:13px;color:#2e7d32;font-weight:700;text-align:center;">24–36 hrs</td>
               </tr>
               <tr style="border-top:1px solid #eeeeee;">
                 <td style="padding:10px 12px;font-size:13px;font-weight:700;color:#c8322b;">Fase 5</td>
-                <td style="padding:10px 12px;font-size:13px;color:#333333;line-height:1.5;">Producción completa: go-live, monitoreo de compliance y soporte 24/7</td>
-                <td style="padding:10px 12px;font-size:13px;color:#777777;text-align:center;">2–4 sem.</td>
+                <td style="padding:10px 12px;font-size:13px;color:#333333;line-height:1.5;">Go-live producción completa: monitoreo de compliance activo y soporte 24/7</td>
+                <td style="padding:10px 12px;font-size:13px;color:#2e7d32;font-weight:700;text-align:center;">24–36 hrs</td>
               </tr>
             </table>
 
             <!-- Section: Licencia -->
             <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:22px;">
               <tr><td style="border-left:3px solid #1565c0;padding:0 0 0 14px;">
-                <p style="margin:0 0 6px;color:#111111;font-size:15px;font-weight:700;">Adquisición de licencia Cybrid</p>
+                <p style="margin:0 0 6px;color:#111111;font-size:15px;font-weight:700;">Estado de la licencia Cybrid</p>
                 <p style="margin:0 0 10px;color:#444444;font-size:13px;line-height:1.75;">
-                  Para acceder a la API de producción es necesario completar los siguientes pasos de acreditación:
+                  El proceso de adquisición de licencia ha sido completado exitosamente:
                 </p>
                 <ol style="margin:0;padding-left:18px;color:#444444;font-size:13px;line-height:2;">
-                  <li>Registrar <strong>Banxico Plus LLC</strong> como <em>Business Customer</em> en <a href="https://cybrid.xyz" style="color:#c8322b;">cybrid.xyz</a></li>
-                  <li>Pasar el proceso AML/KYB (Know Your Business) — documentación corporativa, EIN, dirección registrada</li>
-                  <li>Firmar el acuerdo de servicios y Addendum de Compliance</li>
-                  <li>Recibir credenciales de sandbox → pruebas → aprobación de producción</li>
-                  <li>Activar contrato de licencia API (costo mensual según volumen de transacciones)</li>
+                  <li>✅ Registro de <strong>Banxico Plus LLC</strong> como <em>Business Customer</em> en Cybrid</li>
+                  <li>✅ Proceso AML/KYB aprobado — documentación corporativa verificada</li>
+                  <li>✅ Acuerdo de servicios y Addendum de Compliance firmados</li>
+                  <li>✅ Credenciales de producción activas</li>
+                  <li>🔄 Integración técnica en curso — despliegue estimado: <strong>24–36 hrs por fase</strong></li>
                 </ol>
               </td></tr>
             </table>
