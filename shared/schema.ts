@@ -317,6 +317,8 @@ export interface SystemSettings {
   terminalParams: { label: string; value: string }[];
   // Crypto — límite de dispersión por operación (USDT)
   maxDispersalUsdt: number;
+  // Anuncios de plataforma (visible en el dashboard de todos los usuarios)
+  platformAnnouncement?: string;
 }
 
 export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
@@ -346,6 +348,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
     { symbol: "ADA/USD", value: "$0.82" },
   ],
   maxDispersalUsdt: 5000,
+  platformAnnouncement: "",
   terminalParams: [
     { label: "APLICACION",    value: "RETAIL" },
     { label: "VERSION",       value: "PROVEEOPENAT400" },
