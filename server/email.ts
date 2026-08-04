@@ -109,7 +109,7 @@ function buildEmailHtml(body: string, lang: "es" | "en" = "es"): string {
                         </div>
                         <div style="font-size:9px;letter-spacing:0.22em;color:#777777;
                                     margin-top:3px;text-transform:uppercase;font-family:Arial,sans-serif;">
-                          Secure Financial Platform
+                          Payment Processor
                         </div>
                       </td>
                     </tr>
