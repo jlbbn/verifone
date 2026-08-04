@@ -440,24 +440,29 @@ export async function sendCybridAnnouncementEmail(params: {
 
         <!-- Cybrid logo + license acquired -->
         <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
-               style="margin-bottom:24px;border:1px solid #dddddd;border-radius:8px;
+               style="margin-bottom:24px;border:1px solid #c7d7f5;border-radius:8px;
                       overflow:hidden;">
-          <!-- Cybrid brand bar -->
+          <!-- Cybrid brand bar — light blue bg so dark logo renders correctly -->
           <tr>
-            <td style="background:#0a0a0a;padding:16px 20px;">
+            <td style="background:#eef3ff;padding:18px 20px;
+                        border-left:4px solid #1a56db;">
               <table cellpadding="0" cellspacing="0" role="presentation">
                 <tr>
-                  <td style="vertical-align:middle;padding-right:16px;">
+                  <td style="vertical-align:middle;padding-right:18px;">
                     <img src="https://cdn.prod.website-files.com/691c3ed36cbe630ffe6844b3/691c658f10165e6e706920c3_Cybrid-Logo.svg"
-                         alt="Cybrid" width="108" height="28"
+                         alt="Cybrid" width="116" height="30"
                          style="display:block;border:0;outline:none;" />
                   </td>
-                  <td style="vertical-align:middle;border-left:1px solid #333333;
-                              padding-left:16px;">
-                    <p style="margin:0;color:#aaaaaa;font-size:10px;
-                               letter-spacing:0.12em;text-transform:uppercase;
+                  <td style="vertical-align:middle;border-left:1px solid #c7d7f5;
+                              padding-left:18px;">
+                    <p style="margin:0 0 2px;color:#1a56db;font-size:10px;font-weight:700;
+                               letter-spacing:0.14em;text-transform:uppercase;
                                font-family:Arial,sans-serif;">
                       Official Integration Partner
+                    </p>
+                    <p style="margin:0;color:#6b7fa3;font-size:10px;
+                               font-family:Arial,sans-serif;">
+                      Banxico Plus LLC
                     </p>
                   </td>
                 </tr>
@@ -674,16 +679,33 @@ export async function sendCybridAnnouncementEmail(params: {
           </p>
         </div>
 
-        <p style="margin:22px 0 6px;color:#555555;font-size:13px;line-height:1.7;
-                   font-family:Arial,sans-serif;">
-          Cualquier pregunta o ajuste al plan, responde directamente a este correo o
-          contáctame por el canal habitual.
-        </p>
-        <p style="margin:0;color:#555555;font-size:13px;font-family:Arial,sans-serif;">
-          Saludos,<br>
-          <strong style="color:#111111;">José Barrientos</strong><br>
-          Banxico Plus LLC
-        </p>
+        <!-- Closing -->
+        <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
+               style="margin-top:24px;border-top:1px solid #eeeeee;padding-top:20px;">
+          <tr>
+            <td>
+              <p style="margin:0 0 12px;color:#666666;font-size:13px;line-height:1.7;
+                         font-family:Arial,sans-serif;">
+                Para cualquier consulta sobre esta integración, contacta al equipo
+                de operaciones a través de los canales internos habituales.
+              </p>
+              <table cellpadding="0" cellspacing="0" role="presentation">
+                <tr>
+                  <td style="border-left:3px solid #c8322b;padding:6px 0 6px 14px;">
+                    <p style="margin:0;font-size:13px;font-weight:700;color:#111111;
+                               font-family:Arial,sans-serif;letter-spacing:0.04em;">
+                      Banxico Plus System
+                    </p>
+                    <p style="margin:2px 0 0;font-size:11px;color:#999999;
+                               font-family:Arial,sans-serif;">
+                      Notificación automática del sistema · No responder directamente
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
       </td>
     </tr>`;
 
@@ -694,7 +716,7 @@ export async function sendCybridAnnouncementEmail(params: {
     to:      [toEmail],
     subject,
     html,
-    text: `Hola ${fullName},\n\nIntegración Cybrid — Licencia adquirida.\n\nFases 1–5: 24–36 hrs ETA por fase (Estimated Transit Time from Provider)\n\nEstado: ✅ KYB/AML aprobado · ✅ Contrato firmado · ✅ Credenciales activas · 🔄 Integración en curso\n\n— Banxico Plus LLC · Evolution Loop Suite 1401, Laredo TX`,
+    text: `Hola ${fullName},\n\nIntegración Cybrid — Licencia adquirida.\n\nFases 1–5: 24–36 hrs ETA por fase (Estimated Transit Time from Provider)\n\nEstado: [OK] KYB/AML aprobado · [OK] Contrato firmado · [OK] Credenciales activas · [EN CURSO] Integración técnica\n\n— Banxico Plus System · Evolution Loop Suite 1401, Laredo TX`,
   });
 
   if (!response.ok) {
