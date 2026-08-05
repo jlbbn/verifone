@@ -704,19 +704,19 @@ return `<!DOCTYPE html>
 
       <!-- credit -->
       <tr style="background:#fafafa;border-top:1px solid #eeeeee;">
-        <td style="padding:12px 14px;font-size:13px;color:#555555;font-family:Arial,sans-serif;">Infrastructure credit applied (already paid)</td>
-        <td style="padding:12px 14px;font-size:13px;font-weight:700;color:#166534;font-family:Arial,sans-serif;text-align:right;white-space:nowrap;vertical-align:middle;">−$2,560.00</td>
+        <td style="padding:12px 14px;font-size:13px;color:#555555;font-family:Arial,sans-serif;">Prior payments &amp; credits applied</td>
+        <td style="padding:12px 14px;font-size:13px;font-weight:700;color:#166534;font-family:Arial,sans-serif;text-align:right;white-space:nowrap;vertical-align:middle;">−$1,354.00</td>
       </tr>
 
       <!-- grand total -->
       <tr style="border-top:2px solid #c8322b;background:#0a0a0a;">
         <td style="padding:15px 14px;">
           <p style="margin:0;font-size:14px;font-weight:700;color:#ffffff;font-family:Arial,sans-serif;">TOTAL DUE</p>
-          <p style="margin:3px 0 0;font-size:11px;color:#555555;font-family:Arial,sans-serif;">Development + audit closure · infrastructure fully covered</p>
+          <p style="margin:3px 0 0;font-size:11px;color:#555555;font-family:Arial,sans-serif;">Outstanding balance · infrastructure fully covered</p>
         </td>
         <td style="padding:15px 14px;text-align:right;white-space:nowrap;vertical-align:middle;">
-          <p style="margin:0;font-size:24px;font-weight:900;color:#c8322b;font-family:Arial,Helvetica,sans-serif;">$2,154.00</p>
-          <p style="margin:2px 0 0;font-size:9px;color:#555555;font-family:Arial,sans-serif;text-align:right;">USD · net of infrastructure investment</p>
+          <p style="margin:0;font-size:24px;font-weight:900;color:#c8322b;font-family:Arial,Helvetica,sans-serif;">$800.00</p>
+          <p style="margin:2px 0 0;font-size:9px;color:#555555;font-family:Arial,sans-serif;text-align:right;">USD · net of prior payments</p>
         </td>
       </tr>
     </table>
