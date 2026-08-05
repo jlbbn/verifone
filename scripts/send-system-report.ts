@@ -48,12 +48,12 @@ function badgesHtml(): string {
 // STAGE TRACKER
 // ─────────────────────────────────────────────────────────────────────────────
 const STAGES = [
-  { id: 1, label: "Migrar app Replit → DigitalOcean",   hours: "8 h",  active: true  },
-  { id: 2, label: "Fix HMAC + rotar secrets",            hours: "3 h",  active: false },
-  { id: 3, label: "Idempotencia webhooks Cybrid",        hours: "6 h",  active: false },
+  { id: 1, label: "Migrate app Replit → DigitalOcean",  hours: "8 h",  active: true  },
+  { id: 2, label: "Fix HMAC + rotate secrets",           hours: "3 h",  active: false },
+  { id: 3, label: "Cybrid webhook idempotency",          hours: "6 h",  active: false },
   { id: 4, label: "OAuth2 token cache",                  hours: "3 h",  active: false },
-  { id: 5, label: "Audit log + Backup + Monitoreo",      hours: "11 h", active: false },
-  { id: 6, label: "Rate limiting + Cierre auditoría",    hours: "2 h",  active: false },
+  { id: 5, label: "Audit log + Backup + Monitoring",     hours: "11 h", active: false },
+  { id: 6, label: "Rate limiting + Audit closure",       hours: "2 h",  active: false },
 ];
 function stagesHtml(): string {
   return STAGES.map(s => {
@@ -123,7 +123,7 @@ const agentEta = `
           </td>
           <td style="vertical-align:middle;">
             <span style="font-size:13px;font-weight:700;color:#ffffff;font-family:Arial,sans-serif;">
-              Estimación de entrega
+              Delivery estimate
             </span>
           </td>
         </tr></table>
@@ -133,25 +133,25 @@ const agentEta = `
     <tr style="background:#f9f9f9;">
       <td style="padding:16px 18px;border-right:1px solid #eeeeee;vertical-align:top;width:50%;">
         <p style="margin:0 0 3px;font-size:10px;color:#aaaaaa;font-family:Arial,sans-serif;
-                   letter-spacing:0.1em;text-transform:uppercase;">Base de cálculo</p>
-        <p style="margin:0 0 12px;font-size:22px;font-weight:900;color:#111111;
-                   font-family:'Courier New',monospace;">30 horas</p>
+                   letter-spacing:0.1em;text-transform:uppercase;">Calculation base</p>
+        <p style="margin:0 0 12px;font-size:24px;font-weight:900;color:#111111;
+                   font-family:Arial,Helvetica,sans-serif;">30 hours</p>
         <p style="margin:0 0 3px;font-size:10px;color:#aaaaaa;font-family:Arial,sans-serif;
-                   letter-spacing:0.1em;text-transform:uppercase;">Ritmo efectivo</p>
+                   letter-spacing:0.1em;text-transform:uppercase;">Effective pace</p>
         <p style="margin:0;font-size:14px;font-weight:700;color:#333333;
-                   font-family:Arial,sans-serif;">~6 h / día hábil</p>
+                   font-family:Arial,sans-serif;">~6 h / business day</p>
       </td>
       <td style="padding:16px 18px;vertical-align:top;width:50%;">
         <p style="margin:0 0 3px;font-size:10px;color:#aaaaaa;font-family:Arial,sans-serif;
-                   letter-spacing:0.1em;text-transform:uppercase;">Inicio (Fase 1 activa)</p>
+                   letter-spacing:0.1em;text-transform:uppercase;">Start (Phase 1 active)</p>
         <p style="margin:0 0 12px;font-size:14px;font-weight:700;color:#0080FF;
-                   font-family:Arial,sans-serif;">5 ago 2026</p>
+                   font-family:Arial,sans-serif;">August 5, 2026</p>
         <p style="margin:0 0 3px;font-size:10px;color:#aaaaaa;font-family:Arial,sans-serif;
-                   letter-spacing:0.1em;text-transform:uppercase;">Entrega estimada</p>
-        <p style="margin:0 0 3px;font-size:22px;font-weight:900;color:#c8322b;
-                   font-family:'Courier New',monospace;">~12 ago 2026</p>
+                   letter-spacing:0.1em;text-transform:uppercase;">Estimated delivery</p>
+        <p style="margin:0 0 3px;font-size:24px;font-weight:900;color:#c8322b;
+                   font-family:Arial,Helvetica,sans-serif;">Friday, Aug 7</p>
         <p style="margin:0;font-size:10px;color:#aaaaaa;font-family:Arial,sans-serif;">
-          5 días hábiles desde el inicio de Fase 1
+          End of week · 2 business days from Phase 1 start
         </p>
       </td>
     </tr>
@@ -159,7 +159,7 @@ const agentEta = `
     <tr style="background:#ffffff;border-top:1px solid #eeeeee;">
       <td colspan="2" style="padding:14px 18px;">
         <p style="margin:0 0 10px;font-size:10px;color:#aaaaaa;font-family:Arial,sans-serif;
-                   letter-spacing:0.1em;text-transform:uppercase;">Línea de tiempo por fase</p>
+                   letter-spacing:0.1em;text-transform:uppercase;">Timeline by phase</p>
         <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
           <tr>
             <td style="width:26.7%;background:#0080FF;height:8px;border-radius:4px 0 0 4px;"></td>
@@ -173,13 +173,13 @@ const agentEta = `
         <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-top:6px;">
           <tr>
             <td style="width:26.7%;font-size:9px;color:#0080FF;font-family:Arial,sans-serif;font-weight:700;">
-              Fase 1<br>DO Migration
+              Phase 1<br>DO Migration
             </td>
             <td style="width:10%;font-size:9px;color:#aaaaaa;font-family:Arial,sans-serif;text-align:center;">
               HMAC
             </td>
             <td style="width:20%;font-size:9px;color:#aaaaaa;font-family:Arial,sans-serif;text-align:center;">
-              Idempotencia
+              Idempotency
             </td>
             <td style="width:10%;font-size:9px;color:#aaaaaa;font-family:Arial,sans-serif;text-align:center;">
               OAuth2
@@ -188,7 +188,7 @@ const agentEta = `
               Audit+Backup
             </td>
             <td style="width:6.6%;font-size:9px;color:#aaaaaa;font-family:Arial,sans-serif;text-align:right;">
-              Cierre
+              Closure
             </td>
           </tr>
         </table>
@@ -201,13 +201,13 @@ const agentEta = `
 // TASK TABLE ROWS
 // ─────────────────────────────────────────────────────────────────────────────
 const tasks = [
-  { task: "Migrar app Replit → DO",        hours: "8 h",  pct: "26.7%", cost: "$388", active: true  },
-  { task: "Fix HMAC + rotar secrets",      hours: "3 h",  pct: "10.0%", cost: "$145", active: false },
-  { task: "Idempotencia webhooks Cybrid",  hours: "6 h",  pct: "20.0%", cost: "$291", active: false },
+  { task: "Migrate app Replit → DO",       hours: "8 h",  pct: "26.7%", cost: "$388", active: true  },
+  { task: "Fix HMAC + rotate secrets",     hours: "3 h",  pct: "10.0%", cost: "$145", active: false },
+  { task: "Cybrid webhook idempotency",    hours: "6 h",  pct: "20.0%", cost: "$291", active: false },
   { task: "OAuth2 token cache",            hours: "3 h",  pct: "10.0%", cost: "$145", active: false },
   { task: "Audit log",                     hours: "5 h",  pct: "16.7%", cost: "$242", active: false },
-  { task: "Backup automático + restore",   hours: "1 h",  pct: "3.3%",  cost: "$49",  active: false },
-  { task: "Monitoreo + alertas",           hours: "2 h",  pct: "6.7%",  cost: "$97",  active: false },
+  { task: "Automated backup + restore",    hours: "1 h",  pct: "3.3%",  cost: "$49",  active: false },
+  { task: "Monitoring + alerts",           hours: "2 h",  pct: "6.7%",  cost: "$97",  active: false },
   { task: "Rate limiting",                 hours: "2 h",  pct: "6.7%",  cost: "$97",  active: false },
 ];
 function taskRows(): string {
@@ -596,8 +596,8 @@ return `<!DOCTYPE html>
 
   <!-- ── Stage tracker ── -->
   <tr><td style="background:#ffffff;padding:0 32px 0;">
-    <p style="margin:0 0 4px;font-size:14px;font-weight:700;color:#111111;font-family:Arial,sans-serif;">Estado de etapas</p>
-    <p style="margin:0 0 14px;font-size:12px;color:#aaaaaa;font-family:Arial,sans-serif;">Fase 1 en curso — DigitalOcean migration activa desde ${ISSUED}</p>
+    <p style="margin:0 0 4px;font-size:14px;font-weight:700;color:#111111;font-family:Arial,sans-serif;">Stage status</p>
+    <p style="margin:0 0 14px;font-size:12px;color:#aaaaaa;font-family:Arial,sans-serif;">Phase 1 in progress — DigitalOcean migration active since ${ISSUED}</p>
     <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
            style="border:1px solid #eeeeee;border-radius:8px;overflow:hidden;margin-bottom:24px;">
       <tr style="background:#f7f7f7;">
@@ -613,7 +613,7 @@ return `<!DOCTYPE html>
   <!-- task cost breakdown -->
   <tr><td style="background:#ffffff;padding:0 32px 0;">
     <p style="margin:0 0 4px;font-size:14px;font-weight:700;color:#111111;font-family:Arial,sans-serif;">Development cost breakdown</p>
-    <p style="margin:0 0 14px;font-size:12px;color:#aaaaaa;font-family:Arial,sans-serif;">30 horas · cada tarea mapea un requerimiento de la auditoría Cybrid</p>
+    <p style="margin:0 0 14px;font-size:12px;color:#aaaaaa;font-family:Arial,sans-serif;">30 hours · each task maps to a Cybrid audit requirement</p>
     <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
            style="border:1px solid #eeeeee;border-radius:8px;overflow:hidden;margin-bottom:24px;">
       <tr style="background:#f7f7f7;">
@@ -635,7 +635,7 @@ return `<!DOCTYPE html>
   <!-- invoice summary -->
   <tr><td style="background:#ffffff;padding:0 32px 0;">
     <p style="margin:0 0 4px;font-size:14px;font-weight:700;color:#111111;font-family:Arial,sans-serif;">Invoice summary</p>
-    <p style="margin:0 0 14px;font-size:12px;color:#aaaaaa;font-family:Arial,sans-serif;">2 facturas adjuntas en PDF confirman los $1,600 ya pagados hoy</p>
+    <p style="margin:0 0 14px;font-size:12px;color:#aaaaaa;font-family:Arial,sans-serif;">2 PDF invoices confirming $1,600 paid today — see attached files</p>
     <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
            style="border:1px solid #eeeeee;border-radius:8px;overflow:hidden;margin-bottom:24px;">
 
@@ -671,7 +671,7 @@ return `<!DOCTYPE html>
       </tr>
 
       <tr style="background:#ffffff;border-top:2px solid #52b788;">
-        <td style="padding:10px 14px;font-size:12px;color:#166534;font-family:Arial,sans-serif;font-weight:700;">Total infraestructura pagada hoy ✓</td>
+        <td style="padding:10px 14px;font-size:12px;color:#166534;font-family:Arial,sans-serif;font-weight:700;">Total infrastructure paid today ✓</td>
         <td style="padding:10px 14px;font-size:14px;font-weight:900;color:#166534;font-family:'Courier New',monospace;text-align:right;">$1,536</td>
       </tr>
 
