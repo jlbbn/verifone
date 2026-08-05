@@ -17,12 +17,9 @@ const ISSUED_TIME    = "August 5, 2026 · 1:30 PM CT";
 // ─────────────────────────────────────────────────────────────────────────────
 interface Badge { label: string; initials: string; bg: string; fg: string }
 const BADGES: Badge[] = [
-  { label: "DigitalOcean", initials: "DO",  bg: "#0080FF", fg: "#ffffff" },
-  { label: "Replit",       initials: "Re",  bg: "#F26207", fg: "#ffffff" },
-  { label: "OKX",          initials: "OKX", bg: "#000000", fg: "#ffffff" },
-  { label: "Stripe",       initials: "S",   bg: "#635BFF", fg: "#ffffff" },
-  { label: "Resend",       initials: "Rs",  bg: "#1A1A1A", fg: "#00D2FF" },
-  { label: "Cybrid",       initials: "Cy",  bg: "#1A2744", fg: "#4FC3F7" },
+  { label: "DigitalOcean", initials: "DO", bg: "#0080FF", fg: "#ffffff" },
+  { label: "Cloudflare",   initials: "CF", bg: "#F38020", fg: "#ffffff" },
+  { label: "Replit",       initials: "Re", bg: "#F26207", fg: "#ffffff" },
 ];
 function badgesHtml(): string {
   return BADGES.map(b => `
