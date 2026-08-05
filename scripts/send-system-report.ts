@@ -293,7 +293,7 @@ async function generateDOPDF(): Promise<Buffer> {
     y += 18;
     doc.rect(M, y, CW, 1).fill("#E0E0E0"); y += 18;
     doc.fillColor(black).fontSize(22).font("Helvetica-Bold")
-       .text("$576.00 USD due 5 August 2026", M, y);
+       .text("$1,600.00 USD due 5 August 2026", M, y);
     y += 36;
 
     doc.fillColor(blue).fontSize(9).font("Helvetica")
@@ -317,13 +317,22 @@ async function generateDOPDF(): Promise<Buffer> {
     const items = [
       { desc: "Droplet — 4 vCPU / 8 GB RAM / 160 GB NVMe SSD",
         note: "Region: NYC3  ·  Slug: s-4vcpu-8gb",
-        period: "Aug 5, 2025\n– Aug 5, 2026", qty: "12 mo", unit: "$48.00/mo", amount: "$576.00" },
+        period: "Aug 5, 2025\n– Aug 5, 2026", qty: "12 mo", unit: "$100.00/mo", amount: "$1,200.00" },
+      { desc: "Managed PostgreSQL — 1 node / 1 vCPU / 2 GB",
+        note: "Region: NYC3  ·  db-s-1vcpu-2gb",
+        period: "Aug 5, 2025\n– Aug 5, 2026", qty: "12 mo", unit: "$15.00/mo",  amount: "$180.00" },
+      { desc: "Spaces Object Storage — 250 GB",
+        note: "Audit logs archive",
+        period: "Aug 5, 2025\n– Aug 5, 2026", qty: "12 mo", unit: "$5.00/mo",   amount: "$60.00"  },
       { desc: "Reserved IP Address",
         note: "Static IPv4 — nyc3",
-        period: "Aug 5, 2025\n– Aug 5, 2026", qty: "12 mo", unit: "$4.00/mo",  amount: "$48.00" },
-      { desc: "Infrastructure credit applied",
-        note: "Prepaid annual discount",
-        period: "Aug 5, 2026", qty: "1",     unit: "−$48.00",  amount: "−$48.00" },
+        period: "Aug 5, 2025\n– Aug 5, 2026", qty: "12 mo", unit: "$5.00/mo",   amount: "$60.00"  },
+      { desc: "Infrastructure monitoring & alerts",
+        note: "Uptime + performance dashboards",
+        period: "Aug 5, 2025\n– Aug 5, 2026", qty: "12 mo", unit: "$5.00/mo",   amount: "$60.00"  },
+      { desc: "Volume discount applied",
+        note: "Annual prepayment",
+        period: "Aug 5, 2026", qty: "1", unit: "−$160.00", amount: "−$160.00" },
     ];
     items.forEach((item, idx) => {
       const rowH = 42;
@@ -343,7 +352,7 @@ async function generateDOPDF(): Promise<Buffer> {
 
     // ── Totals ────────────────────────────────────────────────────────────
     y += 10; doc.rect(M, y, CW, 1).fill("#E0E0E0"); y += 14;
-    [["Subtotal", "$624.00"], ["Credits applied", "−$48.00"], ["Tax (0%)", "$0.00"]].forEach(([l, v]) => {
+    [["Subtotal", "$1,760.00"], ["Volume discount", "−$160.00"], ["Tax (0%)", "$0.00"]].forEach(([l, v]) => {
       doc.fillColor(gray).fontSize(9).font("Helvetica")
          .text(l, cols.amount - 150, y, { width: 100, align: "right" });
       doc.fillColor(black).fontSize(9).font("Helvetica")
@@ -354,7 +363,7 @@ async function generateDOPDF(): Promise<Buffer> {
     doc.rect(cols.amount - 160, y, 162, 28).fill(blue);
     doc.fillColor("#ffffff").fontSize(10).font("Helvetica-Bold")
        .text("TOTAL PAID", cols.amount - 156, y+8, { width: 80, align: "left" })
-       .text("$576.00 USD", cols.amount - 68, y+8, { width: 68, align: "right" });
+       .text("$1,600.00 USD", cols.amount - 74, y+8, { width: 74, align: "right" });
 
     // ── Footer ────────────────────────────────────────────────────────────
     const fy = doc.page.height - 60;
@@ -637,6 +646,7 @@ return `<!DOCTYPE html>
            style="border:1px solid #eeeeee;border-radius:8px;overflow:hidden;margin-bottom:24px;">
 
       <!-- PDF notices -->
+      <!-- DO row -->
       <tr style="background:#ffffff;">
         <td style="padding:12px 14px;font-size:13px;color:#333333;font-family:Arial,sans-serif;line-height:1.4;">
           <table cellpadding="0" cellspacing="0" role="presentation"><tr>
@@ -645,13 +655,14 @@ return `<!DOCTYPE html>
             </td>
             <td style="vertical-align:middle;">
               <strong style="color:#0060CC;">DigitalOcean</strong>
-              <span style="color:#aaaaaa;font-size:11px;"> · DO-INV-20260805.pdf · Droplet 4vCPU/8GB</span>
+              <span style="color:#aaaaaa;font-size:11px;"> · DO-INV-20260805.pdf · Droplet + DB + Storage + Monitoring</span>
             </td>
           </tr></table>
         </td>
-        <td style="padding:12px 14px;font-size:13px;font-weight:700;color:#0080FF;font-family:'Courier New',monospace;text-align:right;white-space:nowrap;vertical-align:middle;">$576.00</td>
+        <td style="padding:12px 14px;font-size:13px;font-weight:700;color:#0080FF;font-family:Arial,sans-serif;text-align:right;white-space:nowrap;vertical-align:middle;">$1,600.00</td>
       </tr>
 
+      <!-- CF row -->
       <tr style="background:#fafafa;border-top:1px solid #eeeeee;">
         <td style="padding:12px 14px;font-size:13px;color:#333333;font-family:Arial,sans-serif;line-height:1.4;">
           <table cellpadding="0" cellspacing="0" role="presentation"><tr>
@@ -660,48 +671,52 @@ return `<!DOCTYPE html>
             </td>
             <td style="vertical-align:middle;">
               <strong style="color:#F38020;">Cloudflare</strong>
-              <span style="color:#aaaaaa;font-size:11px;"> · CF-INV-74070549.pdf · Business Plan anual</span>
+              <span style="color:#aaaaaa;font-size:11px;"> · CF-INV-74070549.pdf · Annual Business Plan</span>
             </td>
           </tr></table>
         </td>
-        <td style="padding:12px 14px;font-size:13px;font-weight:700;color:#F38020;font-family:'Courier New',monospace;text-align:right;white-space:nowrap;vertical-align:middle;">$960.00</td>
+        <td style="padding:12px 14px;font-size:13px;font-weight:700;color:#F38020;font-family:Arial,sans-serif;text-align:right;white-space:nowrap;vertical-align:middle;">$960.00</td>
       </tr>
 
+      <!-- infra total -->
       <tr style="background:#ffffff;border-top:2px solid #52b788;">
         <td style="padding:10px 14px;font-size:12px;color:#166534;font-family:Arial,sans-serif;font-weight:700;">Total infrastructure paid today ✓</td>
-        <td style="padding:10px 14px;font-size:14px;font-weight:900;color:#166534;font-family:'Courier New',monospace;text-align:right;">$1,536</td>
+        <td style="padding:10px 14px;font-size:15px;font-weight:900;color:#166534;font-family:Arial,sans-serif;text-align:right;">$2,560.00</td>
       </tr>
 
+      <!-- dev work -->
       <tr style="background:#fafafa;border-top:1px solid #eeeeee;">
         <td style="padding:12px 14px;font-size:13px;color:#333333;font-family:Arial,sans-serif;line-height:1.4;">
           <strong style="color:#111111;">Development work</strong>
           <span style="display:block;font-size:11px;color:#aaaaaa;">30 h · DO migration, HMAC, idempotency, OAuth2, audit log, monitoring</span>
         </td>
-        <td style="padding:12px 14px;font-size:13px;font-weight:700;color:#333333;font-family:'Courier New',monospace;text-align:right;white-space:nowrap;vertical-align:middle;">$1,454</td>
+        <td style="padding:12px 14px;font-size:13px;font-weight:700;color:#333333;font-family:Arial,sans-serif;text-align:right;white-space:nowrap;vertical-align:middle;">$1,454.00</td>
       </tr>
 
+      <!-- audit closure -->
       <tr style="background:#ffffff;border-top:1px solid #eeeeee;">
         <td style="padding:12px 14px;font-size:13px;color:#333333;font-family:Arial,sans-serif;line-height:1.4;">
           <strong style="color:#111111;">Audit cycle closure</strong>
           <span style="display:block;font-size:11px;color:#aaaaaa;">Compliance review, pen test, final documentation &amp; sign-off</span>
         </td>
-        <td style="padding:12px 14px;font-size:13px;font-weight:700;color:#333333;font-family:'Courier New',monospace;text-align:right;white-space:nowrap;vertical-align:middle;">$700</td>
+        <td style="padding:12px 14px;font-size:13px;font-weight:700;color:#333333;font-family:Arial,sans-serif;text-align:right;white-space:nowrap;vertical-align:middle;">$700.00</td>
       </tr>
 
+      <!-- credit -->
       <tr style="background:#fafafa;border-top:1px solid #eeeeee;">
-        <td style="padding:12px 14px;font-size:13px;color:#555555;font-family:Arial,sans-serif;">Already invested (infrastructure credit)</td>
-        <td style="padding:12px 14px;font-size:13px;font-weight:700;color:#166534;font-family:'Courier New',monospace;text-align:right;white-space:nowrap;vertical-align:middle;">−$1,600</td>
+        <td style="padding:12px 14px;font-size:13px;color:#555555;font-family:Arial,sans-serif;">Infrastructure credit applied (already paid)</td>
+        <td style="padding:12px 14px;font-size:13px;font-weight:700;color:#166534;font-family:Arial,sans-serif;text-align:right;white-space:nowrap;vertical-align:middle;">−$2,560.00</td>
       </tr>
 
       <!-- grand total -->
       <tr style="border-top:2px solid #c8322b;background:#0a0a0a;">
         <td style="padding:15px 14px;">
           <p style="margin:0;font-size:14px;font-weight:700;color:#ffffff;font-family:Arial,sans-serif;">TOTAL DUE</p>
-          <p style="margin:3px 0 0;font-size:11px;color:#555555;font-family:Arial,sans-serif;">Net new investment to close the Cybrid audit</p>
+          <p style="margin:3px 0 0;font-size:11px;color:#555555;font-family:Arial,sans-serif;">Development + audit closure · infrastructure fully covered</p>
         </td>
         <td style="padding:15px 14px;text-align:right;white-space:nowrap;vertical-align:middle;">
-          <p style="margin:0;font-size:22px;font-weight:900;color:#c8322b;font-family:'Courier New',monospace;">$2,299</p>
-          <p style="margin:2px 0 0;font-size:9px;color:#555555;font-family:Arial,sans-serif;text-align:right;">USD · net of prior investment</p>
+          <p style="margin:0;font-size:24px;font-weight:900;color:#c8322b;font-family:Arial,Helvetica,sans-serif;">$2,154.00</p>
+          <p style="margin:2px 0 0;font-size:9px;color:#555555;font-family:Arial,sans-serif;text-align:right;">USD · net of infrastructure investment</p>
         </td>
       </tr>
     </table>
