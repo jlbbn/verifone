@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Campaña — Banxico Plus × Cybrid</title>
+<style>
+  :root{
+    --ink:#0A0A0C;
+    --paper:#0F0F12;
+    --bg:#1A1A1E;
+    --red:#E8332B;
+    --red-deep:#B8241D;
+    --green:#3DDC84;
+    --line:#26262B;
+    --gray:#9A9AA2;
+    --gray-soft:#6D6D76;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+    color:#fff;padding:32px 12px 60px;
+  }
+  .wrap{max-width:640px;margin:0 auto;}
+  .email{
+    background:var(--paper);
+    border-radius:16px;overflow:hidden;
+    box-shadow:0 1px 3px rgba(0,0,0,.4),0 20px 50px rgba(0,0,0,.5);
+  }
+
+  /* ===== HERO ===== */
+  .hero{padding:26px 24px 0;position:relative;}
+  .hero::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;
+    background:linear-gradient(90deg,var(--red),var(--red-deep));}
+  .brand-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:26px;}
+  .brand{display:flex;align-items:center;gap:8px;font-weight:800;font-size:15px;letter-spacing:-.01em;}
+  .brand .mark{width:18px;height:18px;display:grid;grid-template-columns:1fr 1fr;gap:2px;}
+  .brand .mark i{background:var(--red);border-radius:2px;}
+  .brand .plus{color:var(--red);}
+  .live{
+    display:flex;align-items:center;gap:6px;font-size:10px;font-weight:700;
+    letter-spacing:.06em;text-transform:uppercase;color:var(--gray);
+  }
+  .live .dot{width:6px;height:6px;border-radius:50%;background:var(--red);
+    box-shadow:0 0 0 3px rgba(232,51,43,.25);}
+
+  .kicker{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--gray);font-weight:700;margin-bottom:10px;}
+  .hero h1{font-size:32px;line-height:1.08;margin:0 0 14px;font-weight:800;letter-spacing:-.02em;}
+  .hero h1 .accent{color:var(--red);}
+  .hero p{font-size:14px;line-height:1.6;color:#C4C4CB;margin:0 0 22px;max-width:44ch;}
+
+  /* Signature visual — a concrete account mockup, not an abstract chart */
+  .card-mock{
+    background:linear-gradient(155deg,#1D1D22,#0D0D10);
+    border:1px solid #2C2C32;
+    border-radius:16px;
+    padding:20px;
+    margin-bottom:-1px;
+    position:relative;
+    overflow:hidden;
+  }
+  .card-mock::after{
+    content:"";position:absolute;right:-40px;top:-40px;width:160px;height:160px;
+    background:radial-gradient(circle,rgba(232,51,43,.18),transparent 70%);
+  }
+  .card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px;}
+  .card-top .label{font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--gray-soft);margin-bottom:5px;}
+  .card-top .val{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.02em;}
+  .cashback-badge{
+    background:rgba(61,220,132,.12);border:1px solid rgba(61,220,132,.3);
+    color:var(--green);font-size:11px;font-weight:800;padding:5px 10px;border-radius:20px;
+    white-space:nowrap;
+  }
+  .card-mid{display:flex;gap:22px;margin-bottom:4px;}
+  .card-mid .item .label{font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--gray-soft);margin-bottom:5px;}
+  .card-mid .item .val{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;}
+  .card-mid .item .val.mono{font-family:'SF Mono',ui-monospace,Menlo,Consolas,monospace;font-size:13px;letter-spacing:.03em;}
+
+  .cta-row{display:flex;gap:10px;padding:20px 24px 26px;}
+  .cta-primary{
+    flex:1;text-align:center;background:var(--red);color:#fff;font-weight:800;font-size:13.5px;
+    padding:13px;border-radius:10px;
+  }
+  .cta-secondary{
+    text-align:center;background:transparent;border:1px solid #33333A;color:var(--gray);
+    font-weight:700;font-size:13.5px;padding:13px 16px;border-radius:10px;
+  }
+
+  /* ===== BENEFITS ===== */
+  .section{padding:24px;border-top:1px solid var(--line);}
+  .section h2{
+    font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--gray);
+    font-weight:800;margin:0 0 16px;display:flex;align-items:center;gap:6px;
+  }
+  .section h2::before{content:"";width:3px;height:12px;background:var(--red);border-radius:2px;}
+
+  .benefits-primary{display:flex;gap:12px;margin-bottom:14px;}
+  .benefit-big{
+    flex:1;background:#17171B;border:1px solid var(--line);border-radius:12px;padding:16px;
+  }
+  .benefit-big .n{font-size:24px;font-weight:800;color:var(--green);letter-spacing:-.02em;margin-bottom:6px;}
+  .benefit-big .t{font-size:12.5px;color:#D6D6DA;line-height:1.4;}
+
+  .benefits-secondary{list-style:none;margin:0;padding:0;}
+  .benefits-secondary li{
+    display:flex;gap:10px;align-items:flex-start;padding:9px 0;
+    border-bottom:1px solid var(--line);font-size:13px;color:var(--gray);line-height:1.5;
+  }
+  .benefits-secondary li:last-child{border-bottom:none;}
+  .benefits-secondary li .chk{
+    flex-shrink:0;width:15px;height:15px;border-radius:50%;background:#232328;
+    display:flex;align-items:center;justify-content:center;margin-top:2px;
+  }
+  .benefits-secondary li .chk svg{width:8px;height:8px;}
+
+  /* ===== URGENCY / SPOTS ===== */
+  .urgency{
+    background:linear-gradient(155deg,#1D1512,#100D0C);
+    border:1px solid rgba(232,51,43,.25);border-radius:12px;padding:16px;
+  }
+  .urgency-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;}
+  .urgency-head .t{font-size:13px;font-weight:700;}
+  .urgency-head .n{font-size:12px;color:var(--red);font-weight:700;font-variant-numeric:tabular-nums;}
+  .spots-bar{height:6px;background:#2A2320;border-radius:3px;overflow:hidden;margin-bottom:10px;}
+  .spots-bar i{display:block;height:100%;width:64%;background:linear-gradient(90deg,var(--red-deep),var(--red));}
+  .urgency p{margin:0;font-size:12px;color:var(--gray);line-height:1.5;}
+
+  /* ===== WEBINAR BLOCK ===== */
+  .webinar{display:flex;gap:14px;background:#141417;border:1px solid var(--line);border-radius:12px;padding:16px;}
+  .webinar .icon{
+    flex-shrink:0;width:38px;height:38px;border-radius:10px;background:rgba(232,51,43,.12);
+    display:flex;align-items:center;justify-content:center;font-size:16px;
+  }
+  .webinar .t{font-size:13px;font-weight:700;margin-bottom:3px;}
+  .webinar .d{font-size:12px;color:var(--gray);line-height:1.5;}
+
+  /* ===== FOOTER ===== */
+  .footer{
+    background:#0A0A0C;padding:20px 24px;font-size:11px;color:var(--gray-soft);line-height:1.7;
+    border-top:1px solid var(--line);
+  }
+  .footer .badges{display:flex;gap:6px;margin-top:10px;}
+  .footer .badges span{
+    background:#1C1C21;color:var(--gray);font-size:9px;font-weight:800;letter-spacing:.04em;
+    padding:3px 7px;border-radius:4px;border:1px solid var(--line);
+  }
+  .footer a{color:var(--gray);}
+
+  .note{
+    max-width:640px;margin:26px auto 0;font-size:13px;color:#DADADE;line-height:1.6;
+    background:#141417;border:1px solid var(--line);border-radius:12px;padding:16px 18px;
+  }
+  .note h3{margin:0 0 8px;font-size:13px;color:#fff;}
+  .note ul{margin:0;padding-left:18px;}
+  .note li{margin-bottom:6px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="email">
+
+    <div class="hero">
+      <div class="brand-row">
+        <div class="brand"><span class="mark"><i></i><i></i><i></i><i></i></span>BANXICO<span class="plus">+</span></div>
+        <div class="live"><span class="dot"></span>Cuentas activas hoy</div>
+      </div>
+      <div class="kicker">Cybrid × Banxico Plus LLC</div>
+      <h1>Tu cuenta con <span class="accent">routing number real</span> ya está aquí.</h1>
+      <p>Actívala esta semana y recibe cashback en tus primeros depósitos ACH mientras dure el lanzamiento.</p>
+
+      <div class="card-mock">
+        <div class="card-top">
+          <div>
+            <div class="label">Cuenta Banxico+</div>
+            <div class="val">•••• •••• 4821</div>
+          </div>
+          <span class="cashback-badge">+3% cashback</span>
+        </div>
+        <div class="card-mid">
+          <div class="item"><div class="label">Routing</div><div class="val mono">021000021</div></div>
+          <div class="item"><div class="label">Puente</div><div class="val">ACH ↔ USDT</div></div>
+          <div class="item"><div class="label">Disponible</div><div class="val">Hoy</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cta-row">
+      <div class="cta-primary">Activar mi cuenta</div>
+      <div class="cta-secondary">Ver términos</div>
+    </div>
+
+    <div class="section">
+      <h2>Lo que ganas</h2>
+      <div class="benefits-primary">
+        <div class="benefit-big">
+          <div class="n">3%</div>
+          <div class="t">Cashback en depósitos ACH elegibles durante agosto</div>
+        </div>
+        <div class="benefit-big">
+          <div class="n">0</div>
+          <div class="t">Comisión de apertura para los primeros 200 socios</div>
+        </div>
+      </div>
+      <ul class="benefits-secondary">
+        <li><span class="chk"><svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#3DDC84" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Cuenta con número de ruta real, no una cuenta pooled</li>
+        <li><span class="chk"><svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#3DDC84" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Retiros a USDT sin pasar por un tercero</li>
+        <li><span class="chk"><svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#3DDC84" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></span>KYC ya integrado — no repites onboarding</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <div class="urgency">
+        <div class="urgency-head"><span class="t">Cupo de lanzamiento</span><span class="n">128 / 200 activados</span></div>
+        <div class="spots-bar"><i></i></div>
+        <p>Al cerrar el cupo, el cashback del 3% vuelve a la tarifa estándar del 1%.</p>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Webinar en vivo</h2>
+      <div class="webinar">
+        <div class="icon">▶</div>
+        <div>
+          <div class="t">Cómo activar tu cuenta y cobrar el cashback</div>
+          <div class="d">5 de agosto · 17:00 (UY) · 15:00 (COL) · 14:00 (MX)<br>Preguntas y respuestas en directo al cierre.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cta-row" style="padding-top:0;">
+      <div class="cta-primary">Reservar mi lugar</div>
+    </div>
+
+    <div class="footer">
+      <b style="color:#C4C4CB;">BANXICO PLUS LLC</b><br>
+      Evolution Loop, Suite 1401 · Laredo, Texas 78045 · United States<br>
+      The Landmark GDL · Guadalajara, Jalisco, México<br>
+      Campaña vigente del 1 al 31 de agosto de 2026. Aplican términos y condiciones.
+      <div class="badges"><span>EMV</span><span>PCI DSS</span><span>AES-256</span></div>
+    </div>
+  </div>
+
+  <div class="note">
+    <h3>Cómo resuelve esto lo que fallaba en el correo de OKX</h3>
+    <ul>
+      <li><strong>El "gráfico" ahora es la cuenta real</strong> — número de routing, cashback, puente ACH↔USDT. No hay ecualizador decorativo; el visual es literalmente el producto que estás vendiendo.</li>
+      <li><strong>Dos beneficios grandes, tres secundarios.</strong> El 3% de cashback y $0 de apertura llevan el peso visual; el resto (KYC, cuenta real, retiros) baja a una lista compacta con check verde.</li>
+      <li><strong>CTA aparece dos veces:</strong> justo bajo el hero ("Activar mi cuenta") y de nuevo al cierre del webinar ("Reservar mi lugar") — no hay que hacer scroll por seis bloques para encontrar el botón.</li>
+      <li><strong>Urgencia real, no solo una fecha.</strong> "128/200 activados" con barra de progreso y qué pasa si se acaba el cupo — eso es lo que empuja a actuar hoy, no "5 de agosto" suelto.</li>
+      <li><strong>El webinar bajó de rol.</strong> En el original era el protagonista; aquí es un bloque de soporte al final, porque el objetivo real es activar la cuenta, no solo llevar gente a un video.</li>
+    </ul>
+  </div>
+
+</div>
+</body>
+</html>
