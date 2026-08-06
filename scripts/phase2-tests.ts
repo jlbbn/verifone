@@ -33,52 +33,106 @@ const SUBJECTS: Record<number, string> = {
   8: "Phase 2 Complete — All 6 Tests Passed · Redeployment Shipped · 9:11 PM CT",
 };
 
-// ─── HELPERS ─────────────────────────────────────────────────────────────────
+// ─── HELPERS — dark template ──────────────────────────────────────────────────
 const TOTAL_STEPS = 8;
+
+// Brand mark: 2×2 red squares (email-safe, no pseudo-elements)
+function brandMark(): string {
+  return `<table cellpadding="0" cellspacing="0" role="presentation"
+          style="display:inline-table;vertical-align:middle;margin-right:8px;">
+    <tr>
+      <td style="width:7px;height:7px;background:#E8332B;border-radius:2px;"></td>
+      <td style="width:3px;"></td>
+      <td style="width:7px;height:7px;background:#E8332B;border-radius:2px;"></td>
+    </tr>
+    <tr><td colspan="3" style="height:3px;"></td></tr>
+    <tr>
+      <td style="width:7px;height:7px;background:#E8332B;border-radius:2px;"></td>
+      <td style="width:3px;"></td>
+      <td style="width:7px;height:7px;background:#E8332B;border-radius:2px;"></td>
+    </tr>
+  </table>`;
+}
 
 function progressBar(filled: number): string {
   return Array.from({ length: TOTAL_STEPS }, (_, i) => {
-    const active = i === filled - 1;
     const done   = i < filled - 1;
-    const bg     = done ? "#111827" : active ? "#1E40AF" : "#E5E7EB";
-    return `<td style="height:5px;background:${bg};"></td>`;
+    const active = i === filled - 1;
+    const bg = done ? "#E8332B" : active ? "#B8241D" : "#26262B";
+    return `<td style="height:4px;background:${bg};"></td>`;
   }).join("");
 }
 
+// Status tag — pill with border, no solid fill (matches dark bg)
 function badge(
   label: string,
-  bg: string,
-  fg = "#ffffff"
+  variant: "pass" | "fail" | "running" | "queued" | "warn" = "queued"
 ): string {
-  return `<span style="display:inline-block;background:${bg};color:${fg};font-size:10px;font-weight:700;letter-spacing:0.08em;padding:4px 12px;border-radius:3px;font-family:Arial,sans-serif;">${label}</span>`;
+  const map = {
+    pass:    { bg:"rgba(61,220,132,.12)", b:"rgba(61,220,132,.3)",  c:"#3DDC84" },
+    fail:    { bg:"rgba(232,51,43,.12)",  b:"rgba(232,51,43,.3)",   c:"#E8332B" },
+    running: { bg:"rgba(96,165,250,.12)", b:"rgba(96,165,250,.3)",  c:"#60A5FA" },
+    queued:  { bg:"#1C1C21",              b:"#26262B",               c:"#6D6D76" },
+    warn:    { bg:"rgba(251,191,36,.1)",  b:"rgba(251,191,36,.3)",  c:"#FBBF24" },
+  };
+  const s = map[variant];
+  return `<span style="display:inline-block;background:${s.bg};border:1px solid ${s.b};
+                        color:${s.c};font-size:10px;font-weight:800;letter-spacing:.07em;
+                        padding:3px 10px;border-radius:20px;
+                        font-family:Arial,Helvetica,sans-serif;">${label}</span>`;
 }
 
 function mono(val: string): string {
-  return `<span style="font-family:'Courier New',Courier,monospace;font-size:11px;color:#111827;">${val}</span>`;
+  return `<span style="font-family:'Courier New',Courier,monospace;font-size:11px;
+                        color:#C4C4CB;letter-spacing:.02em;">${val}</span>`;
 }
 
-function resultRow(label: string, val: string, color = "#374151"): string {
-  return `<tr style="border-top:1px solid #E5E7EB;">
-    <td style="padding:9px 14px;font-size:11px;font-weight:700;color:#6B7280;white-space:nowrap;vertical-align:top;width:160px;">${label}</td>
-    <td style="padding:9px 14px;font-size:12px;color:${color};font-family:Arial,sans-serif;line-height:1.5;">${val}</td>
+function resultRow(label: string, val: string, color = "#9A9AA2", alt = false): string {
+  return `<tr style="border-top:1px solid #26262B;background:${alt ? "#141417" : "#0F0F12"};">
+    <td style="padding:9px 14px;font-size:10px;font-weight:700;color:#6D6D76;white-space:nowrap;
+               vertical-align:top;width:150px;text-transform:uppercase;letter-spacing:.04em;
+               font-family:Arial,Helvetica,sans-serif;">${label}</td>
+    <td style="padding:9px 14px;font-size:12px;color:${color};
+               font-family:Arial,Helvetica,sans-serif;line-height:1.55;">${val}</td>
   </tr>`;
+}
+
+// Section heading: red left-bar (table cell, email-safe)
+function sectionHeading(label: string): string {
+  return `<table cellpadding="0" cellspacing="0" role="presentation" style="margin:0 0 12px;">
+    <tr>
+      <td style="width:3px;background:#E8332B;border-radius:2px;">&nbsp;</td>
+      <td style="width:8px;"></td>
+      <td style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;
+                 color:#9A9AA2;font-family:Arial,Helvetica,sans-serif;">${label}</td>
+    </tr>
+  </table>`;
 }
 
 function section(title: string, rows: string): string {
   return `
-  <tr><td style="padding:20px 32px 0;">
-    <p style="margin:0 0 8px;font-size:9px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:1.5px;">${title}</p>
-    <table cellpadding="0" cellspacing="0" style="width:100%;border:1px solid #E5E7EB;border-radius:6px;overflow:hidden;">
+  <tr><td style="padding:20px 28px 0;">
+    ${sectionHeading(title)}
+    <table cellpadding="0" cellspacing="0" role="presentation"
+           style="width:100%;border:1px solid #26262B;border-radius:8px;overflow:hidden;">
       ${rows}
     </table>
   </td></tr>`;
 }
 
 function fpBadge(num: string, desc: string): string {
-  return `<table cellpadding="0" cellspacing="0" style="margin-bottom:12px;">
+  return `<table cellpadding="0" cellspacing="0" role="presentation" style="margin-bottom:14px;">
     <tr>
-      <td style="background:#111827;color:#ffffff;font-size:9px;font-weight:700;padding:3px 8px;border-radius:3px 0 0 3px;white-space:nowrap;font-family:Arial,sans-serif;">FAILURE POINT ${num}</td>
-      <td style="background:#F3F4F6;color:#374151;font-size:11px;padding:3px 10px;border-radius:0 3px 3px 0;font-family:Arial,sans-serif;">${desc}</td>
+      <td style="background:#E8332B;color:#fff;font-size:9px;font-weight:800;
+                 padding:3px 8px;border-radius:3px 0 0 3px;white-space:nowrap;
+                 font-family:Arial,Helvetica,sans-serif;letter-spacing:.05em;">
+        FAILURE POINT ${num}
+      </td>
+      <td style="background:#1C1C21;color:#9A9AA2;font-size:11px;
+                 padding:3px 12px;border-radius:0 3px 3px 0;
+                 font-family:Arial,Helvetica,sans-serif;border:1px solid #26262B;border-left:none;">
+        ${desc}
+      </td>
     </tr>
   </table>`;
 }
@@ -89,32 +143,89 @@ function shell(
   subLabel: string,
   body: string
 ): string {
+  const bar = progressBar(step);
+  const badgeCells = ["PCI DSS","AES-256","TRC-20"]
+    .map(b => `<td style="padding:0 3px;"><span style="background:#1C1C21;color:#6D6D76;font-size:9px;
+                 font-weight:800;letter-spacing:.04em;padding:3px 7px;border-radius:4px;
+                 border:1px solid #26262B;font-family:Arial,Helvetica,sans-serif;">${b}</span></td>`)
+    .join("");
+
   return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
-<body style="margin:0;padding:0;background:#F3F4F6;font-family:Arial,Helvetica,sans-serif;">
-<table cellpadding="0" cellspacing="0" style="width:100%;background:#F3F4F6;"><tr><td align="center" style="padding:28px 12px;">
-<table cellpadding="0" cellspacing="0" style="max-width:620px;width:100%;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 8px rgba(0,0,0,0.07);">
+<html lang="en"><head><meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/></head>
+<body style="margin:0;padding:28px 12px 48px;background:#1A1A1E;font-family:Arial,Helvetica,sans-serif;">
+<table cellpadding="0" cellspacing="0" role="presentation" style="max-width:640px;width:100%;margin:0 auto;">
+<tr><td>
 
-  <tr><td style="padding:0;">
-    <table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;">
-      <tr>${progressBar(step)}</tr>
-    </table>
-  </td></tr>
+  <!-- progress -->
+  <table cellpadding="0" cellspacing="0" role="presentation" style="width:100%;margin-bottom:0;">
+    <tr>${bar}</tr>
+  </table>
 
-  <tr><td style="background:#0a0a0a;padding:22px 32px 18px;">
-    <p style="margin:0 0 2px;font-size:9px;font-weight:700;letter-spacing:2px;color:#4B5563;text-transform:uppercase;">Banxico Plus LLC — Phase 2 Execution — Step ${step} of ${TOTAL_STEPS}</p>
-    <h1 style="margin:4px 0 5px;font-size:18px;font-weight:900;color:#ffffff;line-height:1.25;">${stepLabel}</h1>
-    <p style="margin:0;font-size:12px;color:#6B7280;">${subLabel}</p>
-  </td></tr>
+  <!-- card -->
+  <table cellpadding="0" cellspacing="0" role="presentation"
+         style="width:100%;background:#0F0F12;border-radius:0 0 16px 16px;overflow:hidden;
+                box-shadow:0 1px 3px rgba(0,0,0,.4),0 20px 50px rgba(0,0,0,.5);">
 
-  ${body}
+    <!-- red top line -->
+    <tr><td style="height:3px;background:linear-gradient(90deg,#E8332B,#B8241D);padding:0;font-size:0;">&nbsp;</td></tr>
 
-  <tr><td style="background:#F9FAFB;border-top:1px solid #E5E7EB;padding:11px 32px;">
-    <p style="margin:0;font-size:9px;color:#9CA3AF;">Banxico Plus LLC · August 6, 2026 · Phase 2 — Cybrid Sandbox Integration · Confidential</p>
-  </td></tr>
+    <!-- hero -->
+    <tr><td style="padding:22px 28px 18px;">
+      <table cellpadding="0" cellspacing="0" role="presentation" style="width:100%;margin-bottom:18px;">
+        <tr>
+          <td>
+            <table cellpadding="0" cellspacing="0" role="presentation"><tr>
+              <td style="vertical-align:middle;">${brandMark()}</td>
+              <td style="font-size:14px;font-weight:800;color:#fff;vertical-align:middle;
+                         font-family:Arial,Helvetica,sans-serif;letter-spacing:-.01em;">
+                BANXICO<span style="color:#E8332B;">+</span>
+              </td>
+            </tr></table>
+          </td>
+          <td style="text-align:right;vertical-align:middle;">
+            <span style="font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#6D6D76;">
+              <span style="display:inline-block;width:5px;height:5px;border-radius:50%;background:#E8332B;
+                           box-shadow:0 0 0 3px rgba(232,51,43,.2);vertical-align:middle;margin-right:5px;"></span>
+              Phase 2 active
+            </span>
+          </td>
+        </tr>
+      </table>
+      <p style="margin:0 0 6px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+                color:#6D6D76;font-family:Arial,Helvetica,sans-serif;">
+        Banxico Plus LLC — Phase 2 — Step ${step} of ${TOTAL_STEPS}
+      </p>
+      <h1 style="margin:0 0 6px;font-size:22px;font-weight:800;letter-spacing:-.02em;
+                 color:#fff;line-height:1.15;font-family:Arial,Helvetica,sans-serif;">
+        ${stepLabel}
+      </h1>
+      <p style="margin:0 0 10px;font-size:12px;color:#9A9AA2;font-family:Arial,Helvetica,sans-serif;">${subLabel}</p>
+      <p style="margin:0;font-size:10px;color:#6D6D76;font-family:Arial,Helvetica,sans-serif;">
+        August 6, 2026 · Cybrid Sandbox Integration</p>
+    </td></tr>
 
+    <!-- divider -->
+    <tr><td style="height:1px;background:#26262B;font-size:0;">&nbsp;</td></tr>
+
+    ${body}
+
+    <!-- footer -->
+    <tr><td style="background:#0A0A0C;border-top:1px solid #26262B;padding:16px 28px;">
+      <p style="margin:0 0 8px;font-size:10px;color:#6D6D76;line-height:1.7;
+                font-family:Arial,Helvetica,sans-serif;">
+        <strong style="color:#9A9AA2;">BANXICO PLUS LLC</strong><br/>
+        Evolution Loop, Suite 1401 · Laredo, Texas 78045 · United States<br/>
+        August 6, 2026 · Phase 2 — Cybrid Sandbox Integration · Confidential
+      </p>
+      <table cellpadding="0" cellspacing="0" role="presentation">
+        <tr>${badgeCells}</tr>
+      </table>
+    </td></tr>
+
+  </table>
+</td></tr>
 </table>
-</td></tr></table>
 </body></html>`;
 }
 
@@ -152,37 +263,37 @@ function step1(): string {
         <td style="padding:9px 14px;font-size:11px;font-weight:700;color:#111;">Test 1</td>
         <td style="padding:9px 14px;font-size:11px;color:#374151;">HMAC — valid signed payload accepted</td>
         <td style="padding:9px 14px;font-size:10px;color:#6B7280;">Audit obs. 1</td>
-        <td style="padding:9px 14px;text-align:center;">${badge("QUEUED", "#E5E7EB", "#6B7280")}</td>
+        <td style="padding:9px 14px;text-align:center;">${badge("QUEUED", "queued")}</td>
       </tr>
       <tr style="border-top:1px solid #E5E7EB;background:#fafafa;">
         <td style="padding:9px 14px;font-size:11px;font-weight:700;color:#111;">Test 2</td>
         <td style="padding:9px 14px;font-size:11px;color:#374151;">HMAC — tampered payload rejected (401)</td>
         <td style="padding:9px 14px;font-size:10px;color:#6B7280;">Audit obs. 1</td>
-        <td style="padding:9px 14px;text-align:center;">${badge("QUEUED", "#E5E7EB", "#6B7280")}</td>
+        <td style="padding:9px 14px;text-align:center;">${badge("QUEUED", "queued")}</td>
       </tr>
       <tr style="border-top:1px solid #E5E7EB;">
         <td style="padding:9px 14px;font-size:11px;font-weight:700;color:#111;">Test 3</td>
         <td style="padding:9px 14px;font-size:11px;color:#374151;">Idempotency — first event delivery processed</td>
         <td style="padding:9px 14px;font-size:10px;color:#6B7280;">FP-3, FP-4</td>
-        <td style="padding:9px 14px;text-align:center;">${badge("QUEUED", "#E5E7EB", "#6B7280")}</td>
+        <td style="padding:9px 14px;text-align:center;">${badge("QUEUED", "queued")}</td>
       </tr>
       <tr style="border-top:1px solid #E5E7EB;background:#fafafa;">
         <td style="padding:9px 14px;font-size:11px;font-weight:700;color:#111;">Test 4</td>
         <td style="padding:9px 14px;font-size:11px;color:#374151;">Idempotency — duplicate event silently acknowledged</td>
         <td style="padding:9px 14px;font-size:10px;color:#6B7280;">FP-4</td>
-        <td style="padding:9px 14px;text-align:center;">${badge("QUEUED", "#E5E7EB", "#6B7280")}</td>
+        <td style="padding:9px 14px;text-align:center;">${badge("QUEUED", "queued")}</td>
       </tr>
       <tr style="border-top:1px solid #E5E7EB;">
         <td style="padding:9px 14px;font-size:11px;font-weight:700;color:#111;">Test 5</td>
         <td style="padding:9px 14px;font-size:11px;color:#374151;">Race condition — concurrent requests, same key</td>
         <td style="padding:9px 14px;font-size:10px;color:#6B7280;">FP-2, FP-3, FP-4</td>
-        <td style="padding:9px 14px;text-align:center;">${badge("QUEUED", "#E5E7EB", "#6B7280")}</td>
+        <td style="padding:9px 14px;text-align:center;">${badge("QUEUED", "queued")}</td>
       </tr>
       <tr style="border-top:1px solid #E5E7EB;background:#fafafa;">
         <td style="padding:9px 14px;font-size:11px;font-weight:700;color:#111;">Test 6</td>
         <td style="padding:9px 14px;font-size:11px;color:#374151;">Atomic rollback — Tron send fails, key not committed</td>
         <td style="padding:9px 14px;font-size:10px;color:#6B7280;">FP-5</td>
-        <td style="padding:9px 14px;text-align:center;">${badge("QUEUED", "#E5E7EB", "#6B7280")}</td>
+        <td style="padding:9px 14px;text-align:center;">${badge("QUEUED", "queued")}</td>
       </tr>
     </table>
   </td></tr>
@@ -229,7 +340,7 @@ function step2(): string {
 
   ${section("Actual result", `
     <tr style="background:#F0FDF4;">
-      <td colspan="2" style="padding:10px 14px;text-align:right;">${badge("PASS", "#16A34A")}</td>
+      <td colspan="2" style="padding:10px 14px;text-align:right;">${badge("PASS", "pass")}</td>
     </tr>
     ${resultRow("HTTP response", mono("200 OK"), "#166534")}
     ${resultRow("HMAC computation", "Raw body captured via middleware before JSON.parse() — bytes match", "#166534")}
@@ -276,7 +387,7 @@ function step3(): string {
 
   ${section("Actual result", `
     <tr style="background:#F0FDF4;">
-      <td colspan="2" style="padding:10px 14px;text-align:right;">${badge("PASS", "#16A34A")}</td>
+      <td colspan="2" style="padding:10px 14px;text-align:right;">${badge("PASS", "pass")}</td>
     </tr>
     ${resultRow("HTTP response", mono("401 Unauthorized"), "#166534")}
     ${resultRow("HMAC mismatch detected", "Recomputed: " + mono("9f2a0b1c3d4e5f6a7b8c9d0e1f2a3b4c") + "<br/>Received: " + mono("7e3f1a9b4c2d8e5f0a1b3c4d6e7f8a9b"), "#166534")}
@@ -324,7 +435,7 @@ function step4(): string {
 
   ${section("Actual result", `
     <tr style="background:#F0FDF4;">
-      <td colspan="2" style="padding:10px 14px;text-align:right;">${badge("PASS", "#16A34A")}</td>
+      <td colspan="2" style="padding:10px 14px;text-align:right;">${badge("PASS", "pass")}</td>
     </tr>
     ${resultRow("HTTP response", mono("200 OK"), "#166534")}
     ${resultRow("Transaction", mono("BEGIN · INSERT · COMMIT"), "#166534")}
@@ -371,7 +482,7 @@ function step5(): string {
 
   ${section("Actual result", `
     <tr style="background:#F0FDF4;">
-      <td colspan="2" style="padding:10px 14px;text-align:right;">${badge("PASS", "#16A34A")}</td>
+      <td colspan="2" style="padding:10px 14px;text-align:right;">${badge("PASS", "pass")}</td>
     </tr>
     ${resultRow("HTTP response", mono("200 OK"), "#166534")}
     ${resultRow("DB error caught", mono("ERROR 23505: duplicate key value violates unique constraint"), "#166534")}
@@ -421,7 +532,7 @@ function step6(): string {
 
   ${section("Actual result", `
     <tr style="background:#F0FDF4;">
-      <td colspan="2" style="padding:10px 14px;text-align:right;">${badge("PASS", "#16A34A")}</td>
+      <td colspan="2" style="padding:10px 14px;text-align:right;">${badge("PASS", "pass")}</td>
     </tr>
     ${resultRow("Tron transfers broadcast", mono("1 of 2 requests · txid: TBroadcast_9b4e..."), "#166534")}
     ${resultRow("USDT sent", mono("500.00 USDT — correct amount, not doubled"), "#166534")}
@@ -472,7 +583,7 @@ function step7(): string {
 
   ${section("Actual result", `
     <tr style="background:#F0FDF4;">
-      <td colspan="2" style="padding:10px 14px;text-align:right;">${badge("PASS", "#16A34A")}</td>
+      <td colspan="2" style="padding:10px 14px;text-align:right;">${badge("PASS", "pass")}</td>
     </tr>
     ${resultRow("Key in processed_events after failure", mono("no — ROLLBACK confirmed"), "#166534")}
     ${resultRow("Tron transfer on failed attempt", mono("no — broadcast never completed"), "#166534")}
@@ -521,11 +632,11 @@ function step8(): string {
       <tr style="border-top:1px solid #E5E7EB;background:${i % 2 === 1 ? "#fafafa" : "#ffffff"};">
         <td style="padding:9px 14px;font-size:11px;font-weight:700;color:#111;">${t}</td>
         <td style="padding:9px 14px;font-size:11px;color:#374151;">${d}</td>
-        <td style="padding:9px 14px;text-align:center;">${badge("PASS", "#16A34A")}</td>
+        <td style="padding:9px 14px;text-align:center;">${badge("PASS", "pass")}</td>
       </tr>`).join("")}
       <tr style="border-top:2px solid #16A34A;background:#F0FDF4;">
         <td colspan="2" style="padding:10px 14px;font-size:12px;font-weight:700;color:#166534;">All tests passed · 6 of 6</td>
-        <td style="padding:10px 14px;text-align:center;">${badge("6 / 6", "#16A34A")}</td>
+        <td style="padding:10px 14px;text-align:center;">${badge("6 / 6", "pass")}</td>
       </tr>
     </table>
   </td></tr>
