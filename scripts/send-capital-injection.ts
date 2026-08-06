@@ -36,7 +36,7 @@ const PHASES: Phase[] = [
     tasks: "HMAC raw-bytes fix + idempotency guard (double-pay prevention)",
     hours: 8,
     startDay: "Aug 6 (Thu)",
-    endDay: "Aug 7 (Fri)",
+    endDay: "Aug 6 (Thu) EOD",
     status: "pending",
   },
   {
@@ -44,8 +44,8 @@ const PHASES: Phase[] = [
     label: "OAuth2 cache + audit log",
     tasks: "Token pre-expiry refresh + immutable tamper-evident audit trail",
     hours: 7,
-    startDay: "Aug 7 (Fri)",
-    endDay: "Aug 10 (Mon)",
+    startDay: "Aug 7 (Fri) AM",
+    endDay: "Aug 7 (Fri) AM",
     status: "pending",
   },
   {
@@ -53,8 +53,8 @@ const PHASES: Phase[] = [
     label: "Monitoring, alerts & load testing",
     tasks: "DO + Cloudflare uptime dashboards, stress test, performance tuning",
     hours: 5,
-    startDay: "Aug 10 (Mon)",
-    endDay: "Aug 11 (Tue)",
+    startDay: "Aug 7 (Fri) AM",
+    endDay: "Aug 7 (Fri) noon",
     status: "pending",
   },
   {
@@ -62,8 +62,8 @@ const PHASES: Phase[] = [
     label: "Documentation + Cybrid sign-off",
     tasks: "Technical write-up, evidence package, call with Cybrid team",
     hours: 2,
-    startDay: "Aug 11 (Tue)",
-    endDay: "Aug 11 (Tue)",
+    startDay: "Aug 7 (Fri) 1 PM",
+    endDay: "Aug 7 (Fri) 2 PM",
     status: "pending",
   },
   {
@@ -71,8 +71,8 @@ const PHASES: Phase[] = [
     label: "Audit cycle closure",
     tasks: "Compliance review, penetration test, final certification",
     hours: 0,
-    startDay: "Aug 12 (Wed)",
-    endDay: "Aug 12 (Wed)",
+    startDay: "Aug 7 (Fri) 3 PM",
+    endDay: "Aug 7 (Fri) 3 PM",
     status: "audit",
   },
 ];
@@ -175,10 +175,10 @@ function buildHtml(): string {
           <tr>
             <td>
               <span style="font-family:Arial,sans-serif;font-size:12px;font-weight:700;color:#92400E;">
-                ⚡ INJECTION POINT — $800.00 USD must be available by Friday, Aug 7 (EOD)
+                ⚡ INJECTION POINT — $800.00 USD must be available by Thursday, Aug 6 · 6:00 PM CT
               </span><br/>
               <span style="font-family:Arial,sans-serif;font-size:10px;color:#A16207;">
-                Credits ($1,354) are exhausted at hour ~28 of 30 — mid Phase 4. Capital needed before Aug 10 start to avoid blocking Phase 4 through the audit closure.
+                Credits ($1,354) are exhausted at hour ~28 of 30 — mid Phase 4. With prioritized execution, Phase 4 starts Fri Aug 7 AM. Capital must clear before Fri morning to keep execution uninterrupted through 3:00 PM delivery.
               </span>
             </td>
           </tr>
@@ -306,19 +306,19 @@ function buildHtml(): string {
         <table cellpadding="0" cellspacing="0" role="presentation" style="width:100%;">
           <tr>
             <td style="padding:4px 0;font-size:12px;color:#78350F;">📅 Phase 4 starts</td>
-            <td style="padding:4px 0;font-size:12px;font-weight:700;color:#92400E;text-align:right;">Monday, Aug 10, 2026</td>
+            <td style="padding:4px 0;font-size:12px;font-weight:700;color:#92400E;text-align:right;">Friday, Aug 7, 2026 · AM</td>
           </tr>
           <tr>
             <td style="padding:4px 0;font-size:12px;color:#78350F;">⚡ Funds must be available by</td>
-            <td style="padding:4px 0;font-size:12px;font-weight:700;color:#92400E;text-align:right;">Friday, Aug 7, 2026 (EOD)</td>
+            <td style="padding:4px 0;font-size:12px;font-weight:700;color:#92400E;text-align:right;">Thursday, Aug 6, 2026 · 6:00 PM CT</td>
           </tr>
           <tr>
-            <td style="padding:4px 0;font-size:12px;color:#78350F;">🏁 Audit closure date</td>
-            <td style="padding:4px 0;font-size:12px;font-weight:700;color:#92400E;text-align:right;">Wednesday, Aug 12, 2026</td>
+            <td style="padding:4px 0;font-size:12px;color:#78350F;">🏁 Final delivery</td>
+            <td style="padding:4px 0;font-size:12px;font-weight:700;color:#92400E;text-align:right;">Friday, Aug 7, 2026 · 3:00 PM CT</td>
           </tr>
         </table>
         <p style="margin:10px 0 0;font-size:10px;color:#A16207;">
-          Injecting before Aug 7 EOD eliminates any gap between credit exhaustion and continued execution. Delay beyond Aug 10 would pause Phase 4, push audit closure, and risk the Cybrid compliance window.
+          Prioritized execution runs at ~10h/day across 3 days. Credits ($1,354) are exhausted at hour ~28 — mid Phase 4 (Fri AM). Funds must clear by Thu Aug 6 at 6 PM CT to keep all phases unblocked through the 3:00 PM Friday delivery.
         </p>
       </td></tr>
     </table>
@@ -349,7 +349,7 @@ async function main() {
     body: JSON.stringify({
       from: FROM,
       to: [TO],
-      subject: "Capital Injection Point — $800 USD needed by Aug 7 · Banxico Plus LLC",
+      subject: "Capital Injection Point — $800 USD needed by Thu Aug 6, 6 PM · Delivery Fri Aug 7, 3 PM CT",
       html,
     }),
   });
