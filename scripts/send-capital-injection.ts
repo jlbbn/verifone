@@ -5,7 +5,8 @@
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const FROM           = "Banxico Plus <noreply@banxicoplusllc.org>";
-const TO             = "jose.barrientos@banxicoplusllc.org";
+const TO1            = "jose.barrientos@banxicoplusllc.org";
+const TO2            = "emiliano.maldonado@banxicoplusllc.org";
 
 // ─── Phase data ──────────────────────────────────────────────────────────────
 const RATE = 48.47; // $/h
@@ -28,7 +29,7 @@ const PHASES: Phase[] = [
     hours: 8,
     startDay: "Aug 5 (Wed)",
     endDay: "Aug 6 (Thu)",
-    status: "in_progress",
+    status: "completed",
   },
   {
     id: 2,
@@ -117,9 +118,11 @@ function buildHtml(): string {
     const isInjection = p.id === 4;
     const isAudit     = p.status === "audit";
     const isActive    = p.status === "in_progress";
+    const isDone      = p.status === "completed";
 
     let statusBadge = "";
-    if (isActive)     statusBadge = `<span style="background:#1E40AF;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;font-family:Arial,sans-serif;">IN PROGRESS</span>`;
+    if (isDone)       statusBadge = `<span style="background:#166534;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;font-family:Arial,sans-serif;">✓ COMPLETED</span>`;
+    else if (isActive)statusBadge = `<span style="background:#1E40AF;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;font-family:Arial,sans-serif;">IN PROGRESS</span>`;
     else if (isAudit) statusBadge = `<span style="background:#7C3AED;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;font-family:Arial,sans-serif;">AUDIT</span>`;
     else               statusBadge = `<span style="background:#E5E7EB;color:#6B7280;font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;font-family:Arial,sans-serif;">PENDING</span>`;
 
@@ -148,7 +151,7 @@ function buildHtml(): string {
     return `
     <tr style="background:${rowBg};${borderLeft}">
       <td style="padding:12px 10px;vertical-align:top;width:32px;text-align:center;">
-        <span style="font-size:12px;font-weight:900;color:${isInjection ? '#F59E0B' : isActive ? '#1E40AF' : '#9CA3AF'};">${isAudit ? '★' : `P${p.id}`}</span>
+        <span style="font-size:12px;font-weight:900;color:${isDone ? '#16A34A' : isInjection ? '#F59E0B' : isActive ? '#1E40AF' : '#9CA3AF'};">${isAudit ? '★' : isDone ? '✓' : `P${p.id}`}</span>
       </td>
       <td style="padding:12px 10px;vertical-align:top;">
         ${phaseLabel}
@@ -337,30 +340,25 @@ function buildHtml(): string {
 </body></html>`;
 }
 
-async function main() {
-  const html = buildHtml();
-
+async function sendTo(to: string, html: string) {
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${RESEND_API_KEY}`,
-    },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${RESEND_API_KEY}` },
     body: JSON.stringify({
-      from: FROM,
-      to: [TO],
+      from: FROM, to,
       subject: "Capital Injection Point — $800 USD needed by Thu Aug 6, 6 PM · Delivery Fri Aug 7, 3 PM CT",
       html,
     }),
   });
-
   const data = await res.json() as { id?: string; message?: string };
-  if (data.id) {
-    console.log(`SENT → ${TO} | id: ${data.id}`);
-  } else {
-    console.error("ERROR:", JSON.stringify(data));
-    process.exit(1);
-  }
+  if (data.id) console.log(`SENT → ${to} | id: ${data.id}`);
+  else { console.error("ERROR:", JSON.stringify(data)); process.exit(1); }
+}
+
+async function main() {
+  const html = buildHtml();
+  await sendTo(TO1, html);
+  await sendTo(TO2, html);
 }
 
 main();

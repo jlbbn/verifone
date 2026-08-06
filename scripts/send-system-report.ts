@@ -45,55 +45,45 @@ function badgesHtml(): string {
 // STAGE TRACKER
 // ─────────────────────────────────────────────────────────────────────────────
 const STAGES = [
-  { id: 1, label: "Migrate app Replit → DigitalOcean",  hours: "8 h",  active: true  },
-  { id: 2, label: "Fix HMAC + rotate secrets",           hours: "3 h",  active: false },
-  { id: 3, label: "Cybrid webhook idempotency",          hours: "6 h",  active: false },
-  { id: 4, label: "OAuth2 token cache",                  hours: "3 h",  active: false },
-  { id: 5, label: "Audit log + Backup + Monitoring",     hours: "11 h", active: false },
-  { id: 6, label: "Rate limiting + Audit closure",       hours: "2 h",  active: false },
+  { id: 1, label: "Migrate app Replit → DigitalOcean",  hours: "8 h",  active: false, done: true  },
+  { id: 2, label: "Fix HMAC + rotate secrets",           hours: "3 h",  active: true,  done: false },
+  { id: 3, label: "Cybrid webhook idempotency",          hours: "6 h",  active: false, done: false },
+  { id: 4, label: "OAuth2 token cache",                  hours: "3 h",  active: false, done: false },
+  { id: 5, label: "Audit log + Backup + Monitoring",     hours: "11 h", active: false, done: false },
+  { id: 6, label: "Rate limiting + Audit closure",       hours: "2 h",  active: false, done: false },
 ];
 function stagesHtml(): string {
   return STAGES.map(s => {
     const active = s.active;
+    const done   = s.done;
+    const bg     = done ? "#f0fdf4" : active ? "#f0f7ff" : "#ffffff";
+    const border = done ? "#16A34A33" : active ? "#0080FF33" : "#f0f0f0";
+    const circBg = done ? "#16A34A"  : active ? "#0080FF"  : "#e8e8e8";
+    const circFg = (done || active)  ? "#ffffff" : "#aaaaaa";
+    const label  = done ? `<span style="text-decoration:line-through;color:#9CA3AF;">${s.label}</span> <span style="color:#16A34A;font-size:11px;">✓</span>`
+                 : s.label;
+    const badge  = done
+      ? `<span style="display:inline-block;background:#16A34A;color:#ffffff;font-size:9px;font-weight:700;letter-spacing:0.1em;padding:3px 9px;border-radius:20px;font-family:Arial,sans-serif;">✓ COMPLETED</span>`
+      : active
+        ? `<span style="display:inline-block;background:#0080FF;color:#ffffff;font-size:9px;font-weight:700;letter-spacing:0.1em;padding:3px 9px;border-radius:20px;font-family:Arial,sans-serif;">● IN PROGRESS</span>`
+        : `<span style="display:inline-block;background:#f0f0f0;color:#aaaaaa;font-size:9px;font-weight:700;letter-spacing:0.08em;padding:3px 9px;border-radius:20px;font-family:Arial,sans-serif;">PENDING</span>`;
     return `
-    <tr style="border-top:1px solid ${active ? "#0080FF33" : "#f0f0f0"};
-               background:${active ? "#f0f7ff" : "#ffffff"};">
-      <!-- stage number -->
+    <tr style="border-top:1px solid ${border};background:${bg};">
       <td style="padding:11px 12px;width:28px;vertical-align:middle;">
-        <div style="width:26px;height:26px;border-radius:50%;
-                    background:${active ? "#0080FF" : "#e8e8e8"};
-                    text-align:center;vertical-align:middle;display:table-cell;">
-          <span style="font-size:11px;font-weight:900;
-                       color:${active ? "#ffffff" : "#aaaaaa"};
-                       font-family:Arial,sans-serif;line-height:26px;">
-            ${s.id}
+        <div style="width:26px;height:26px;border-radius:50%;background:${circBg};text-align:center;vertical-align:middle;display:table-cell;">
+          <span style="font-size:11px;font-weight:900;color:${circFg};font-family:Arial,sans-serif;line-height:26px;">
+            ${done ? "✓" : s.id}
           </span>
         </div>
       </td>
-      <!-- label -->
-      <td style="padding:11px 8px;font-size:13px;
-                 color:${active ? "#0060CC" : "#555555"};
-                 font-family:Arial,sans-serif;font-weight:${active ? "700" : "400"};">
-        ${s.label}
+      <td style="padding:11px 8px;font-size:13px;color:${done ? "#166534" : active ? "#0060CC" : "#555555"};font-family:Arial,sans-serif;font-weight:${(done || active) ? "700" : "400"};">
+        ${label}
       </td>
-      <!-- hours -->
-      <td style="padding:11px 12px;font-size:11px;color:#aaaaaa;
-                 font-family:'Courier New',monospace;text-align:center;white-space:nowrap;">
+      <td style="padding:11px 12px;font-size:11px;color:#aaaaaa;font-family:'Courier New',monospace;text-align:center;white-space:nowrap;">
         ${s.hours}
       </td>
-      <!-- badge -->
       <td style="padding:11px 12px;text-align:right;white-space:nowrap;vertical-align:middle;">
-        ${active
-          ? `<span style="display:inline-block;background:#0080FF;color:#ffffff;
-                          font-size:9px;font-weight:700;letter-spacing:0.1em;
-                          padding:3px 9px;border-radius:20px;font-family:Arial,sans-serif;">
-               ● EN CURSO
-             </span>`
-          : `<span style="display:inline-block;background:#f0f0f0;color:#aaaaaa;
-                          font-size:9px;font-weight:700;letter-spacing:0.08em;
-                          padding:3px 9px;border-radius:20px;font-family:Arial,sans-serif;">
-               PENDIENTE
-             </span>`}
+        ${badge}
       </td>
     </tr>`;
   }).join("");
@@ -198,7 +188,7 @@ const agentEta = `
 // TASK TABLE ROWS
 // ─────────────────────────────────────────────────────────────────────────────
 const tasks = [
-  { task: "Migrate app Replit → DO",       hours: "8 h",  pct: "26.7%", cost: "$388", active: true  },
+  { task: "Migrate app Replit → DO",       hours: "8 h",  pct: "26.7%", cost: "$388", active: false, done: true  },
   { task: "Fix HMAC + rotate secrets",     hours: "3 h",  pct: "10.0%", cost: "$145", active: false },
   { task: "Cybrid webhook idempotency",    hours: "6 h",  pct: "20.0%", cost: "$291", active: false },
   { task: "OAuth2 token cache",            hours: "3 h",  pct: "10.0%", cost: "$145", active: false },
@@ -208,21 +198,22 @@ const tasks = [
   { task: "Rate limiting",                 hours: "2 h",  pct: "6.7%",  cost: "$97",  active: false },
 ];
 function taskRows(): string {
-  return tasks.map((r, i) => `
-  <tr style="border-top:1px solid ${r.active ? "#b3d9ff" : "#eeeeee"};
-             background:${r.active ? "#f0f7ff" : (i % 2 === 1 ? "#fafafa" : "#ffffff")};">
-    <td style="padding:10px 14px;font-size:13px;
-               color:${r.active ? "#0060CC" : "#222222"};
-               font-family:Arial,sans-serif;font-weight:${r.active ? "700" : "400"};">
-      ${r.active ? "● " : ""}${r.task}
+  return tasks.map((r: any, i: number) => {
+    const done = r.done === true;
+    const bg   = done ? "#f0fdf4" : r.active ? "#f0f7ff" : (i % 2 === 1 ? "#fafafa" : "#ffffff");
+    const border = done ? "#16A34A33" : r.active ? "#b3d9ff" : "#eeeeee";
+    const color  = done ? "#166534"  : r.active ? "#0060CC" : "#222222";
+    const label  = done ? `✓ ${r.task}` : r.active ? `● ${r.task}` : r.task;
+    return `
+  <tr style="border-top:1px solid ${border};background:${bg};">
+    <td style="padding:10px 14px;font-size:13px;color:${color};font-family:Arial,sans-serif;font-weight:${(done || r.active) ? "700" : "400"};">
+      ${label}
     </td>
-    <td style="padding:10px 14px;font-size:12px;color:#444444;font-family:'Courier New',monospace;
-               text-align:center;white-space:nowrap;">${r.hours}</td>
-    <td style="padding:10px 14px;font-size:12px;color:#888888;font-family:Arial,sans-serif;
-               text-align:center;white-space:nowrap;">${r.pct}</td>
-    <td style="padding:10px 14px;font-size:13px;font-weight:700;color:#c8322b;
-               font-family:'Courier New',monospace;text-align:right;white-space:nowrap;">${r.cost}</td>
-  </tr>`).join("");
+    <td style="padding:10px 14px;font-size:12px;color:#444444;font-family:'Courier New',monospace;text-align:center;white-space:nowrap;">${r.hours}</td>
+    <td style="padding:10px 14px;font-size:12px;color:#888888;font-family:Arial,sans-serif;text-align:center;white-space:nowrap;">${r.pct}</td>
+    <td style="padding:10px 14px;font-size:13px;font-weight:700;color:${done ? "#166534" : "#c8322b"};font-family:'Courier New',monospace;text-align:right;white-space:nowrap;">${r.cost}</td>
+  </tr>`;
+  }).join("");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
