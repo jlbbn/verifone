@@ -12,3 +12,4 @@
 - [Broker executor swap architecture](broker-executor-swap.md) — real crypto swaps go through broker-executor.ts (OKX→Kraken→internal fallback); 2-leg USDT bridge; exchange route uses actual fill amounts for DB update.
 - [Kraken broker integration architecture](kraken-integration-arch.md) — Kraken demoted to fallback (priority 2, active:false); OKX replaced it as primary; SR-link guard uses lowercase status set not exact match.
 - [Dev/prod DB sync strategy](dev-prod-db-sync.md) — all persistent data changes go into the idempotent sync block inside storage.ts initialize(); prod executeSql is read-only from CodeExecution; only redeploy triggers the sync block in production.
+- [Email campaign design rules](email-campaign-design.md) — dark campana template is authoritative; no colored-font spans in body, no emojis, failures framed as ongoing work never stopped.
