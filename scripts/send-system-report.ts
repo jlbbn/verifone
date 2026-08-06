@@ -101,7 +101,7 @@ function stagesHtml(): string {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // REPLIT AGENT ETA
-// Based on 30 effective hours, 6h/day working rate, Phase 1 started Aug 5
+// Based on 30 effective hours, ~10h/day prioritized rate, Phase 1 started Aug 5
 // ─────────────────────────────────────────────────────────────────────────────
 const agentEta = `
 <tr><td style="background:#ffffff;padding:28px 32px 0;">
@@ -146,9 +146,9 @@ const agentEta = `
         <p style="margin:0 0 3px;font-size:10px;color:#aaaaaa;font-family:Arial,sans-serif;
                    letter-spacing:0.1em;text-transform:uppercase;">Estimated delivery</p>
         <p style="margin:0 0 3px;font-size:24px;font-weight:900;color:#c8322b;
-                   font-family:Arial,Helvetica,sans-serif;">Friday, Aug 7</p>
+                   font-family:Arial,Helvetica,sans-serif;">Fri, Aug 7 · 3:00 PM CT</p>
         <p style="margin:0;font-size:10px;color:#aaaaaa;font-family:Arial,sans-serif;">
-          End of week · 2 business days from Phase 1 start
+          Prioritized · ~10h/day · 3-day sprint
         </p>
       </td>
     </tr>
