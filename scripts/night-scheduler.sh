@@ -28,8 +28,8 @@ while :; do
   fi
 
   if [ -f "$F1" ] && [ -f "$F2" ]; then
-    echo "[$(date -u '+%F %T')Z] all sends complete · scheduler exit" >> "$LOG"
-    break
+    echo "[$(date -u '+%F %T')Z] all sends complete · scheduler parked" >> "$LOG"
+    while :; do sleep 3600; done
   fi
 
   # keepalive ping so the environment stays warm
