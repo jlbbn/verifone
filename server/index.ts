@@ -1,5 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import helmet from "helmet";
+import compression from "compression";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
@@ -36,6 +37,11 @@ app.use(
     crossOriginEmbedderPolicy: false,
   }),
 );
+
+// Gzip/Brotli-eligible compression for all responses (HTML, JS, CSS, JSON).
+// Without this, the ~1.7MB JS bundle is served uncompressed, which causes long
+// blank-screen load times on slow/mobile connections.
+app.use(compression());
 
 // ── OKX Webhook — before body parsers (needs raw body for HMAC) ──────────────
 import { rawBodyCapture, okxIpAllowlist, okxWebhookHandler } from "./crypto/okx-webhook.js";
