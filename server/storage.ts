@@ -193,15 +193,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   async initialize() {
-    // --- Migrate: update Admin email and reset password to canonical value ---
-    const adminPwd = hashPassword("Zenvobook1000$");
-    await db.execute(sql`
-      UPDATE users
-      SET email    = 'josbar93@gmail.com',
-          password = ${adminPwd}
-      WHERE username = 'Admin'
-    `);
-
     // --- Migrate: set socemro2 as BUSINESS_PARTNER ---
     await db.execute(sql`
       UPDATE users
