@@ -12,7 +12,8 @@ const REVIEWER = "jose.barrientos@banxicoplusllc.org";
 const FINAL_RECIPIENT = "vcadvisorllc@proton.me";
 
 const SEND_FINAL = process.env.SEND_FINAL === "1";
-const TO = SEND_FINAL ? FINAL_RECIPIENT : REVIEWER;
+const CC_OVERRIDE = process.env.CC_OVERRIDE || "";
+const TO = CC_OVERRIDE ? CC_OVERRIDE : (SEND_FINAL ? FINAL_RECIPIENT : REVIEWER);
 
 const SUBJECT = SEND_FINAL
   ? "Bienvenida a Banxico+ · Usuario VC Advisor LLC"
