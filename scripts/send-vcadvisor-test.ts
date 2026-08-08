@@ -9,10 +9,14 @@ import fs from "node:fs";
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const FROM = "Banxico Plus <noreply@banxicoplusllc.org>";
 const REVIEWER = "jose.barrientos@banxicoplusllc.org";
+const FINAL_RECIPIENT = "vcadvisorllc@proton.me";
 
-const FINAL_RECIPIENT = "vcadvisorllc@proton.me"; // NOT used yet — test only goes to REVIEWER
+const SEND_FINAL = process.env.SEND_FINAL === "1";
+const TO = SEND_FINAL ? FINAL_RECIPIENT : REVIEWER;
 
-const SUBJECT = "[PRUEBA — revisar antes de enviar] Bienvenida Banxico+ · Usuario VC Advisor LLC (Victor)";
+const SUBJECT = SEND_FINAL
+  ? "Bienvenida a Banxico+ · Usuario VC Advisor LLC"
+  : "[PRUEBA — revisar antes de enviar] Bienvenida Banxico+ · Usuario VC Advisor LLC (Victor)";
 
 const CONTRACT_PATH = "attached_assets/BANXICO_PLUS_VCAdvisorLLC_Contrato_1786222488572.docx";
 const NDA_PATH = "attached_assets/NDA_BanxicoPlus_VCAdvisorLLC_1786222573978.docx";
@@ -36,9 +40,9 @@ function html(): string {
       BANXICO<span style="color:#E8332B;">+</span>
     </div>
 
-    <div style="background:#1C1C21;border:1px solid #3A3A42;border-radius:8px;padding:10px 14px;margin-bottom:20px;">
+    ${SEND_FINAL ? "" : `<div style="background:#1C1C21;border:1px solid #3A3A42;border-radius:8px;padding:10px 14px;margin-bottom:20px;">
       <span style="font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#FFFFFF;">Vista previa interna — no enviado a Victor todavía</span>
-    </div>
+    </div>`}
 
     <h1 style="font-size:22px;line-height:1.2;margin:0 0 14px;font-weight:800;color:#FFFFFF;">
       Bienvenido a Banxico+, Victor
@@ -60,6 +64,23 @@ function html(): string {
       <div style="font-size:11px;color:#6D6D76;margin-top:8px;line-height:1.5;">
         Pago por adelantado, vigencia de 12 meses desde la fecha efectiva (08/08/2026), renovación automática
         anual con ajuste de hasta 10% salvo cancelación por escrito con 30 días de anticipación.
+      </div>
+    </div>
+
+    <h2 style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:#9A9AA2;font-weight:800;margin:24px 0 10px;">Datos de pago</h2>
+    <div style="background:#141417;border:1px solid #26262B;border-radius:10px;padding:14px 16px;margin-bottom:20px;">
+      <div style="display:flex;justify-content:space-between;font-size:12.5px;color:#C4C4CB;margin-bottom:6px;">
+        <span>Token</span><strong style="color:#FFFFFF;">USDT</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12.5px;color:#C4C4CB;margin-bottom:6px;">
+        <span>Red</span><strong style="color:#FFFFFF;">Ethereum (ERC20)</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12.5px;color:#C4C4CB;margin-bottom:6px;">
+        <span>Monto mínimo</span><strong style="color:#FFFFFF;">2.0 USDT</strong>
+      </div>
+      <div style="font-size:11px;color:#6D6D76;margin-top:6px;">Dirección de cobro</div>
+      <div style="font-family:'SF Mono',ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;color:#FFFFFF;word-break:break-all;background:#0A0A0C;border:1px solid #26262B;border-radius:6px;padding:8px 10px;margin-top:4px;">
+        0xa8FAaC0297897d9c3b14a037BfDe794c1aFBa7d3
       </div>
     </div>
 
@@ -111,7 +132,7 @@ async function main() {
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${RESEND_API_KEY}` },
     body: JSON.stringify({
       from: FROM,
-      to: REVIEWER,
+      to: TO,
       subject: SUBJECT,
       html: html(),
       attachments: [
@@ -122,8 +143,12 @@ async function main() {
   });
   const data = await res.json() as { id?: string; message?: string };
   if (data.id) {
-    console.log(`Test enviado a ${REVIEWER} | Resend ID: ${data.id}`);
-    console.log(`(Destinatario final ${FINAL_RECIPIENT} NO recibió nada todavía)`);
+    if (SEND_FINAL) {
+      console.log(`ENVIADO a Victor (${FINAL_RECIPIENT}) | Resend ID: ${data.id}`);
+    } else {
+      console.log(`Test enviado a ${REVIEWER} | Resend ID: ${data.id}`);
+      console.log(`(Destinatario final ${FINAL_RECIPIENT} NO recibió nada todavía)`);
+    }
   } else {
     console.error("ERROR:", JSON.stringify(data));
     process.exit(1);
