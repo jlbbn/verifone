@@ -13,3 +13,4 @@
 - [Kraken broker integration architecture](kraken-integration-arch.md) — Kraken demoted to fallback (priority 2, active:false); OKX replaced it as primary; SR-link guard uses lowercase status set not exact match.
 - [Dev/prod DB sync strategy](dev-prod-db-sync.md) — all persistent data changes go into the idempotent sync block inside storage.ts initialize(); prod executeSql is read-only from CodeExecution; only redeploy triggers the sync block in production.
 - [Email campaign design rules](email-campaign-design.md) — dark campana template is authoritative; no colored-font spans in body, no emojis, failures framed as ongoing work never stopped.
+- [Stale index.html after redeploy causes blank screen](stale-index-html-cache.md) — express.static needs no-store on index.html + immutable on hashed assets, or cached old HTML 404s on deleted chunk files post-deploy.
