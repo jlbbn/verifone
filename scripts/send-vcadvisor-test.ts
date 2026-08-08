@@ -133,6 +133,7 @@ async function main() {
     body: JSON.stringify({
       from: FROM,
       to: TO,
+      ...(SEND_FINAL ? { cc: REVIEWER } : {}),
       subject: SUBJECT,
       html: html(),
       attachments: [
