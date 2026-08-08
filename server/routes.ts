@@ -3516,8 +3516,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     const { to } = parsed.data;
     // Resolve name from users table if available
-    const allUsers = await storage.getUsers();
-    const recipient = allUsers.find(u => u.email === to || u.username === to);
+    const recipient = await storage.getUserByUsername(to);
     const fullName = recipient?.fullName ?? to.split("@")[0];
 
     try {
