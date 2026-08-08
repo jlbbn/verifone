@@ -15,3 +15,4 @@
 - [Email campaign design rules](email-campaign-design.md) — dark campana template is authoritative; no colored-font spans in body, no emojis, failures framed as ongoing work never stopped.
 - [Stale index.html after redeploy causes blank screen](stale-index-html-cache.md) — express.static needs no-store on index.html + immutable on hashed assets, or cached old HTML 404s on deleted chunk files post-deploy.
 - [Mobile black-screen from uncompressed JS bundle](mobile-black-screen-no-compression.md) — check backend logs are clean, then check for missing gzip/brotli compression before assuming a frontend crash.
+- [Google Translate causes React removeChild crash](google-translate-removechild-crash.md) — mismatched html lang triggers Chrome auto-translate, which mutates DOM nodes React later crashes on; fix lang + notranslate meta, add ErrorBoundary.
