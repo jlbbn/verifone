@@ -32,6 +32,7 @@ import CompliancePage from "@/pages/compliance";
 import NotFound from "@/pages/not-found";
 import ResetPasswordPage from "@/pages/reset-password";
 import PayVCAdvisorPage from "@/pages/pay-vc-advisor";
+import { ErrorBoundary } from "@/components/error-boundary";
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading, isAuthenticated } = useAuth();
@@ -215,13 +216,15 @@ export default function App() {
   };
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <SidebarProvider style={style as React.CSSProperties} defaultOpen={false}>
-          <Router />
-        </SidebarProvider>
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <SidebarProvider style={style as React.CSSProperties} defaultOpen={false}>
+            <Router />
+          </SidebarProvider>
+          <Toaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }

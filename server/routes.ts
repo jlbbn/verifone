@@ -190,6 +190,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ]));
   } catch (_) { /* ignore */ }
 
+  // ── Client-side crash reporting — logs render errors that would otherwise
+  //    just vanish as a blank/black screen on the user's device ────────────
+  const clientErrorLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+  app.post("/api/client-error", clientErrorLimiter, (req, res) => {
+    const { message, stack, componentStack, url, userAgent } = req.body || {};
+    console.error(
+      `[CLIENT ERROR] ${url ?? "unknown url"} — ${message ?? "no message"}\n` +
+      `UA: ${userAgent ?? "unknown"}\n` +
+      `Stack: ${stack ?? "none"}\n` +
+      `Component stack: ${componentStack ?? "none"}`
+    );
+    res.status(204).end();
+  });
+
   // ====================================================================
   // AUTENTICACIÓN
   // ====================================================================
