@@ -31,6 +31,7 @@ import SubscriptionPaymentPage from "@/pages/subscription-payment";
 import CompliancePage from "@/pages/compliance";
 import NotFound from "@/pages/not-found";
 import ResetPasswordPage from "@/pages/reset-password";
+import PayVCAdvisorPage from "@/pages/pay-vc-advisor";
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading, isAuthenticated } = useAuth();
@@ -121,6 +122,7 @@ function Router() {
       <Route path="/" component={LoginPage} />
       <Route path="/login" component={LoginPage} />
       <Route path="/reset-password" component={ResetPasswordPage} />
+      <Route path="/pay/vc-advisor" component={PayVCAdvisorPage} />
       
       <Route path="/dashboard">
         <AppLayout><Dashboard /></AppLayout>
