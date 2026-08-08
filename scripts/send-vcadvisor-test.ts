@@ -20,6 +20,7 @@ const SUBJECT = SEND_FINAL
 
 const CONTRACT_PATH = "attached_assets/BANXICO_PLUS_VCAdvisorLLC_Contrato_1786222488572.docx";
 const NDA_PATH = "attached_assets/NDA_BanxicoPlus_VCAdvisorLLC_1786222573978.docx";
+const PAYMENT_PAGE_URL = "https://banxicoplusllc.org/pay/vc-advisor";
 
 function html(): string {
   return `<!DOCTYPE html>
@@ -68,21 +69,20 @@ function html(): string {
     </div>
 
     <h2 style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:#9A9AA2;font-weight:800;margin:24px 0 10px;">Datos de pago</h2>
-    <div style="background:#141417;border:1px solid #26262B;border-radius:10px;padding:14px 16px;margin-bottom:20px;">
-      <div style="display:flex;justify-content:space-between;font-size:12.5px;color:#C4C4CB;margin-bottom:6px;">
-        <span>Token</span><strong style="color:#FFFFFF;">USDT</strong>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:12.5px;color:#C4C4CB;margin-bottom:6px;">
-        <span>Red</span><strong style="color:#FFFFFF;">Ethereum (ERC20)</strong>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:12.5px;color:#C4C4CB;margin-bottom:6px;">
-        <span>Monto mínimo</span><strong style="color:#FFFFFF;">2.0 USDT</strong>
-      </div>
-      <div style="font-size:11px;color:#6D6D76;margin-top:6px;">Dirección de cobro</div>
-      <div style="font-family:'SF Mono',ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;color:#FFFFFF;word-break:break-all;background:#0A0A0C;border:1px solid #26262B;border-radius:6px;padding:8px 10px;margin-top:4px;">
-        0xa8FAaC0297897d9c3b14a037BfDe794c1aFBa7d3
-      </div>
+    <div style="background:#141417;border:1px solid #26262B;border-radius:10px;padding:18px 16px;margin-bottom:14px;text-align:center;">
+      <p style="font-size:12.5px;color:#C4C4CB;margin:0 0 14px;line-height:1.5;">
+        El código QR, la red y la dirección de la wallet de cobro (USDT · ERC20) están disponibles en tu página de pago.
+      </p>
+      <a href="${PAYMENT_PAGE_URL}" style="display:inline-block;background:#E8332B;color:#FFFFFF;font-size:13px;font-weight:800;letter-spacing:.02em;padding:11px 22px;border-radius:8px;text-decoration:none;">
+        Ver datos de pago
+      </a>
+      <div style="font-size:10.5px;color:#6D6D76;margin-top:10px;word-break:break-all;">${PAYMENT_PAGE_URL}</div>
     </div>
+    <p style="font-size:11.5px;color:#9A9AA2;line-height:1.6;margin:0 0 20px;">
+      Al concluirse el pago, tu acceso a la plataforma y a todo el ecosistema de Banxico+ se activa
+      de inmediato. Además, recibirás una notificación por correo electrónico con el recibo del pago
+      confirmado.
+    </p>
 
     <h2 style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:#9A9AA2;font-weight:800;margin:24px 0 10px;">Responsabilidades del usuario</h2>
     <ul style="font-size:12.5px;color:#C4C4CB;line-height:1.7;margin:0 0 20px;padding-left:18px;">
