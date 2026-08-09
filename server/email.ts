@@ -22,23 +22,41 @@ function getConnectors(): ReplitConnectors {
   return connectors;
 }
 
+// Resend calls previously had no timeout — if the API stalled, the entire
+// /api/login request (which awaits the OTP email before responding) hung
+// indefinitely, which is what caused the ~24s login response seen in prod.
+const EMAIL_SEND_TIMEOUT_MS = 8_000;
+
 /** Unified send — uses direct API key if available, falls back to connector */
 async function resendSend(payload: object): Promise<Response> {
-  if (RESEND_API_KEY) {
-    return fetch("https://api.resend.com/emails", {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), EMAIL_SEND_TIMEOUT_MS);
+  try {
+    if (RESEND_API_KEY) {
+      return await fetch("https://api.resend.com/emails", {
+        method:  "POST",
+        headers: {
+          "Content-Type":  "application/json",
+          "Authorization": `Bearer ${RESEND_API_KEY}`,
+        },
+        body:   JSON.stringify(payload),
+        signal: controller.signal,
+      });
+    }
+    return await getConnectors().proxy("resend", "/emails", {
       method:  "POST",
-      headers: {
-        "Content-Type":  "application/json",
-        "Authorization": `Bearer ${RESEND_API_KEY}`,
-      },
-      body: JSON.stringify(payload),
-    });
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify(payload),
+      signal:  controller.signal,
+    } as any);
+  } catch (err: any) {
+    if (err?.name === "AbortError") {
+      throw new Error(`Resend request timed out after ${EMAIL_SEND_TIMEOUT_MS}ms`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-  return getConnectors().proxy("resend", "/emails", {
-    method:  "POST",
-    headers: { "Content-Type": "application/json" },
-    body:    JSON.stringify(payload),
-  });
 }
 
 // ── Banxico+ SVG logo (inline, white on dark) ──────────────────────────────

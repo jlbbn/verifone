@@ -85,6 +85,25 @@ app.use(express.urlencoded({ extended: false, limit: "1mb" }));
 
 const SENSITIVE_PATHS = ["/api/login", "/api/pos/process-payment", "/api/payment-methods"];
 
+// ── API response guarantee ────────────────────────────────────────────────
+// If any downstream call (external broker/API, email provider, DB) stalls
+// without its own timeout, this ensures the client always gets a definitive
+// response instead of hanging indefinitely — which otherwise looks like a
+// frozen/crashed app on the frontend.
+const API_TIMEOUT_MS = 25_000;
+app.use((req, res, next) => {
+  if (!req.path.startsWith("/api")) return next();
+  const timer = setTimeout(() => {
+    if (!res.headersSent) {
+      console.error(`[TIMEOUT] ${req.method} ${req.path} exceeded ${API_TIMEOUT_MS}ms — responding 503`);
+      res.status(503).json({ message: "La solicitud tardó demasiado en responder. Intenta de nuevo." });
+    }
+  }, API_TIMEOUT_MS);
+  res.on("finish", () => clearTimeout(timer));
+  res.on("close", () => clearTimeout(timer));
+  next();
+});
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
