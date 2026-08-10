@@ -12,6 +12,7 @@
 - [Broker executor swap architecture](broker-executor-swap.md) — real crypto swaps go through broker-executor.ts (OKX→Kraken→internal fallback); 2-leg USDT bridge; exchange route uses actual fill amounts for DB update.
 - [Kraken broker integration architecture](kraken-integration-arch.md) — Kraken demoted to fallback (priority 2, active:false); OKX replaced it as primary; SR-link guard uses lowercase status set not exact match.
 - [Dev/prod DB sync strategy](dev-prod-db-sync.md) — all persistent data changes go into the idempotent sync block inside storage.ts initialize(); prod executeSql is read-only from CodeExecution; only redeploy triggers the sync block in production.
+- [DB SSL config differs by environment](db-ssl-dev-prod.md) — dev SSL off (internal host, sslmode=disable); prod must verify certs; explicit pg Pool ssl option overrides the URL's sslmode.
 - [Email campaign design rules](email-campaign-design.md) — dark campana template is authoritative; no colored-font spans in body, no emojis, failures framed as ongoing work never stopped.
 - [Stale index.html after redeploy causes blank screen](stale-index-html-cache.md) — express.static needs no-store on index.html + immutable on hashed assets, or cached old HTML 404s on deleted chunk files post-deploy.
 - [Mobile black-screen from uncompressed JS bundle](mobile-black-screen-no-compression.md) — check backend logs are clean, then check for missing gzip/brotli compression before assuming a frontend crash.
