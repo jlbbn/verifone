@@ -49,6 +49,35 @@ app y BD.
 
 ---
 
+## 2026-08-10 — Remediación parcial (hallazgo 2.b): validación de certificado TLS en producción
+
+**Estado: APLICADA en código (pendiente de verificación en producción al desplegar)**
+
+Cambio real en `server/db.ts`:
+
+- Producción ahora exige TLS **y valida el certificado** del servidor
+  (`rejectUnauthorized: true` por defecto), en lugar de aceptar cualquier
+  certificado. Esto cierra el hallazgo 2.b de la Tarea 1.
+- Se corrigió el comentario que afirmaba, falsamente, que la configuración
+  anterior era "equivalente a verify-full".
+- Se agregó una válvula de escape documentada
+  (`DATABASE_SSL_REJECT_UNAUTHORIZED=false`) por si algún día la BD apunta a
+  un proveedor con certificado privado/autofirmado — es una degradación
+  deliberada, no se debilita el código.
+
+Verificación hecha:
+- `tsc --noEmit` limpio.
+- App de desarrollo reinicia y conecta a la BD sin errores (dev no usa TLS por
+  el host interno, así que su comportamiento no cambia).
+- Logs de despliegue confirman que producción sí usa TLS hoy.
+
+Verificación pendiente (no ejecutada, por instrucción de trabajar solo local):
+- Confirmar en el próximo despliegue que la BD de producción valida contra el
+  certificado sin romper la conexión. Si rompiera, la válvula de escape queda
+  disponible.
+
+---
+
 ## Tareas 2-6 — Estado: BLOQUEADAS
 
 Requieren una cuenta real de DigitalOcean y un token de API (secret) que hoy
