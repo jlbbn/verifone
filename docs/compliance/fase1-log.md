@@ -148,3 +148,12 @@ verificado (ver hoja "Riesgos" del plan original).
   de administración del droplet (el servicio y la aplicación no se vieron afectados). Se generó
   y registró una llave nueva; la restauración del acceso requiere pegar la llave pública en la
   consola web del droplet (procedimiento sin exposición de secretos). Sin impacto en usuarios.
+- 2026-08-11: acceso de administración al droplet restaurado (llave nueva verificada por SSH).
+  Desplegada en DigitalOcean la versión con verificación de firma de webhooks OKX (tarea #62
+  fusionada) y configurado OKX_WEBHOOK_SECRET en el entorno del servidor; servicio activo,
+  arranque sin advertencias de webhook. Nota: los webhooks de OKX seguirán llegando al dominio
+  actual (Replit) hasta el cutover de DNS; la protección aplica en DO desde ya para el tráfico
+  que reciba ese servidor.
+- 2026-08-11: observado en los registros de producción (Replit): sondeos automatizados
+  buscando /api/.env e intentos de inicio de sesión fallidos — todos rechazados (401).
+  Refuerza la justificación del WAF planificado en la Etapa 2.
