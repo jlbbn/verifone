@@ -101,3 +101,26 @@ verificado (ver hoja "Riesgos" del plan original).
   si la BD falla por certificado TLS al arrancar, el proceso aborta con un
   error que nombra la causa, en vez de seguir sirviendo sin BD. Arranque en
   desarrollo verificado limpio tras la integración.
+
+## 2026-08-11 — Tareas 2-6 DESBLOQUEADAS: cuenta DigitalOcean conectada y verificada
+
+- Token de API recibido de forma segura (secreto `DIGITALOCEAN_TOKEN`).
+- Verificación de SOLO LECTURA contra la API real (`/v2/account`):
+  cuenta **activa**, correo verificado, límite de 3 droplets, equipo "My Team".
+- Inventario inicial real: 0 VPCs, 0 bases de datos gestionadas, 0 droplets —
+  cuenta limpia, sin infraestructura previa.
+- Pendiente señalado: el panel muestra "Add Payment Method" — la creación de
+  recursos con costo (BD gestionada, bastión) puede requerir activar
+  facturación; hay $5 USD de crédito de registro.
+- Regla acordada: ningún recurso con costo se crea sin confirmación explícita
+  del titular; la migración de BD en vivo queda condicionada a respaldo
+  verificado + ventana de mantenimiento.
+
+## 2026-08-11 — Etapa 1, Tarea 2 COMPLETADA: VPC privada creada (real)
+
+- VPC `banxico-plus-vpc` creada vía API en región **nyc3**.
+- ID real: `7338eb23-1f3d-4224-9fca-7577fc571e6c`
+- Rango IP privado: `10.10.0.0/20`
+- Nota técnica honesta: las VPC de DigitalOcean usan un solo rango IP por red;
+  no existen "subredes" separadas como tal — la tarea del plan queda cubierta
+  por el rango único. Verificable en el panel: Networking → VPC.
