@@ -6,7 +6,29 @@ import { setupVite, serveStatic, log } from "./vite";
 import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
 import { storage } from "./storage";
 import { db } from "./db";
+import { isTlsCertificateError } from "./db-ssl";
 import { sql } from "drizzle-orm";
+
+/**
+ * Fail loudly on database TLS/certificate errors. Production requires full
+ * certificate verification (see server/db-ssl.ts); if the managed Postgres
+ * endpoint or its certificate chain ever changes and verification fails, we
+ * must crash with a clear message in the deployment logs — not continue
+ * without a working database and let requests hang or silently retry.
+ */
+function abortIfDbTlsError(err: unknown, phase: string): void {
+  if (!isTlsCertificateError(err)) return;
+  const e = err as { code?: string; message?: string };
+  console.error(
+    `FATAL DATABASE TLS/CERTIFICATE ERROR during ${phase}: ` +
+      `${e.code ? `[${e.code}] ` : ""}${e.message ?? String(err)}\n` +
+      "The database server's TLS certificate could not be verified. " +
+      "This usually means the managed Postgres endpoint or its certificate " +
+      "chain changed. The app refuses to start rather than run without a " +
+      "verified database connection.",
+  );
+  process.exit(1);
+}
 
 // ── Global safety net ─────────────────────────────────────────────────────────
 process.on("unhandledRejection", (reason) => {
@@ -136,12 +158,16 @@ app.use((req, res, next) => {
   try {
     await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS payment_engine_access boolean NOT NULL DEFAULT false`);
     await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS pos_full_access boolean NOT NULL DEFAULT false`);
-  } catch (_) { /* columns likely already exist */ }
+  } catch (e: any) {
+    abortIfDbTlsError(e, "DB migrations");
+    /* otherwise: columns likely already exist */
+  }
 
   // ── Storage init ───────────────────────────────────────────────────────────
   try {
     await withTimeout(storage.initialize(), 20_000, "storage.initialize");
   } catch (e: any) {
+    abortIfDbTlsError(e, "storage.initialize");
     log(`Storage init warning: ${e.message} — continuing startup`);
   }
 

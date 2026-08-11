@@ -39,6 +39,41 @@ export function extractSslMode(url: string): ExtractedSslMode {
 //   this local hop. Any other mode in development also gets full validation.
 // Never downgrade to `rejectUnauthorized: false` — that accepts any
 // certificate and defeats TLS authentication entirely.
+// Recognize TLS/certificate-verification failures from `pg`/Node so startup
+// can fail loudly instead of continuing without a database. Covers the OpenSSL
+// verify error codes Node surfaces on `err.code` plus common message text.
+const TLS_ERROR_CODES = new Set([
+  "SELF_SIGNED_CERT_IN_CHAIN",
+  "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+  "UNABLE_TO_GET_ISSUER_CERT",
+  "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
+  "CERT_HAS_EXPIRED",
+  "CERT_NOT_YET_VALID",
+  "CERT_SIGNATURE_FAILURE",
+  "CERT_UNTRUSTED",
+  "CERT_REJECTED",
+  "CERT_REVOKED",
+  "DEPTH_ZERO_SELF_SIGNED_CERT",
+  "HOSTNAME_MISMATCH",
+  "ERR_TLS_CERT_ALTNAME_INVALID",
+  "ERR_TLS_HANDSHAKE_TIMEOUT",
+  "EPROTO",
+]);
+
+export function isTlsCertificateError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { code?: unknown; message?: unknown };
+  if (typeof e.code === "string" && TLS_ERROR_CODES.has(e.code)) return true;
+  const msg = typeof e.message === "string" ? e.message.toLowerCase() : "";
+  return (
+    msg.includes("certificate") ||
+    msg.includes("ssl") ||
+    msg.includes("tls") ||
+    msg.includes("self signed") ||
+    msg.includes("self-signed")
+  );
+}
+
 export function resolvePoolSsl(
   sslmode: string | null,
   isProduction: boolean,
