@@ -1,0 +1,23 @@
+---
+name: DigitalOcean production migration architecture
+description: Production app + DB are migrating from Replit hosting to DigitalOcean (compliance plan, Etapa 1) — target architecture, naming, and hard rules.
+---
+
+# DigitalOcean migration (compliance plan, decided 2026-08-11)
+
+**Decision:** User confirmed (twice) the literal compliance plan: production DB **and** app runtime move to DigitalOcean so the DB can live VPC-only without public exposure. Replit stays as the dev workspace; Replit production deployment will be retired after DNS cutover.
+
+**Why:** The compliance plan (Etapa 1, Tareas 3-5) requires a DB with no public IP reachable only inside a private network. The app on Replit cannot reach a VPC-only DB, and Replit has no fixed egress IP, so trusted-source firewalling doesn't work from Replit. Option B (public hardened endpoint) was rejected as cost without real control gain.
+
+**Target architecture (region nyc3):**
+- VPC `banxico-plus-vpc` — 10.10.0.0/20. DO VPCs have a single ip_range; no separate subnets (documented honestly in bitácora).
+- Managed PostgreSQL 18 `banxico-plus-db` inside the VPC (db-s-1vcpu-1gb, ~$15/mes). Tarea 4 = restrict trusted sources to app droplet + bastion (DO managed DBs always expose a hostname; the firewall is what removes effective public access).
+- App droplet `banxico-plus-app` Ubuntu 24.04 (s-1vcpu-2gb, $12/mes) in the same VPC. Chosen over App Platform because Etapa 2 (SSH hardening, fail2ban, bastion) presumes real servers.
+- SSH: dedicated ed25519 key at `/home/runner/.ssh/do_banxico_ed25519` (workspace-local, not in repo), DO key name `banxico-plus-admin`. Key-only auth, no passwords.
+
+**How to apply:**
+- All DO API calls: `Authorization: Bearer $DIGITALOCEAN_TOKEN` (Replit secret). Never print the token or DB passwords; jq-filter credentials out of any `/v2/databases` output shown in chat or logs.
+- Hard rules agreed with the user: no paid resource created without explicit confirmation; live-data migration only with verified backup + maintenance window + rollback path (DNS points back to Replit deployment).
+- Build in the Replit workspace, ship artifacts to the droplet (2GB RAM: avoid building on-server). Secrets go to the droplet via SSH into a root-owned env file (never committed).
+- Budget honesty: the plan's spreadsheet budgeted $0 for the managed DB and nothing for app hosting; real ~$27/mes fits in the plan's buffer lines — flagged to the user, accepted.
+- The bitácora `docs/compliance/fase1-log.md` records only real, verified events (anti-fabrication boundary).

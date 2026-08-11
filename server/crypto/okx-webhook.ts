@@ -16,7 +16,7 @@ import type { Request, Response, NextFunction } from "express";
 import { db } from "../db.js";
 import { sql } from "drizzle-orm";
 import { storage } from "../storage.js";
-import { log } from "../vite.js";
+import { log } from "../logger.js";
 
 // ─── OKX Webhook IP Allowlist ─────────────────────────────────────────────────
 // OKX push notifications originate from these IPs (AWS ap-northeast-1 region).

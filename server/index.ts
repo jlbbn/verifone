@@ -2,7 +2,8 @@ import express, { type Request, Response, NextFunction } from "express";
 import helmet from "helmet";
 import compression from "compression";
 import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
+import { log } from "./logger";
+import { serveStatic } from "./static";
 import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
 import { storage } from "./storage";
 import { db } from "./db";
@@ -193,6 +194,15 @@ app.use((req, res, next) => {
 
   // ── Static files / Vite dev ────────────────────────────────────────────────
   if (app.get("env") === "development") {
+    // Dynamic import with a variable specifier: keeps vite (a dev-only
+    // dependency) out of the production bundle's import graph — esbuild
+    // cannot statically analyze or inline it, so `node dist/index.js`
+    // works with node_modules installed via --omit=dev. Never executed in
+    // production; in dev, tsx resolves it against server/vite.ts.
+    const devViteModule = "./vite";
+    const { setupVite } = (await import(
+      devViteModule
+    )) as typeof import("./vite");
     await setupVite(app, server);
   } else {
     try {

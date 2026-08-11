@@ -124,3 +124,23 @@ verificado (ver hoja "Riesgos" del plan original).
 - Nota técnica honesta: las VPC de DigitalOcean usan un solo rango IP por red;
   no existen "subredes" separadas como tal — la tarea del plan queda cubierta
   por el rango único. Verificable en el panel: Networking → VPC.
+
+## 2026-08-11 — Etapa 1, Tarea 3 INICIADA: infraestructura de migración creada (real)
+
+- Decisión del titular (confirmada 2 veces): plan literal — BD **y** app migran a DigitalOcean.
+- BD gestionada PostgreSQL 18 `banxico-plus-db` creada dentro de la VPC (id `270ef2e5-4fb3-4719-87a3-9ae6d0c31c71`), tamaño db-s-1vcpu-1gb (~$15/mes).
+- Droplet `banxico-plus-app` Ubuntu 24.04 (id `591494608`, s-1vcpu-2gb, $12/mes) en la misma VPC. IP pública 165.227.125.34, IP privada 10.10.0.2.
+- Acceso administrativo SOLO por llave SSH ed25519 dedicada (sin contraseñas) — alineado con Etapa 2.
+- La facturación de la cuenta permitió crear recursos (crédito inicial activo).
+- Pendiente: aprovisionamiento del droplet, migración de datos con respaldo verificado, cutover DNS con ventana.
+
+## 2026-08-11 — HITO REAL: la aplicación corre en DigitalOcean contra la BD privada
+
+- Droplet `banxico-plus-app` sirviendo la app (HTTP 200 vía Caddy) con systemd + reinicio automático.
+- Conexión a la BD gestionada por el **host privado de la VPC** con TLS y verificación
+  completa de certificados (CA del clúster vía NODE_EXTRA_CA_CERTS; política de #59/#60 intacta).
+- Esquema completo (24 tablas) creado con drizzle; datos semilla inicializados (12 usuarios).
+- Corrección de portabilidad real: vite (dependencia solo de desarrollo) quedó fuera del
+  bundle de producción (import dinámico no analizable + módulos logger/static separados).
+- Pendientes para el cutover: migración de datos reales con respaldo verificado, llave de
+  Stripe válida fuera de Replit, DNS del dominio, allowlist de IP en OKX si aplica.

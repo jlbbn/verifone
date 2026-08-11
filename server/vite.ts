@@ -1,4 +1,7 @@
-import express, { type Express } from "express";
+// NOTE: this module statically imports `vite` and `../vite.config` (dev-only
+// dependencies). It must only ever be loaded via dynamic import in development
+// (see server/index.ts) so the production bundle never resolves them.
+import { type Express } from "express";
 import fs from "fs";
 import path from "path";
 import { createServer as createViteServer, createLogger } from "vite";
@@ -7,17 +10,6 @@ import viteConfig from "../vite.config";
 import { nanoid } from "nanoid";
 
 const viteLogger = createLogger();
-
-export function log(message: string, source = "express") {
-  const formattedTime = new Date().toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  });
-
-  console.log(`${formattedTime} [${source}] ${message}`);
-}
 
 export async function setupVite(app: Express, server: Server) {
   const serverOptions = {
@@ -67,34 +59,3 @@ export async function setupVite(app: Express, server: Server) {
   });
 }
 
-export function serveStatic(app: Express) {
-  const distPath = path.resolve(import.meta.dirname, "public");
-
-  if (!fs.existsSync(distPath)) {
-    throw new Error(
-      `Could not find the build directory: ${distPath}, make sure to build the client first`,
-    );
-  }
-
-  app.use(
-    express.static(distPath, {
-      // Hashed build assets (e.g. /assets/index-<hash>.js) are safe to cache
-      // forever; index.html must never be cached, or a stale copy on the
-      // client keeps referencing chunk hashes that no longer exist after a
-      // new deploy, causing dynamic-import 404s and a blank page.
-      setHeaders: (res, filePath) => {
-        if (filePath.endsWith("index.html")) {
-          res.setHeader("Cache-Control", "no-store");
-        } else {
-          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-        }
-      },
-    }),
-  );
-
-  // fall through to index.html if the file doesn't exist
-  app.use("*", (_req, res) => {
-    res.setHeader("Cache-Control", "no-store");
-    res.sendFile(path.resolve(distPath, "index.html"));
-  });
-}
