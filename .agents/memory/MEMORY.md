@@ -19,3 +19,4 @@
 - [Google Translate causes React removeChild crash](google-translate-removechild-crash.md) — mismatched html lang triggers Chrome auto-translate, which mutates DOM nodes React later crashes on; fix lang + notranslate meta, add ErrorBoundary.
 - [DB TLS verification policy](db-tls-verification.md) — pool SSL follows URL sslmode; prod Neon certs are publicly trusted so rejectUnauthorized:true works; never disable verification.
 - [API hangs from untimed external calls](api-response-guarantees.md) — untimed fetch to email/broker APIs can hang a request for 20s+; add timeouts on outbound calls + a server-side response-guarantee middleware + client fetch timeout/retry.
+- [DigitalOcean production migration architecture](do-migration-arch.md) — prod app+DB moving to DO VPC (nyc3) per compliance plan; no paid resources or live-data moves without user confirmation; never print DB credentials.
