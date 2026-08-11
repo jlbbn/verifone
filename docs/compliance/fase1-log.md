@@ -84,3 +84,20 @@ Requieren una cuenta real de DigitalOcean y un token de API (secret) que hoy
 no existen en este entorno. No se ejecutan ni se reportan como avanzadas
 hasta que exista esa credencial y una ventana de mantenimiento con backup
 verificado (ver hoja "Riesgos" del plan original).
+
+## 2026-08-11 — Perímetro local: reducción de superficie y verificación de webhook
+
+- **Eliminado el mapeo de puerto público sin uso** (externo 3000 → interno 5050):
+  ningún proceso escucha en 5050 y ninguna parte del código lo referencia.
+  Superficie pública restante: 80 → app (5000) y 3001 → sandbox de diseño
+  (23636, solo desarrollo).
+- **Verificado el comportamiento del webhook de OKX sin `OKX_WEBHOOK_SECRET`:**
+  falla en modo seguro — los eventos sin firma verificada se registran pero NO
+  ejecutan efectos (no tocan saldos), y en producción además hay allowlist de
+  IPs de OKX. Hallazgo: mientras el secreto real no esté configurado, los
+  eventos legítimos de OKX tampoco ejecutan efectos. Es un hueco funcional,
+  no una vulnerabilidad.
+- **Integrada la alarma de arranque** (tarea #60, hecha por agente de tarea):
+  si la BD falla por certificado TLS al arrancar, el proceso aborta con un
+  error que nombra la causa, en vez de seguir sirviendo sin BD. Arranque en
+  desarrollo verificado limpio tras la integración.
