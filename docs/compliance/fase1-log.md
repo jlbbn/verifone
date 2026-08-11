@@ -144,3 +144,7 @@ verificado (ver hoja "Riesgos" del plan original).
   bundle de producción (import dinámico no analizable + módulos logger/static separados).
 - Pendientes para el cutover: migración de datos reales con respaldo verificado, llave de
   Stripe válida fuera de Replit, DNS del dominio, allowlist de IP en OKX si aplica.
+- 2026-08-11: incidente operativo real: el reinicio del entorno de trabajo eliminó la llave SSH
+  de administración del droplet (el servicio y la aplicación no se vieron afectados). Se generó
+  y registró una llave nueva; la restauración del acceso requiere pegar la llave pública en la
+  consola web del droplet (procedimiento sin exposición de secretos). Sin impacto en usuarios.

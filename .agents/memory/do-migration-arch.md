@@ -21,3 +21,14 @@ description: Production app + DB are migrating from Replit hosting to DigitalOce
 - Build in the Replit workspace, ship artifacts to the droplet (2GB RAM: avoid building on-server). Secrets go to the droplet via SSH into a root-owned env file (never committed).
 - Budget honesty: the plan's spreadsheet budgeted $0 for the managed DB and nothing for app hosting; real ~$27/mes fits in the plan's buffer lines — flagged to the user, accepted.
 - The bitácora `docs/compliance/fase1-log.md` records only real, verified events (anti-fabrication boundary).
+
+## Lección: /home/runner/.ssh NO persiste
+- Un reinicio del entorno de Replit borra `/home/runner/.ssh` (llaves + known_hosts). La llave
+  privada del droplet se pierde y NO debe respaldarse dentro del workspace (se comparte/commitea).
+- Recuperación estándar: generar llave nueva, registrarla en la cuenta DO vía API
+  (`POST /v2/account/keys`), y pedir al usuario pegar UNA línea en la Droplet Console web
+  (`echo '<pubkey>' >> /root/.ssh/authorized_keys`). La console web entra como root sin
+  contraseña gracias al droplet-agent preinstalado en imágenes DO Ubuntu.
+- Regla: al inicio de cada sesión que toque el droplet, verificar `ls ~/.ssh` antes de asumir acceso.
+- Llaves DO en cuenta: banxico-plus-admin (58416636, privada perdida, inofensiva) y
+  banxico-plus-admin-2 (58433245, activa).
