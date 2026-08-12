@@ -157,3 +157,7 @@ verificado (ver hoja "Riesgos" del plan original).
 - 2026-08-11: observado en los registros de producción (Replit): sondeos automatizados
   buscando /api/.env e intentos de inicio de sesión fallidos — todos rechazados (401).
   Refuerza la justificación del WAF planificado en la Etapa 2.
+- 2026-08-11: segundo incidente de pérdida de la llave SSH de administración por reinicio del
+  entorno de trabajo (la aplicación y el servidor no se afectaron). Decisión: migrar a una llave
+  de administración derivable de una semilla secreta persistente, para que los reinicios del
+  entorno dejen de requerir recuperación manual por consola.
