@@ -44,3 +44,12 @@ description: Production app + DB are migrating from Replit hosting to DigitalOce
 - banxicoplusllc.org ya usa nameservers de CLOUDFLARE (cuenta del usuario). A raíz → IP GCP de Replit,
   TTL 3600, registro sin proxy; www NO existe (crearlo en el cutover). Cutover = editar registro A en
   panel CF del usuario; secuencia: gris (directo) → Caddy emite LE → luego nube naranja + WAF (Etapa 2).
+
+## Pipeline de migración de datos (ensayado OK 2026-08-12)
+- Export: executeSql prod → json_agg por tabla → base64 → /tmp/rehearsal-data/*.json (decodificar
+  con Buffer DENTRO de "use impure"; el ámbito durable del sandbox no tiene Buffer).
+- Import/verify: scripts/migration/import-data.mjs y verify-import.mjs (DB_URL + DATA_DIR;
+  NODE_EXTRA_CA_CERTS con la CA del clúster re-descargable vía API /v2/databases/{id}/ca).
+- El sandbox de CodeExecution comparte /tmp con el shell del workspace (verificado con marker).
+- Regla PII: tras verificar, borrar dumps de /tmp y la base de ensayo (no dejar copias).
+- Día real: mismo pipeline contra defaultdb + delta re-sync post-propagación DNS.

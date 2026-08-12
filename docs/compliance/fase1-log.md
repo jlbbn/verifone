@@ -165,3 +165,15 @@ verificado (ver hoja "Riesgos" del plan original).
   persistente (los reinicios del entorno de trabajo ya no requieren recuperación manual).
   Llave real de Stripe (sk_live, creada por el usuario en su panel de Stripe) instalada en el
   entorno del droplet; servicio reiniciado. Valores nunca expuestos.
+
+## 2026-08-12 — HITO REAL: ensayo general de migración de datos, verificado
+
+- Exportación solo-lectura de la base de producción (24 tablas, 421 filas) sin exposición de datos.
+- Importación completa a una base de ensayo en el clúster de DigitalOcean con orden de
+  dependencias, casts por tipo y ajuste de secuencias (herramientas en scripts/migration/).
+- Verificación tabla por tabla: conteos de filas y sumas de TODAS las columnas numéricas
+  idénticos entre origen y destino (24/24 tablas, sin diferencias).
+- Higiene de datos: al terminar la verificación se eliminaron la base de ensayo y los archivos
+  temporales para no dejar copias adicionales de datos personales.
+- Pendiente para el día real: exportación fresca con ventana breve, misma verificación,
+  cambio de DNS en Cloudflare y re-sincronización de diferencias tras la propagación.
