@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bitstamp — Simulación de implementación</title>
+<style>
+  :root{
+    --bg:#0a0b0d; --panel:#111318; --border:#22262e; --text:#e7e9ec; --muted:#8b929e;
+    --green:#22c55e; --amber:#f59e0b; --red:#ef4444; --blue:#3b82f6; --accent:#22c55e;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;}
+  .wrap{max-width:980px;margin:0 auto;padding:28px 20px 60px;}
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:10px;}
+  h1{font-size:22px;margin:0;letter-spacing:.2px;}
+  h1 span{color:var(--muted);font-weight:400;}
+  .badge{font-size:11px;padding:3px 9px;border-radius:20px;border:1px solid var(--border);color:var(--muted);}
+  .disclaimer{background:#171a1f;border:1px solid var(--border);border-left:3px solid var(--blue);
+    padding:10px 14px;border-radius:6px;font-size:12.5px;color:var(--muted);margin:14px 0 22px;line-height:1.5;}
+  .controls{display:flex;gap:8px;align-items:center;margin-bottom:20px;}
+  button{background:var(--accent);color:#04140a;border:none;font-weight:600;font-size:13px;
+    padding:9px 16px;border-radius:6px;cursor:pointer;}
+  button.secondary{background:transparent;border:1px solid var(--border);color:var(--text);}
+  button:disabled{opacity:.45;cursor:not-allowed;}
+  .eta{font-size:12.5px;color:var(--muted);margin-left:auto;}
+  .day{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:14px;
+    transition:border-color .3s;}
+  .day.active{border-color:#2f7d46;}
+  .day-head{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+  .day-num{width:26px;height:26px;border-radius:50%;background:#1c2027;border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);flex-shrink:0;}
+  .day.active .day-num, .day.done .day-num{background:var(--green);color:#04140a;border-color:var(--green);}
+  .day-title{font-size:14.5px;font-weight:600;}
+  .day-sub{font-size:12px;color:var(--muted);}
+  .bar-track{height:5px;background:#1c2027;border-radius:3px;overflow:hidden;margin:8px 0 12px;}
+  .bar-fill{height:100%;width:0%;background:linear-gradient(90deg,#22c55e,#3b82f6);transition:width .4s linear;}
+  .steps{display:flex;flex-direction:column;gap:6px;}
+  .step{display:flex;gap:9px;align-items:flex-start;font-size:12.8px;color:var(--muted);padding:3px 0;}
+  .step.on{color:var(--text);}
+  .icon{width:15px;flex-shrink:0;text-align:center;font-size:12px;line-height:18px;}
+  .step.ok .icon{color:var(--green);}
+  .step.warn .icon{color:var(--amber);}
+  .step.err .icon{color:var(--red);}
+  .step .icon.spin::before{content:"◐";display:inline-block;animation:spin 1s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .note{font-size:11.5px;color:var(--muted);margin-left:24px;margin-top:-2px;}
+  .note.warn{color:var(--amber);}
+  .note.err{color:var(--red);}
+  .console{background:#0d0f13;border:1px solid var(--border);border-radius:10px;padding:14px 16px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.6px;color:#9fe6b0;height:220px;
+    overflow-y:auto;margin-top:22px;}
+  .console .l{color:#7b8593;}
+  .console .warn{color:var(--amber);}
+  .console .err{color:var(--red);}
+  .console .ok{color:#67e28d;}
+  .summary{display:none;margin-top:20px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px 20px;}
+  .summary h2{font-size:15px;margin:0 0 10px;}
+  .summary table{width:100%;border-collapse:collapse;font-size:12.8px;}
+  .summary td{padding:6px 4px;border-bottom:1px solid var(--border);color:var(--muted);}
+  .summary td.v{color:var(--text);text-align:right;}
+  .risk{margin-top:12px;padding:10px 12px;border-radius:8px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);
+    font-size:12.5px;color:#f3c98a;}
+  footer{margin-top:26px;font-size:11px;color:#565c66;text-align:center;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Bitstamp <span>— simulación de implementación</span></h1>
+    <span class="badge">Entorno de pruebas · sin credenciales reales</span>
+  </header>
+
+  <div class="disclaimer">
+    Este es un ejercicio ilustrativo interno de Banxico Plus. Reproduce, con datos simulados, la lógica real
+    ya escrita para el conector de Bitstamp (firma HMAC-SHA256, endpoints v2, cadena de respaldo de brokers).
+    No ejecuta llamadas reales al API de Bitstamp, no usa credenciales, y no toca la plataforma en producción.
+  </div>
+
+  <div class="controls">
+    <button id="playBtn">▶ Iniciar simulación</button>
+    <button id="resetBtn" class="secondary" disabled>Reiniciar</button>
+    <span class="eta" id="eta">Duración estimada real: ~9.5 h en 4 días</span>
+  </div>
+
+  <div id="days"></div>
+
+  <div class="console" id="console"></div>
+
+  <div class="summary" id="summary">
+    <h2>Resultado de la simulación</h2>
+    <table>
+      <tr><td>Días simulados</td><td class="v">4 de 4</td></tr>
+      <tr><td>Pasos completados</td><td class="v" id="sumSteps">—</td></tr>
+      <tr><td>Advertencias detectadas</td><td class="v" id="sumWarn">—</td></tr>
+      <tr><td>Errores detectados</td><td class="v" id="sumErr">—</td></tr>
+      <tr><td>Broker resultante en la cadena</td><td class="v">OKX → Kraken → Bitstamp → interno (respaldo #3)</td></tr>
+    </table>
+    <div class="risk">
+      ⚠ Riesgo principal confirmado: Bitstamp no ofrece red TRC-20 para USDT — un retiro que en OKX cuesta
+      ~$1 saldría por red Ethereum a ~$15–20. Recomendación: mantener a Bitstamp como último respaldo,
+      nunca como ruta principal de dispersión.
+    </div>
+  </div>
+
+  <footer>Simulación generada a partir de la lógica real del conector — Banxico Plus LLC</footer>
+</div>
+
+<script>
+const DAYS = [
+  {
+    title: "Día 1 — Cliente Bitstamp desde cero",
+    sub: "Autenticación v2 (HMAC-SHA256 sobre nonce + customer_id + api_key)",
+    steps: [
+      { t: "Generar nonce y construir mensaje de firma", d: 900 },
+      { t: "Firmar con HMAC-SHA256 y clave secreta", d: 900 },
+      { t: "Firma rechazada: nonce reutilizado del intento anterior", d: 700, kind: "warn",
+        note: "Corregido — nonce ahora se genera con Date.now() en cada llamada" },
+      { t: "Reintento de firma → aceptada", d: 900, kind: "ok" },
+      { t: "Prueba de conexión contra ticker público (btcusd)", d: 1000 },
+      { t: "Cliente base completo: ticker · balance · orden de mercado · retiro", d: 900 },
+    ],
+  },
+  {
+    title: "Día 2 — Integración al motor de brokers",
+    sub: "Cadena de respaldo: OKX → Kraken → Bitstamp → interno",
+    steps: [
+      { t: "Registrar Bitstamp como respaldo #3 en broker-executor", d: 900 },
+      { t: "Prueba de saldo autenticado (requiere API key + secret + customer ID)", d: 1000 },
+      { t: "Aviso: solo se activa si OKX y Kraken fallan o no tienen credenciales", d: 700, kind: "warn",
+        note: "Esperado — Bitstamp es el último recurso, no la ruta principal" },
+      { t: "Prueba de conexión exitosa con llaves reales", d: 900, kind: "ok" },
+      { t: "Confirmación de prioridad en la cadena", d: 800 },
+    ],
+  },
+  {
+    title: "Día 3 — Prueba de intercambio real",
+    sub: "Swap de monto mínimo · verificación de comisiones y errores",
+    steps: [
+      { t: "Orden de venta de mercado (monto mínimo)", d: 1000 },
+      { t: "Orden de compra de mercado — bridge en USD", d: 1000 },
+      { t: "Cálculo de comisión de retiro de USDT", d: 800 },
+      { t: "Sin red TRC-20 disponible — retiro forzado por red Ethereum", d: 900, kind: "err",
+        note: "Comisión real ~$15–20 vs. ~$1 en OKX — riesgo confirmado, no es error de código" },
+      { t: "Manejo de error específico de Bitstamp (fondos insuficientes) probado", d: 900 },
+    ],
+  },
+  {
+    title: "Día 4 — Despliegue y monitoreo",
+    sub: "Publicación, primeras operaciones reales, bitácora de cumplimiento",
+    steps: [
+      { t: "Despliegue del conector a producción", d: 900 },
+      { t: "Monitoreo de primera operación real", d: 1000 },
+      { t: "HTTP 429 — límite de solicitudes alcanzado", d: 700, kind: "warn",
+        note: "Reintento automático tras backoff — comportamiento esperado bajo carga" },
+      { t: "Reintento exitoso", d: 800, kind: "ok" },
+      { t: "Registro en bitácora de cumplimiento", d: 900 },
+    ],
+  },
+];
+
+const daysEl = document.getElementById("days");
+const consoleEl = document.getElementById("console");
+const playBtn = document.getElementById("playBtn");
+const resetBtn = document.getElementById("resetBtn");
+const summaryEl = document.getElementById("summary");
+
+function buildDom() {
+  daysEl.innerHTML = "";
+  DAYS.forEach((day, di) => {
+    const el = document.createElement("div");
+    el.className = "day";
+    el.id = "day" + di;
+    el.innerHTML = `
+      <div class="day-head">
+        <div class="day-num">${di + 1}</div>
+        <div>
+          <div class="day-title">${day.title}</div>
+          <div class="day-sub">${day.sub}</div>
+        </div>
+      </div>
+      <div class="bar-track"><div class="bar-fill" id="bar${di}"></div></div>
+      <div class="steps" id="steps${di}"></div>
+    `;
+    daysEl.appendChild(el);
+    const stepsEl = el.querySelector("#steps" + di);
+    day.steps.forEach((s, si) => {
+      const row = document.createElement("div");
+      row.className = "step";
+      row.id = "step" + di + "_" + si;
+      row.innerHTML = `<span class="icon">○</span><span>${s.t}</span>`;
+      stepsEl.appendChild(row);
+      if (s.note) {
+        const n = document.createElement("div");
+        n.className = "note " + (s.kind === "err" ? "err" : s.kind === "warn" ? "warn" : "");
+        n.id = "note" + di + "_" + si;
+        n.style.display = "none";
+        n.textContent = "↳ " + s.note;
+        stepsEl.appendChild(n);
+      }
+    });
+  });
+}
+
+function log(msg, cls) {
+  const line = document.createElement("div");
+  const time = new Date().toLocaleTimeString("es-MX", { hour12: false });
+  line.innerHTML = `<span class="l">[${time}]</span> ${msg}`;
+  if (cls) line.classList.add(cls);
+  consoleEl.appendChild(line);
+  consoleEl.scrollTop = consoleEl.scrollHeight;
+}
+
+let counts = { ok: 0, warn: 0, err: 0, total: 0 };
+
+async function runStep(di, si) {
+  const day = DAYS[di];
+  const s = day.steps[si];
+  const row = document.getElementById(`step${di}_${si}`);
+  const icon = row.querySelector(".icon");
+  row.classList.add("on");
+  icon.className = "icon spin";
+  await sleep(s.d);
+
+  const kind = s.kind || "ok";
+  counts.total++;
+  if (kind === "ok") { icon.className = "icon"; icon.textContent = "✓"; row.classList.add("ok"); counts.ok++; log(s.t, "ok"); }
+  if (kind === "warn") { icon.className = "icon"; icon.textContent = "!"; row.classList.add("warn"); counts.warn++; log("ADVERTENCIA — " + s.t, "warn"); }
+  if (kind === "err") { icon.className = "icon"; icon.textContent = "✕"; row.classList.add("err"); counts.err++; log("RIESGO — " + s.t, "err"); }
+  if (!s.kind) { icon.textContent = "✓"; row.classList.add("ok"); }
+
+  const note = document.getElementById(`note${di}_${si}`);
+  if (note) note.style.display = "block";
+
+  const bar = document.getElementById("bar" + di);
+  bar.style.width = Math.round(((si + 1) / day.steps.length) * 100) + "%";
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function run() {
+  playBtn.disabled = true;
+  resetBtn.disabled = true;
+  log("Iniciando simulación — sin llamadas reales, solo lógica del conector.", "l");
+  for (let di = 0; di < DAYS.length; di++) {
+    const dayEl = document.getElementById("day" + di);
+    dayEl.classList.add("active");
+    dayEl.scrollIntoView({ behavior: "smooth", block: "center" });
+    log("— " + DAYS[di].title + " —");
+    for (let si = 0; si < DAYS[di].steps.length; si++) {
+      await runStep(di, si);
+    }
+    dayEl.classList.remove("active");
+    dayEl.classList.add("done");
+  }
+  log("Simulación completa.", "ok");
+  document.getElementById("sumSteps").textContent = counts.total;
+  document.getElementById("sumWarn").textContent = counts.warn;
+  document.getElementById("sumErr").textContent = counts.err;
+  summaryEl.style.display = "block";
+  summaryEl.scrollIntoView({ behavior: "smooth", block: "center" });
+  resetBtn.disabled = false;
+}
+
+function reset() {
+  counts = { ok: 0, warn: 0, err: 0, total: 0 };
+  consoleEl.innerHTML = "";
+  summaryEl.style.display = "none";
+  buildDom();
+  playBtn.disabled = false;
+}
+
+playBtn.addEventListener("click", run);
+resetBtn.addEventListener("click", reset);
+buildDom();
+</script>
+</body>
+</html>
