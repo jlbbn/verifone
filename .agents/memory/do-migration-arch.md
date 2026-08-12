@@ -39,3 +39,8 @@ description: Production app + DB are migrating from Replit hosting to DigitalOce
 - Tras cualquier reinicio del entorno: correr ese script y usar `-i /home/runner/.ssh/do_banxico_derived`.
 - Registrada en la cuenta DO (banxico-plus-admin-derived). Las llaves admin (58416636) y
   admin-2 (58433245) tienen la parte privada perdida: inofensivas, no reutilizar.
+
+## DNS del dominio
+- banxicoplusllc.org ya usa nameservers de CLOUDFLARE (cuenta del usuario). A raíz → IP GCP de Replit,
+  TTL 3600, registro sin proxy; www NO existe (crearlo en el cutover). Cutover = editar registro A en
+  panel CF del usuario; secuencia: gris (directo) → Caddy emite LE → luego nube naranja + WAF (Etapa 2).
