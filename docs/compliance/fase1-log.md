@@ -161,3 +161,7 @@ verificado (ver hoja "Riesgos" del plan original).
   entorno de trabajo (la aplicación y el servidor no se afectaron). Decisión: migrar a una llave
   de administración derivable de una semilla secreta persistente, para que los reinicios del
   entorno dejen de requerir recuperación manual por consola.
+- 2026-08-12: acceso de administración restaurado con llave SSH derivable de semilla secreta
+  persistente (los reinicios del entorno de trabajo ya no requieren recuperación manual).
+  Llave real de Stripe (sk_live, creada por el usuario en su panel de Stripe) instalada en el
+  entorno del droplet; servicio reiniciado. Valores nunca expuestos.
