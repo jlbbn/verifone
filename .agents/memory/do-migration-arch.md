@@ -53,3 +53,21 @@ description: Production app + DB are migrating from Replit hosting to DigitalOce
 - El sandbox de CodeExecution comparte /tmp con el shell del workspace (verificado con marker).
 - Regla PII: tras verificar, borrar dumps de /tmp y la base de ensayo (no dejar copias).
 - Día real: mismo pipeline contra defaultdb + delta re-sync post-propagación DNS.
+
+## Runbook del cutover (todo preparado, esperando ventana del usuario)
+1. Export fresco: mismo pipeline del ensayo (CodeExecution → /tmp) contra prod.
+2. Import a `defaultdb` (NO a base de ensayo; ya borrada): scripts/migration/import-data.mjs
+   + verify-import.mjs con DB_URL de defaultdb; luego `systemctl restart banxico-plus`.
+   OJO: el import TRUNCATE-a todo — la app del droplet debe estar detenida o el seed re-corre
+   al reiniciar (storage.initialize() es idempotente sobre datos ya presentes: verificar que
+   respeta filas existentes tras import real).
+3. Activar dominio: `cp /etc/caddy/Caddyfile.cutover /etc/caddy/Caddyfile && systemctl reload caddy`.
+4. Usuario en Cloudflare: registro A banxicoplusllc.org → 165.227.125.34 (gris primero; crear
+   www también). TTL idealmente ya bajado a 5 min ANTES.
+5. Smoke: https + login + saldos. Luego delta re-sync: comparar prod Replit (executeSql, filas
+   nuevas desde export por created_at/id) y re-aplicar en DO.
+6. Post-estabilidad: trusted sources de la BD a solo el droplet (Tarea 4), apagar Replit prod,
+   nube naranja CF + WAF (Etapa 2), restringir llave OKX a IP 165.227.125.34 y revisar permiso
+   withdraw (hallazgo: llave sin restricción de IP con permisos read_only,withdraw,trade).
+- Env file /etc/banxico-plus.env es formato systemd, NO sourceable por bash (RESEND_FROM lleva
+  espacios): extraer valores con grep|cut.
