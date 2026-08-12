@@ -7,13 +7,14 @@
  *   2. Comprar B/USDT  (si toAsset  ≠ usdt)
  */
 
-import * as Binance from "./binance-client.js";
-import * as OKX     from "./okx-client.js";
-import * as Kraken  from "./kraken-client.js";
+import * as Binance  from "./binance-client.js";
+import * as OKX      from "./okx-client.js";
+import * as Kraken   from "./kraken-client.js";
+import * as Bitstamp from "./bitstamp-client.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type BrokerName = "binance" | "okx" | "kraken" | "internal";
+export type BrokerName = "binance" | "okx" | "kraken" | "bitstamp" | "internal";
 
 export interface SwapResult {
   broker:      BrokerName;
@@ -254,6 +255,59 @@ async function executeViaKraken(
   };
 }
 
+// ─── Bitstamp executor ────────────────────────────────────────────────────────
+// Nota: Bitstamp no ofrece red TRC-20 para USDT (solo ERC-20/Omni) — usarlo
+// solo como último respaldo, nunca como ruta principal de dispersión.
+
+async function executeViaBitstamp(
+  fromAsset: string,
+  toAsset:   string,
+  fromAmount: number,
+): Promise<SwapResult> {
+  const orderIds: string[] = [];
+  let usdtBridge = 0; // aquí usado como "puente en USD", Bitstamp cotiza en USD no USDT
+  let toAmount   = 0;
+
+  // ── Leg 1: vender fromAsset → USD ───────────────────────────────────────────
+  if (fromAsset !== "usdt") {
+    const fromPair = Bitstamp.BITSTAMP_PAIR[fromAsset];
+    if (!fromPair) throw new Error(`Bitstamp: par no soportado para ${fromAsset}`);
+
+    const order = await Bitstamp.sellMarket(fromPair, fromAmount.toFixed(8));
+    if (order.id) orderIds.push(order.id);
+
+    const t   = await Bitstamp.ticker(fromPair);
+    usdtBridge = fromAmount * parseFloat(t.bid);
+  } else {
+    usdtBridge = fromAmount;
+  }
+
+  // ── Leg 2: comprar toAsset con USD ──────────────────────────────────────────
+  if (toAsset !== "usdt") {
+    const toPair = Bitstamp.BITSTAMP_PAIR[toAsset];
+    if (!toPair) throw new Error(`Bitstamp: par no soportado para ${toAsset}`);
+
+    const t      = await Bitstamp.ticker(toPair);
+    const ask    = parseFloat(t.ask);
+    const amount = (usdtBridge / ask).toFixed(8);
+
+    const order = await Bitstamp.buyMarket(toPair, amount);
+    if (order.id) orderIds.push(order.id);
+    toAmount = parseFloat(amount);
+  } else {
+    toAmount = usdtBridge;
+  }
+
+  return {
+    broker:     "bitstamp",
+    fromAsset,  toAsset,
+    fromAmount, toAmount,
+    usdtBridge,
+    executedAt: new Date().toISOString(),
+    orderIds,
+  };
+}
+
 // ─── Public entry point ───────────────────────────────────────────────────────
 
 /**
@@ -289,7 +343,16 @@ export async function executeSwap(
     try {
       return await executeViaKraken(fromAsset, toAsset, fromAmount);
     } catch (e) {
-      console.warn("[broker-executor] Kraken swap falló:", (e as Error).message);
+      console.warn("[broker-executor] Kraken swap falló:", (e as Error).message, "→ intentando Bitstamp");
+    }
+  }
+
+  // 4️⃣  Bitstamp (respaldo 3 — sin red TRC-20, solo último recurso)
+  if (Bitstamp.hasPrivateCredentials()) {
+    try {
+      return await executeViaBitstamp(fromAsset, toAsset, fromAmount);
+    } catch (e) {
+      console.warn("[broker-executor] Bitstamp swap falló:", (e as Error).message);
     }
   }
 
@@ -299,8 +362,9 @@ export async function executeSwap(
 
 /** Qué broker ejecutaría si se llamara ahora */
 export function availableBroker(): BrokerName {
-  if (Binance.hasPrivateCredentials()) return "binance";
-  if (OKX.hasPrivateCredentials())     return "okx";
-  if (Kraken.hasPrivateCredentials())  return "kraken";
+  if (Binance.hasPrivateCredentials())  return "binance";
+  if (OKX.hasPrivateCredentials())      return "okx";
+  if (Kraken.hasPrivateCredentials())   return "kraken";
+  if (Bitstamp.hasPrivateCredentials()) return "bitstamp";
   return "internal";
 }
