@@ -4,6 +4,8 @@ Enfocada en lo que la plataforma realmente hace con los brokers:
 swaps BTC/ETH ↔ USDT (puente de 2 patas: cada swap paga 2 comisiones taker)
 y retiros/dispersiones de USDT por red TRON (TRC-20).
 
+OKX esta bloqueado/por vulneracion de claves 
+
 Cybrid excluido a petición del usuario (además no es exchange: es banca-como-servicio).
 
 ## Resumen
