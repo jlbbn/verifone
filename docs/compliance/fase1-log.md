@@ -177,3 +177,10 @@ verificado (ver hoja "Riesgos" del plan original).
   temporales para no dejar copias adicionales de datos personales.
 - Pendiente para el día real: exportación fresca con ventana breve, misma verificación,
   cambio de DNS en Cloudflare y re-sincronización de diferencias tras la propagación.
+- 2026-08-12: preparación del cutover verificada con pruebas reales: (a) llave de OKX responde
+  correctamente desde la IP del servidor nuevo — sin restricción de IP configurada (se recomendará
+  restringirla a la IP del servidor tras el cutover, junto con revisar el permiso de retiro);
+  (b) la aplicación no consume webhooks de Stripe y la cuenta de Stripe no tiene endpoints
+  configurados — nada que migrar en ese frente; (c) configuración del dominio en Caddy preparada
+  sin activar (/etc/caddy/Caddyfile.cutover). La migración queda lista a la espera de la ventana
+  que defina el usuario.
