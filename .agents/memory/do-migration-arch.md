@@ -32,3 +32,10 @@ description: Production app + DB are migrating from Replit hosting to DigitalOce
 - Regla: al inicio de cada sesión que toque el droplet, verificar `ls ~/.ssh` antes de asumir acceso.
 - Llaves DO en cuenta: banxico-plus-admin (58416636, privada perdida, inofensiva) y
   banxico-plus-admin-2 (58433245, activa).
+
+## Llave SSH derivada (estándar actual)
+- La llave de administración del droplet se regenera con `scripts/derive-do-ssh-key.sh`
+  (lee el secreto DO_SSH_SEED; SHA-256 → semilla ed25519; escribe /home/runner/.ssh/do_banxico_derived).
+- Tras cualquier reinicio del entorno: correr ese script y usar `-i /home/runner/.ssh/do_banxico_derived`.
+- Registrada en la cuenta DO (banxico-plus-admin-derived). Las llaves admin (58416636) y
+  admin-2 (58433245) tienen la parte privada perdida: inofensivas, no reutilizar.
