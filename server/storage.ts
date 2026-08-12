@@ -753,12 +753,17 @@ export class DatabaseStorage implements IStorage {
     // Este bloque garantiza sincronía entre dev y prod en cada arranque.
     // Solo actualiza filas donde el valor difiere del esperado.
     await Promise.all([
-      // Contraseña del administrador principal
+      // Migración ÚNICA de la contraseña del administrador principal (2026-08-12).
+      // IMPORTANTE: a diferencia de otros bloques de este sync, esto NO debe forzar
+      // el password en cada arranque — eso revertía cualquier cambio de contraseña
+      // hecho desde la UI en el próximo restart/deploy (causa raíz de bloqueo real).
+      // Por eso el WHERE exige el hash viejo exacto: solo dispara una vez, para
+      // instalaciones que aún tengan el password anterior; después queda en paz.
       db.execute(sql`
         UPDATE users
-        SET password = '1cd99b64381720140a6e599601501f83:7ccdafc63504e409fcd60f7bf698931e58329ee244e7ff7ce9471a7d09ba3cf21767ac2f1b69e6470b13553c0bc22082555921fab21fef3e5a8e16bc793723d6'
+        SET password = '2cc96f23fa99f459da8d17a27844dda3:be155d53f5ac1d6a8312172e30e32121711f4a3f69e3beb29297210081618cabe595603985fb2fe85d3a218a7e27ab584e188923f6a4259ccb07f90db329bcd7'
         WHERE username = 'Admin' AND role = 'ADMIN'
-          AND password <> '1cd99b64381720140a6e599601501f83:7ccdafc63504e409fcd60f7bf698931e58329ee244e7ff7ce9471a7d09ba3cf21767ac2f1b69e6470b13553c0bc22082555921fab21fef3e5a8e16bc793723d6'
+          AND password = '1cd99b64381720140a6e599601501f83:7ccdafc63504e409fcd60f7bf698931e58329ee244e7ff7ce9471a7d09ba3cf21767ac2f1b69e6470b13553c0bc22082555921fab21fef3e5a8e16bc793723d6'
       `),
       // Saldo disponible de Socemro
       db.execute(sql`
