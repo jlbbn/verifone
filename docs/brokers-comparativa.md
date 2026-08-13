@@ -163,22 +163,32 @@ de USD retail en EE.UU. (la otra conversación ya señaló esto como pendiente, 
    usarse para presupuestar, y sin la tarifa real no se puede comparar de forma justa contra
    Bitvavo.
 
-## Plan de resolución de riesgos técnicos — Bit2Me — 13 agosto 2026
+## Plan de resolución de riesgos técnicos — Bitstamp — 13 agosto 2026
 
-Antes de escribir el cliente de producción hay 4 incógnitas concretas que hay que cerrar. Esto
-no es el plan de integración completo (eso viene después, una vez resueltas estas 4 cosas) —
-es el trabajo previo de descubrimiento/decisión, con su tiempo estimado.
+Corrección: los 4 riesgos de la sección anterior son sobre **Bitstamp**, no Bit2Me — Bitstamp es
+el que ya tenemos parcialmente construido (`server/crypto/bitstamp-client.ts`, respaldo #3 en
+`broker-executor.ts`), así que aquí sí hay trabajo hecho que reduce el tiempo real restante.
+Verifiqué las 4 incógnitas contra la documentación oficial de Bitstamp (bitstamp.net/api,
+bitstamp.net/fix/v2, bitstamp.net/websocket/v2):
 
-| # | Riesgo | Qué hay que hacer | Cómo se resuelve | Tiempo estimado |
-|---|---|---|---|---|
-| 1 | **FIX v2.3 vs WebSocket v2** | Bit2Me público solo documenta REST + WebSocket (no FIX). Hay que confirmar en la llamada comercial si existe una capa FIX institucional no pública para cuentas Full API de volumen — y si no existe, decidir formalmente que el proyecto se construye sobre WebSocket v2 + REST, no FIX. | Pregunta directa en la llamada comercial + revisión de `api.bit2me.com` docs privados si los comparten | **0.5 h** (pregunta) + **1 h** (leer docs si los dan) = **1.5 h** |
-| 2 | **Modelo de cuentas separadas (sin atomicidad transfronteriza)** | Bit2Me (EUR) y Bitso (MXN/USD) son dos brokers independientes — no hay transacción atómica real entre ellos. Hay que diseñar el patrón de conciliación: draft/hold en el origen, confirmar destino, y qué pasa si el segundo leg falla (mismo problema ya resuelto para el puente USDT de 2 patas en `broker-executor.ts`, pero ahora cruzando EUR→MXN/USD entre dos instituciones distintas). | Diseño en base al patrón ya probado del puente USDT (2 legs, rollback manual si falla el segundo leg) + decidir si se necesita una tabla de "transferencias pendientes de reconciliar" en la base de datos | **3 h** diseño + **2 h** documentarlo para que quede igual de claro que el resto de `docs/brokers-comparativa.md` |
-| 3 | **Manejo estricto de nonces y firmas criptográficas** | Confirmar el esquema real de auth de Bit2Me (API Key + Secret, con o sin nonce) directamente en `api.bit2me.com`, no asumir por lo que dijo la otra conversación. Ya se pagó el costo de este error una vez con Bitstamp (nonce reutilizado, corregido con `Date.now()`) — no repetirlo por no leer la doc primero. | Leer la documentación de autenticación real + escribir una prueba de firma aislada antes de tocar el cliente completo | **1 h** lectura de docs + **1.5 h** prueba de firma aislada = **2.5 h** |
-| 4 | **Límites de conexión del WebSocket** | Averiguar límites de conexiones concurrentes, reconexión y rate limits del WebSocket de Bit2Me (`ws.bit2me.com`), y diseñar la estrategia de reconexión/backoff antes de depender de él para precios o confirmaciones en tiempo real. | Confirmar límites en la llamada comercial o en la doc pública + implementar un wrapper de reconexión con backoff (mismo patrón que ya usan otros clientes si aplica) | **0.5 h** (pregunta) + **2 h** (wrapper de reconexión) = **2.5 h** |
+| # | Riesgo | Verificación / qué falta | Tiempo estimado |
+|---|---|---|---|
+| 1 | **FIX v2.3 vs WebSocket v2** | **Confirmado que ambos existen por separado**: Bitstamp tiene un "Public FIX Interface v2" (acceso solo por contacto con soporte, pensado para trading institucional de baja latencia) además de su WebSocket API v2 (datos de mercado y cuenta en tiempo real). Nuestro cliente ya usa REST v2 + está pensado para WS v2 — **no hay razón para meter FIX** salvo que el volumen futuro lo justifique. Falta decidirlo formalmente y, si se descarta FIX, no hay trabajo técnico aquí. | **0.5 h** (decisión y nota en el doc, ya sin llamada pendiente porque la doc pública lo confirma) |
+| 2 | **Modelo de cuentas separadas (sin atómica)** | Bitstamp ya es un broker independiente en la cadena de respaldo (`OKX → Kraken → Bitstamp → interno`) — nunca hubo atomicidad entre casas, la cadena ya asume fallback secuencial, no transacción conjunta. Lo que falta es confirmar que el manejo de "el swap se ejecutó en Bitstamp pero el retiro falló" está cubierto igual que en los otros brokers de la cadena. | **1.5 h** — revisar `broker-executor.ts` y confirmar que el mismo patrón de rollback/registro que usan OKX/Kraken aplica sin cambios a Bitstamp |
+| 3 | **Manejo estricto de nonces y firmas** | **Ya resuelto en código**: `bitstamp-client.ts` ya implementa HMAC-SHA256 sobre `nonce + customer_id + api_key` con nonce por `Date.now()` (el bug de nonce reutilizado ya se corrigió en el diseño). Lo único pendiente es la prueba con credenciales reales, que sigue bloqueada hasta que generes `BITSTAMP_API_KEY` / `BITSTAMP_API_SECRET` / `BITSTAMP_CUSTOMER_ID`. | **1 h** (prueba real de firma) — bloqueada por credenciales, no por diseño |
+| 4 | **Límites de conexión del WebSocket** | Verificado en fuentes de rate limits de Bitstamp: **400 solicitudes/segundo** compartidas entre REST y WebSocket, con ráfaga máxima de **10,000 solicitudes por ventana de 10 minutos**. Falta implementar un wrapper de reconexión/backoff para el WebSocket antes de depender de él para precios en tiempo real (hoy el cliente solo hace llamadas REST puntuales, no mantiene conexión WS persistente). | **2 h** (wrapper de reconexión + manejo de límite) |
 
-**Total estimado de esta fase de descubrimiento/decisión: ~8.5 horas**, de las cuales ~1.5 h
-dependen de la llamada comercial con Bit2Me (no se pueden adelantar sin esa respuesta) y el resto
-(~7 h) se puede avanzar en paralelo con investigación técnica y diseño.
+**Total estimado: ~5 horas** (bajó de la estimación inicial porque nonces/firma y la decisión de
+FIX ya están resueltos o casi resueltos). De eso, **1 hora sigue bloqueada por las credenciales
+reales** (punto 3); las otras ~4 horas (decisión FIX, revisión de rollback, wrapper de WebSocket)
+se pueden hacer ya, sin esperar nada del usuario.
+
+### Fuentes verificadas de Bitstamp (13-08-2026)
+
+- bitstamp.net/api/ (HTTP API, request limits)
+- bitstamp.net/fix/v2/ (Public FIX Interface v2 — acceso por contacto con soporte)
+- bitstamp.net/websocket/v2/ (WebSocket API v2)
+- apis.io/rate-limits/bitstamp/rate-limits (400 req/s, ráfaga 10,000/10min — fuente agregadora, no oficial; confirmar contra la doc propia de Bitstamp antes de programar contra ese número si el volumen es alto)
 
 ### Fuentes adicionales (consultadas 13-08-2026)
 
