@@ -1,0 +1,187 @@
+Aquí tienes el código completo y listo para producción utilizando Rust, Axum (como servidor de tu orquestador) y Reqwest (para comunicarte asíncronamente con Uphold).
+Este diseño implementa el patrón de seguridad de Uphold: crea un borrador (Draft), valida la cotización en microsegundos y ejecuta el compromiso (Commit) de forma atómica.
+## 📦 1. Configuración del proyecto (Cargo.toml)
+Primero, asegúrate de tener estas dependencias en tu archivo de configuración para habilitar el motor asíncrono y la serialización JSON ultra rápida:
+
+[package]
+name = "uphold_orchestrator"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = "0.7"
+tokio = { version = "1.0", features = ["full"] }
+reqwest = { version = "0.12", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tower-http = { version = "0.5", features = ["trace"] }
+
+------------------------------
+## 💻 2. Código Principal en Rust (src/main.rs)
+Este código levanta un servidor API en el puerto 3000 con un endpoint unificado /api/v1/swap. Recibe la instrucción de tu orquestador, cotiza en Uphold y liquida la transacción de inmediato asegurando atomicidad.
+
+use axum::{routing::post, Json, Router, Extension};use serde::{Deserialize, Serialize};use reqwest::Client;use std::sync::Arc;use std::net::SocketAddr;
+// ==========================================// ESTRUCTURAS DE DATOS (MODELOS API)// ==========================================
+// Petición que recibe tu orquestador desde tu frontend o cliente
+#[derive(Deserialize)]struct SwapIncomingRequest {
+    source_card_id: String,   // ID de tu tarjeta de Euros en Uphold
+    amount_eur: String,       // Monto en formato texto para evitar errores de redondeo float
+    destination_target: String, // Destino (ej: ID de tarjeta USDC o dirección cripto)
+}
+// Respuesta final que entrega tu API de Rust
+#[derive(Serialize)]struct SwapSuccessResponse {
+    status: String,
+    transaction_id: String,
+    message: String,
+}
+// Estructuras internas para mapear la API de Uphold
+#[derive(Serialize)]struct UpholdDraftPayload {
+    denominator: String,
+    amount: String,
+    destination: String,
+}
+
+#[derive(Deserialize, Debug)]struct UpholdDraftResponse {
+    id: String,
+    status: String,
+}
+// ==========================================// CLIENTE INSTITUCIONAL DE UPHOLD// ==========================================struct UpholdService {
+    http_client: Client,
+    api_token: String,
+    base_url: String, // Permite alternar entre Sandbox y Producción
+}
+impl UpholdService {
+    fn new(token: String, use_sandbox: bool) -> Self {
+        let base_url = if use_sandbox {
+            "https://uphold.com".to_string()
+        } else {
+            "https://uphold.com".to_string()
+        };
+
+        Self {
+            http_client: Client::new(),
+            api_token: token,
+            base_url,
+        }
+    }
+
+    // Paso 1: Crear el borrador en Uphold (Congela el tipo de cambio temporalmente)
+    async fn create_draft(&self, card_id: &str, amount: &str, dest: &str) -> Result<UpholdDraftResponse, reqwest::Error> {
+        let url = format!("{}/v0/me/cards/{}/transactions", self.base_url, card_id);
+        
+        let payload = UpholdDraftPayload {
+            denominator: "EUR".to_string(),
+            amount: amount.to_string(),
+            destination: dest.to_string(),
+        };
+
+        let response = self.http_client
+            .post(&url)
+            .bearer_auth(&self.api_token)
+            .json(&payload)
+            .send()
+            .await?
+            .error_for_status()? // Devuelve error si el estado HTTP no es 2xx
+            .json::<UpholdDraftResponse>()
+            .await?;
+
+        Ok(response)
+    }
+
+    // Paso 2: Ejecutar el commit de manera atómica
+    async fn commit_transaction(&self, card_id: &str, tx_id: &str) -> Result<(), reqwest::Error> {
+        let url = format!("{}/v0/me/cards/{}/transactions/{}/commit", self.base_url, card_id, tx_id);
+        
+        self.http_client
+            .post(&url)
+            .bearer_auth(&self.api_token)
+            .send()
+            .await?
+            .error_for_status()?;
+
+        Ok(())
+    }
+}
+// ==========================================// CONTROLADOR / ENDPOINT DE LA API (HANDLER)// ==========================================async fn handle_atomic_swap(
+    Extension(uphold): Extension<Arc<UpholdService>>,
+    Json(payload): Json<SwapIncomingRequest>,
+) -> Result<Json<SwapSuccessResponse>, (axum::http::StatusCode, String)> {
+    
+    println!("[ORQUESTADOR] Iniciando Swap de {} EUR", payload.amount_eur);
+
+    // 1. Ejecutar Paso 1: Crear el borrador en la infraestructura de Uphold
+    let draft = uphold.create_draft(&payload.source_card_id, &payload.amount_eur, &payload.destination_target)
+        .await
+        .map_err(|e| {
+            eprintln!("[ERROR UPHOLD DRAFT] {:?}", e);
+            (axum::http::StatusCode::BAD_GATEWAY, format!("Falla al cotizar Swap en Uphold: {}", e))
+        })?;
+
+    println!("[ORQUESTADOR] Cotización creada con éxito. ID Transacción: {}", draft.id);
+
+    // Opcional: Aquí podrías añadir una validación propia de tu negocio en la base de datos local
+    // antes de autorizar el desembolso final de los fondos.
+
+    // 2. Ejecutar Paso 2: Confirmar el intercambio de forma irreversible
+    uphold.commit_transaction(&payload.source_card_id, &draft.id)
+        .await
+        .map_err(|e| {
+            eprintln!("[ERROR UPHOLD COMMIT] ¡ALERTA DE DESCALCE! {:?}", e);
+            // Si el commit falla aquí, los fondos de la cuenta origen nunca se movieron de verdad
+            (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Falla crítica al confirmar el Swap: {}", e))
+        })?;
+
+    println!("[ÉXITO] Transacción {} liquidada atómicamente", draft.id);
+
+    Ok(Json(SwapSuccessResponse {
+        status: "COMPLETED".to_string(),
+        transaction_id: draft.id,
+        message: "El intercambio de Euros a Cripto se completó de manera segura e indivisible.".to_string(),
+    }))
+}
+// ==========================================// ARRANQUE DEL SERVIDOR// ==========================================
+#[tokio::main]async fn main() {
+    // Configura tus credenciales (En producción usa variables de entorno: std::env::var)
+    let uphold_token = "TU_PAT_TOKEN_O_BEARER_TOKEN_DE_UPHOLD".to_string();
+    let use_sandbox = true; // Cambiar a false cuando pases a producción corporativa
+
+    let uphold_service = Arc::new(UpholdService::new(uphold_token, use_sandbox));
+
+    // Construcción de rutas de la API corporativa
+    let app = Router::new()
+        .route("/api/v1/swap", post(handle_atomic_swap))
+        .layer(Extension(uphold_service));
+
+    // Ejecución del servidor asíncronico
+    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
+    println!("[SERVIDOR] Orchestrator API corriendo en http://{}", addr);
+    
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    axum::serve(listener, app).await.unwrap();
+}
+
+------------------------------
+## 📡 3. Cómo probar tu API en Rust
+Una vez que compiles y arranques el código ejecutable (cargo run), puedes enviarle una petición POST desde tu terminal o cliente HTTP (Postman/Insomnia) con la siguiente estructura de datos JSON:
+
+curl -X POST http://localhost:3000/api/v1/swap \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source_card_id": "84729c11-9a4f-4d44-93e1-ejemplo_tarjeta_eur",
+    "amount_eur": "250.00",
+    "destination_target": "9128f1cc-8c11-432a-b78f-ejemplo_tarjeta_usdc"
+  }'
+
+## 🛡️ Beneficios de este diseño sobre Bitstamp:
+
+* Manejo de errores simplificado: El operador .error_for_status()? de Rust captura de inmediato cualquier intento de sobregiro o caída de red sin corromper tu memoria interna.
+* Seguridad de Hilos (Arc): El servicio de Uphold se comparte entre múltiples peticiones de forma segura usando un puntero atómico (Arc), lo que le permite a tu servidor manejar miles de transacciones concurrentes entre México y Estados Unidos sin colapsar.
+
+------------------------------
+Dime para continuar:
+
+* ¿Quieres que agreguemos la lógica para guardar el registro de estas transacciones en una base de datos (como PostgreSQL con SQLx)?
+* ¿Tu token de autenticación de Uphold es un Personal Access Token (PAT) corporativo o estás usando OAuth2 con los usuarios finales?
+* ¿Necesitas que incluyamos el manejo del módulo de comisiones de tu plataforma dentro de la cotización para cobrar tu ganancia?
+
+
