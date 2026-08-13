@@ -183,6 +183,24 @@ FIX ya están resueltos o casi resueltos). De eso, **1 hora sigue bloqueada por 
 reales** (punto 3); las otras ~4 horas (decisión FIX, revisión de rollback, wrapper de WebSocket)
 se pueden hacer ya, sin esperar nada del usuario.
 
+### Ejecutado — 13 agosto 2026
+
+- **#1 FIX v2.3 vs WebSocket v2 — decidido**: el proyecto se construye sobre REST v2 + WebSocket
+  v2. No se integra FIX; es una capa de baja latencia pensada para trading institucional de alto
+  volumen que no aporta nada al patrón actual (swap ocasional + respaldo de última instancia).
+  Se revisita solo si el volumen algún día lo justifica.
+- **#2 Cuentas separadas sin atómica — confirmado**: revisé `broker-executor.ts` — Bitstamp ya
+  sigue exactamente el mismo patrón de try/catch secuencial que OKX y Kraken (si el swap o el
+  retiro fallan, se registra el error y se intenta el siguiente broker de la cadena; no hay
+  transacción conjunta entre casas, nunca la hubo). No requirió cambios de código.
+- **#4 Límites del WebSocket — resuelto**: `server/crypto/bitstamp-websocket.ts` (nuevo)
+  implementa un cliente con reconexión por backoff exponencial (1 s → 30 s), detección de
+  conexión muerta por ausencia de heartbeat (20 s) y reseteo del backoff tras una reconexión
+  exitosa — para no entrar en bucles agresivos de reconexión que choquen contra el límite de
+  400 solicitudes/segundo. Compila limpio (`tsc --noEmit`); todavía no está conectado a ningún
+  flujo en producción (es infraestructura lista para cuando se necesite streaming de precios).
+- **#3 Nonces y firmas — sigue bloqueado por credenciales**, sin cambios (ver arriba).
+
 ### Fuentes verificadas de Bitstamp (13-08-2026)
 
 - bitstamp.net/api/ (HTTP API, request limits)
