@@ -117,3 +117,55 @@ enrutamiento por compatibilidad real con lo ya construido:
   prioridad — no se debe mezclar con la cadena cripto porque resuelven objetivos distintos
   (una mueve USDT entre exchanges, la otra debe reconciliar depósitos/retiros bancarios en EUR).
 - Nada de esto está construido todavía; es la ruta recomendada si se decide avanzar.
+
+## Corrección + arquitectura de dos brokers por región — 13 agosto 2026
+
+Verifiqué contra fuentes oficiales la propuesta de arquitectura "un broker por zona monetaria"
+(Bit2Me para EUR/Europa, Bitso para USD/MXN México) que surgió de otra conversación externa.
+Corrijo aquí mi lectura anterior de Bit2Me, que era incompleta.
+
+### Corrección sobre Bit2Me
+
+Antes dije que Bit2Me "sale de competencia" por su comisión de depósito EUR del 1.99%. Esa cifra
+es la **tarifa retail** (app de consumidor). Bit2Me tiene un producto B2B separado, **Full API**,
+con su propio modelo de cuentas — y **no publica una tarifa institucional pública**, así que el
+1.99% retail no debe usarse para descartarlo en un contexto B2B. Este vacío de información ya lo
+señalaron en la otra conversación como pendiente de verificar en una llamada comercial — coincido,
+es el paso correcto antes de decidir.
+
+Verificado directamente en fuentes oficiales de Bit2Me (13-08-2026):
+
+| Afirmación | Verificación |
+|---|---|
+| CASP autorizado por la CNMV bajo MiCA | **Confirmado** — Bit2Me (Bitcoinforme S.L.) fue la primera fintech hispanohablante autorizada como CASP bajo MiCA por la CNMV, 31-oct-2025. |
+| API solo REST + WebSocket, sin FIX | **Confirmado** — bit2me.com/api: "Access the functionalities... through RESTful JSON APIs and Websocket." No se menciona FIX en ningún lado. |
+| Cuentas omnibus o individuales en el modelo Full API | **Confirmado** — blog oficial de Bit2Me: "the possibility of creating omnibus or individual accounts" es parte explícita del modelo Full API. |
+| Repos públicos en GitHub con SDKs JS/TS listos | **Parcialmente inexacto** — la propia página bit2me.com/api dice "Official SDKs (**coming soon**)" incluyendo el ícono de Node.js, es decir, todavía no hay SDK oficial de producción. Existe un repo comunitario (`bit2me-dev/bit2me-api-node-tool`, 3 estrellas) pero es pequeño y no se puede asumir listo para producción. |
+| Auth simple API Key + Secret sin esquema de nonce | No verificado en este pase — requiere revisar la documentación de autenticación en api.bit2me.com directamente antes de comprometerse. |
+
+### Sobre Bitso (lado USD/MXN)
+
+Bitso es una Institución de Tecnología Financiera (ITF) regulada en México bajo la Ley Fintech,
+con supervisión de CNBV/Banxico — consistente con la afirmación "ya regulado" de la otra
+conversación. Bitso Business ofrece rieles de pago (SPEI, cross-border) vía API, relevante para
+el lado MXN/USD de una arquitectura de dos brokers. No verifiqué en este pase su cobertura real
+de USD retail en EE.UU. (la otra conversación ya señaló esto como pendiente, y coincido).
+
+### Lectura honesta actualizada
+
+1. La arquitectura de dos brokers por zona monetaria (Bit2Me EUR/Europa + Bitso USD/MXN) es
+   **más sólida regulatoriamente** que forzar a Bitvavo o Kraken a cubrir todo: cada uno está
+   autorizado en la jurisdicción donde opera.
+2. Antes de comprometerse hay que resolver los mismos 3 pendientes que ya identificó la otra
+   conversación: (1) tarifa institucional real de Bit2Me, (2) límites del WebSocket, (3) cómo
+   se cubre USD retail en EE.UU. si Bitso Business no llega ahí completo.
+3. Recomiendo la llamada comercial con Bit2Me antes de escribir código — el 1.99% retail no debe
+   usarse para presupuestar, y sin la tarifa real no se puede comparar de forma justa contra
+   Bitvavo.
+
+### Fuentes adicionales (consultadas 13-08-2026)
+
+- casplist.eu/casp/bit2me-9598007r, thecryptoregister.com/eu/exchange/bit2me, prnewswire.com (autorización CASP/MiCA)
+- bit2me.com/api, blog.bit2me.com "How Do the Different Bit2Me Crypto API Integration Models Work" (Full API, omnibus/individual, SDKs "coming soon")
+- github.com/bit2me-dev/bit2me-api-node-tool (repo comunitario, 3 estrellas)
+- bitso.com, business.bitso.com (Bitso Business, SPEI/cross-border)
