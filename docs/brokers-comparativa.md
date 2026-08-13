@@ -77,3 +77,43 @@ no solo pares EUR de cotización. Relevante si se piensa aceptar o dispersar en 
 - Kraken: kraken.com/features/fee-schedule, support.kraken.com "how trading fees work on Kraken"
 - Bit2Me: bit2me.freshdesk.com "Fees and Limits for Euro and Cryptocurrency Deposits and Withdrawals"
 - Binance: binance.info/en/fee/cryptoFee, binance.com FAQ SEPA/Faster Payments
+
+## Desglose de opciones + enrutamiento compatible — 13 agosto 2026
+
+Punto importante de arquitectura: `broker-executor.ts` hoy resuelve **un solo problema** —
+swap cripto↔cripto (puente USDT) y dispersión de USDT por TRC-20. Es una cadena de prioridad
+(`OKX → Kraken → Bitstamp → interno`) pensada para ese único flujo. **Ninguna casa EUR resuelve
+lo mismo**: aceptar/entregar euros reales es un flujo distinto (fiat on/off-ramp vía SEPA), con
+su propia cola, KYC y reconciliación contable. Por eso el enrutamiento no puede ser "una sola
+cadena" — son dos cadenas independientes que comparten casas de bolsa donde coinciden.
+
+### Cadena 1 — swap/dispersión cripto (ya existe, sin cambios necesarios)
+
+`OKX → Kraken → Bitstamp → interno`. Bitvavo, Bit2Me o Binance podrían añadirse aquí como
+respaldos adicionales (todas permiten trading cripto), pero no aportan ventaja real: ninguna
+baja del costo de OKX, y Binance ya está a medio integrar (solo falta el secret) si se quiere
+un respaldo #2 más barato que Kraken.
+
+### Cadena 2 — riel EUR (fiat), no existe todavía
+
+Este es el flujo nuevo que habría que construir si el negocio empieza a mover euros reales
+(depósito de usuario en EUR → conversión a cripto/USDT, o al revés para retiros). Propuesta de
+enrutamiento por compatibilidad real con lo ya construido:
+
+| Prioridad | Casa | Rol | Por qué esta posición |
+|---|---|---|---|
+| **1 — principal EUR** | **Bitvavo** | Recibe/envía EUR por SEPA, ejecuta el swap EUR→cripto | Más barata (0.15%/0.25% baja con volumen), SEPA gratis, API documentada. Ningún cliente escrito todavía. |
+| **2 — respaldo EUR** | **Kraken** | Mismo rol si Bitvavo falla o está fuera de límites | Ya integrado en el proyecto (cliente existe), soporta SEPA, solo falta activar el flujo EUR (hoy el cliente solo se usa para el swap USDT). |
+| **3 — respaldo EUR** | **Bitstamp** | Mismo rol, último recurso | Ya integrado, SEPA nativo, pero su trading fee base es el más caro del grupo EUR. |
+| — no recomendado | Bit2Me | — | 1.99% solo por depositar EUR lo saca de competencia como riel principal o de respaldo. Serviría solo si se necesita presencia regulatoria española específica, no por costo. |
+| — evaluar aparte | Binance | — | Fees más bajos que Bitvavo en trading, pero requiere revisar restricciones regulatorias EUR/MiCA por país antes de meterlo a una cadena fiat; no evaluado en este pase. |
+
+### Compatibilidad técnica con el código actual
+
+- El patrón de cliente (`*-client.ts` con auth, `ping()`, `hasPrivateCredentials()`) es reusable
+  tal cual para Bitvavo — mismo molde que OKX/Kraken/Bitstamp.
+- `broker-executor.ts` tendría que ganar una **segunda función de ejecución** (p. ej.
+  `executeEurRoute`) separada de `executeViaOKX/Kraken/Bitstamp`, con su propia cadena de
+  prioridad — no se debe mezclar con la cadena cripto porque resuelven objetivos distintos
+  (una mueve USDT entre exchanges, la otra debe reconciliar depósitos/retiros bancarios en EUR).
+- Nada de esto está construido todavía; es la ruta recomendada si se decide avanzar.
