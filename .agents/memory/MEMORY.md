@@ -20,4 +20,5 @@
 - [DB TLS verification policy](db-tls-verification.md) — pool SSL follows URL sslmode; prod Neon certs are publicly trusted so rejectUnauthorized:true works; never disable verification.
 - [API hangs from untimed external calls](api-response-guarantees.md) — untimed fetch to email/broker APIs can hang a request for 20s+; add timeouts on outbound calls + a server-side response-guarantee middleware + client fetch timeout/retry.
 - [DigitalOcean production migration architecture](do-migration-arch.md) — prod app+DB moving to DO VPC (nyc3) per compliance plan; no paid resources or live-data moves without user confirmation; never print DB credentials.
+- [DO SSH firewall vs agent dynamic IP](do-firewall-agent-access.md) — agent's egress IP changes between/within sessions; self-add current IP to firewall via API before SSH instead of hardcoding.
 - [Sandbox droplet isolation history](sandbox-droplet-shared-prod.md) — sandbox shared prod DB/keys, then was isolated (own local Postgres, no real secrets) after a security scare; re-check live state before assuming either way.
