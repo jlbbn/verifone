@@ -119,6 +119,7 @@
     "brace-expansion": ">=2.1.3",
     "ethers": {
       "ws": ">=8.21.0"
-    }
+    },
+    "ip-address": "^10.3.1"
   }
 }
