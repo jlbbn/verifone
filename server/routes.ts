@@ -6,6 +6,7 @@ import { db } from "./db";
 import { eq, inArray, sql, or } from "drizzle-orm";
 import { transactions as txTable, users as usersTable, hotWalletDispersions } from "@shared/schema";
 import { randomBytes } from "crypto";
+import { discoverTestFiles, runTestsExclusive, isTestRunInFlight, getLastTestRun } from "./test-runner";
 import { z } from "zod";
 import { sendOtpEmail, sendPasswordResetEmail } from "./email";
 import { verifyPassword, maskCardNumber, hashPassword } from "./auth-utils";
@@ -1761,6 +1762,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: (err as Error).message });
     }
   });
+
+  // ====================================================================
+  // CENTRO DE PRUEBAS — suite automatizada node:test (solo ADMIN)
+  // Lógica en server/test-runner.ts (lista blanca, lock atómico, TAP)
+  // ====================================================================
+
+  /** GET /api/admin/tests — archivos disponibles + último resultado en memoria */
+  app.get("/api/admin/tests", requireSession, async (req, res) => {
+    if (req.currentUser!.role !== "ADMIN")
+      return res.status(403).json({ error: "Solo administradores" });
+    const files = await discoverTestFiles();
+    res.json({ files, running: isTestRunInFlight(), lastRun: getLastTestRun() });
+  });
+
+  /** POST /api/admin/tests/run { file? } — corre la suite completa o un archivo */
+  app.post("/api/admin/tests/run", requireSession, async (req, res) => {
+    if (req.currentUser!.role !== "ADMIN")
+      return res.status(403).json({ error: "Solo administradores" });
+    const requested = typeof req.body?.file === "string" ? req.body.file : undefined;
+    const outcome = await runTestsExclusive(requested);
+    if (outcome.kind === "busy")
+      return res.status(409).json({ error: "Ya hay una ejecución de pruebas en curso" });
+    if (outcome.kind === "unknown-file")
+      return res.status(400).json({ error: "Archivo de prueba no reconocido" });
+    res.json(outcome.record);
+  });
+
 
   // ====================================================================
   // BROKER OPS — withdraw to network · internal transfer · deposit addr

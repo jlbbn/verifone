@@ -24,6 +24,7 @@ import {
   ShieldCheck,
   HardDrive,
   TrendingUp,
+  FlaskConical,
 } from "lucide-react";
 import { SiDropbox, SiReplit, SiGithub } from "react-icons/si";
 import {
@@ -74,9 +75,10 @@ const menuItems = [
 ];
 
 const adminItems = [
-  { title: "Gestión de Usuarios", url: "/admin/usuarios",  icon: Users  },
-  { title: "Caja USDT",           url: "/admin/caja-usdt", icon: Coins  },
-  { title: "Configuración",       url: "/admin/settings",  icon: Sliders },
+  { title: "Gestión de Usuarios", url: "/admin/usuarios",     icon: Users  },
+  { title: "Caja USDT",           url: "/admin/caja-usdt",    icon: Coins  },
+  { title: "Centro de Pruebas",   url: "/admin/laboratorio",  icon: FlaskConical },
+  { title: "Configuración",       url: "/admin/settings",     icon: Sliders },
 ];
 
 const PLAN_NAME   = "Enterprise Banking";
