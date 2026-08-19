@@ -308,6 +308,11 @@ async function executeViaBitstamp(
   };
 }
 
+/** Interruptor explícito para operar swaps vía Bitstamp (default: apagado). */
+export function bitstampTradingEnabled(): boolean {
+  return (process.env.BITSTAMP_TRADING_ENABLED ?? "").trim().toLowerCase() === "true";
+}
+
 // ─── Public entry point ───────────────────────────────────────────────────────
 
 /**
@@ -348,7 +353,10 @@ export async function executeSwap(
   }
 
   // 4️⃣  Bitstamp (respaldo 3 — sin red TRC-20, solo último recurso)
-  if (Bitstamp.hasPrivateCredentials()) {
+  // Doble candado: además de credenciales requiere BITSTAMP_TRADING_ENABLED=true.
+  // Así, unas llaves de sandbox configuradas para el panel de pruebas jamás
+  // pueden rutear swaps reales del producto por accidente.
+  if (bitstampTradingEnabled() && Bitstamp.hasPrivateCredentials()) {
     try {
       return await executeViaBitstamp(fromAsset, toAsset, fromAmount);
     } catch (e) {
@@ -365,6 +373,6 @@ export function availableBroker(): BrokerName {
   if (Binance.hasPrivateCredentials())  return "binance";
   if (OKX.hasPrivateCredentials())      return "okx";
   if (Kraken.hasPrivateCredentials())   return "kraken";
-  if (Bitstamp.hasPrivateCredentials()) return "bitstamp";
+  if (bitstampTradingEnabled() && Bitstamp.hasPrivateCredentials()) return "bitstamp";
   return "internal";
 }

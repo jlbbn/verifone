@@ -23,3 +23,4 @@
 - [Stripe key resolution order](stripe-key-resolution-order.md) — STRIPE_SECRET_KEY secret holds an invalid mk_ value; code falls through candidates; never hardcode a fallback key in .replit.
 - [DO SSH firewall vs agent dynamic IP](do-firewall-agent-access.md) — agent's egress IP changes between/within sessions; self-add current IP to firewall via API before SSH instead of hardcoding.
 - [Sandbox droplet isolation history](sandbox-droplet-shared-prod.md) — sandbox shared prod DB/keys, then was isolated (own local Postgres, no real secrets) after a security scare; re-check live state before assuming either way.
+- [Bitstamp integration](bitstamp-integration.md) — auth v2 por headers (Content-Type se omite sin cuerpo); balance real es account_balances; sin WS sandbox; swaps requieren doble candado BITSTAMP_TRADING_ENABLED.
