@@ -14,8 +14,10 @@ import { BROKER_REGISTRY, brokerSummary, checkAmlThreshold } from "./crypto/brok
 import { fetchPrices, clearPriceCache } from "./crypto/price-aggregator.js";
 import * as OKXClient    from "./crypto/okx-client.js";
 import * as KrakenClient from "./crypto/kraken-client.js";
-import { executeSwap, availableBroker } from "./crypto/broker-executor.js";
+import { executeSwap, availableBroker, bitstampTradingEnabled } from "./crypto/broker-executor.js";
 import * as TronClient from "./crypto/tron-client.js";
+import * as Bitstamp from "./crypto/bitstamp-client.js";
+import { ensureBitstampFeed, bitstampFeedSnapshot } from "./crypto/bitstamp-ws-feed.js";
 
 declare module "express-session" {
   interface SessionData {
@@ -1686,6 +1688,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const data = results.map(r => r.status === "fulfilled" ? r.value : null).filter(Boolean);
     brokerStatusCache = { data, fetchedAt: Date.now() };
     res.json(data);
+  });
+
+  // ====================================================================
+  // BITSTAMP — PANEL DE PRUEBAS (solo lectura; sin credenciales privadas)
+  // ====================================================================
+
+  let bitstampStatusCache: { data: Record<string, unknown>; fetchedAt: number } | null = null;
+  let bitstampPricesCache: { data: Record<string, unknown>; fetchedAt: number } | null = null;
+
+  /** Estado de conectividad: producción + sandbox lado a lado, entorno activo, candados. */
+  app.get("/api/admin/bitstamp/status", requireSession, async (req, res) => {
+    if (req.currentUser!.role !== "ADMIN")
+      return res.status(403).json({ error: "Solo administradores" });
+    try {
+      ensureBitstampFeed(); // feed WS público (producción) — arranque perezoso
+      if (bitstampStatusCache && Date.now() - bitstampStatusCache.fetchedAt < 15_000) {
+        return res.json({ ...bitstampStatusCache.data, ws: bitstampFeedSnapshot() });
+      }
+      const [production, sandbox] = await Promise.all([
+        Bitstamp.probe("production"),
+        Bitstamp.probe("sandbox"),
+      ]);
+      const data = {
+        environment:           Bitstamp.activeEnvironment(),
+        baseUrl:               Bitstamp.resolveBaseUrl(),
+        credentialsConfigured: Bitstamp.hasPrivateCredentials(),
+        tradingEnabled:        bitstampTradingEnabled(),
+        executorWouldUse:      availableBroker(),
+        production,
+        sandbox,
+      };
+      bitstampStatusCache = { data, fetchedAt: Date.now() };
+      res.json({ ...data, ws: bitstampFeedSnapshot() });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  /** Precios públicos en vivo: Bitstamp (entorno activo, USD) vs OKX (USDT). */
+  app.get("/api/admin/bitstamp/prices", requireSession, async (req, res) => {
+    if (req.currentUser!.role !== "ADMIN")
+      return res.status(403).json({ error: "Solo administradores" });
+    try {
+      if (bitstampPricesCache && Date.now() - bitstampPricesCache.fetchedAt < 10_000) {
+        return res.json(bitstampPricesCache.data);
+      }
+      const [bs, okx] = await Promise.all([
+        Bitstamp.fetchAllTickers(),
+        OKXClient.fetchAllTickers().catch(() => ({} as Record<string, { price: number }>)),
+      ]);
+      const rows = Object.keys(Bitstamp.BITSTAMP_PAIR).map((asset) => {
+        const b = bs[asset];
+        const o = (okx as Record<string, { price: number }>)[asset];
+        const deltaPct = b?.price && o?.price ? ((b.price - o.price) / o.price) * 100 : null;
+        return {
+          asset,
+          pair:     Bitstamp.BITSTAMP_PAIR[asset],
+          bitstamp: b ? { price: b.price, bid: b.bid, ask: b.ask, change24h: b.change24h } : null,
+          okx:      o ? { price: o.price } : null,
+          deltaPct,
+        };
+      });
+      const data = {
+        environment: Bitstamp.activeEnvironment(),
+        rows,
+        fetchedAt:   new Date().toISOString(),
+      };
+      bitstampPricesCache = { data, fetchedAt: Date.now() };
+      res.json(data);
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
   });
 
   // ====================================================================
