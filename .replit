@@ -69,6 +69,9 @@ PLATFORM_TRON_ADDRESS = "TD99cNkHynEmTZzD6EJqmTDGxu64kvHH1b"
 RESEND_FROM = "Banxico Plus <noreply@banxicoplusllc.org>"
 PRODUCTION_URL = "https://banxicoplusllc.org"
 
+[userenv.development]
+BITSTAMP_ENV = "sandbox"
+
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 120000
