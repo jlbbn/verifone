@@ -23,6 +23,7 @@ import ClavesPage from "@/pages/claves";
 import AdminUsuariosPage from "@/pages/admin-users";
 import AdminSettingsPage from "@/pages/admin-settings";
 import AdminCajaUSDTPage from "@/pages/admin-caja-usdt";
+import AdminLabPage from "@/pages/admin-lab";
 import DocumentsPage from "@/pages/documents";
 import SupportPage from "@/pages/support";
 import POSIntelligencePage from "@/pages/pos-intelligence";
@@ -201,6 +202,12 @@ function Router() {
       <Route path="/admin/caja-usdt">
         <AppLayout>
           <AdminGuard><AdminCajaUSDTPage /></AdminGuard>
+        </AppLayout>
+      </Route>
+
+      <Route path="/admin/laboratorio">
+        <AppLayout>
+          <AdminGuard><AdminLabPage /></AdminGuard>
         </AppLayout>
       </Route>
       
