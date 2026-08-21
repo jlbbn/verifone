@@ -1,0 +1,14 @@
+[Unit]
+Description=TRON FullNode chain-head health check
+After=tron-node.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/tron-node/tron-node.env
+ExecStart=/usr/local/sbin/tron-node-monitor
+User=tron
+Group=tron
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true

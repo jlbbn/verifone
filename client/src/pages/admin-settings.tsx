@@ -450,12 +450,46 @@ export default function AdminSettingsPage() {
               </div>
 
               <Separator className="my-5" />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="space-y-1.5">
+                  <Label htmlFor="maxDailyDispersalUsdt">Límite diario acumulado (USDT)</Label>
+                  <Input
+                    id="maxDailyDispersalUsdt"
+                    type="number"
+                    step="100"
+                    min="0"
+                    value={draft.maxDailyDispersalUsdt ?? 0}
+                    onChange={e => set("maxDailyDispersalUsdt", parseFloat(e.target.value) || 0)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Cero mantiene toda firma bloqueada. El límite efectivo nunca puede superar el del firmador.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="minTrxReserve">Reserva mínima para gas (TRX)</Label>
+                  <Input
+                    id="minTrxReserve"
+                    type="number"
+                    step="1"
+                    min="1"
+                    value={draft.minTrxReserve ?? 40}
+                    onChange={e => set("minTrxReserve", parseFloat(e.target.value) || 40)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    La app se niega a solicitar firma si la hot wallet queda debajo de esta reserva.
+                  </p>
+                </div>
+              </div>
+
+              <Separator className="my-5" />
               <div className="rounded-md bg-muted/50 p-4 text-sm space-y-1">
                 <p className="font-medium">Vista previa — Caja Administrador</p>
                 <p className="text-muted-foreground">Saldo apertura: <span className="font-mono text-foreground">${fmtUSD(draft.saldoAperturaUSD)} USD</span></p>
                 <p className="text-muted-foreground">Saldo sistema: <span className="font-mono text-foreground">${fmtUSD(draft.saldoSistemaUSD)} USD</span></p>
                 <p className="text-muted-foreground">En MXN ({draft.tipoCambio}): <span className="font-mono text-foreground">${fmtUSD(draft.saldoSistemaUSD * draft.tipoCambio)} MXN</span></p>
                 <p className="text-muted-foreground">Límite dispersión: <span className="font-mono text-foreground">${fmtUSD(draft.maxDispersalUsdt ?? 5000)} USDT</span></p>
+                <p className="text-muted-foreground">Límite diario: <span className="font-mono text-foreground">${fmtUSD(draft.maxDailyDispersalUsdt ?? 0)} USDT</span></p>
+                <p className="text-muted-foreground">Reserva TRX: <span className="font-mono text-foreground">{draft.minTrxReserve ?? 40} TRX</span></p>
               </div>
             </CardContent>
           </Card>

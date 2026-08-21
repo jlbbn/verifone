@@ -255,6 +255,43 @@ export class DatabaseStorage implements IStorage {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS caja_saldo_usd DOUBLE PRECISION NOT NULL DEFAULT 0
     `);
 
+    // --- Migrate: harden TRON hot-wallet audit/idempotency state ---
+    // Existing rows are retained; only new remote-signer operations populate
+    // the intent columns. The unique partial index makes retries safe while
+    // allowing legacy NULL rows.
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS hot_wallet_dispersions (
+        id SERIAL PRIMARY KEY,
+        admin_id TEXT NOT NULL,
+        to_address TEXT NOT NULL,
+        amount_usdt NUMERIC(18, 6) NOT NULL,
+        txid TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        note TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`
+      ALTER TABLE hot_wallet_dispersions
+        ADD COLUMN IF NOT EXISTS idempotency_key TEXT,
+        ADD COLUMN IF NOT EXISTS signer_request_id TEXT,
+        ADD COLUMN IF NOT EXISTS expected_atomic_amount TEXT,
+        ADD COLUMN IF NOT EXISTS expected_contract TEXT,
+        ADD COLUMN IF NOT EXISTS network TEXT NOT NULL DEFAULT 'mainnet',
+        ADD COLUMN IF NOT EXISTS failure_code TEXT,
+        ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    `);
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_hot_wallet_dispersions_idempotency
+        ON hot_wallet_dispersions (idempotency_key)
+        WHERE idempotency_key IS NOT NULL
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_hot_wallet_dispersions_daily
+        ON hot_wallet_dispersions (created_at, status)
+    `);
+
     // --- Ensure user_crypto_balances table exists (saldos internos por usuario/activo) ---
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS user_crypto_balances (

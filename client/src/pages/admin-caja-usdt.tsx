@@ -146,12 +146,110 @@ interface Dispersion {
   createdAt:  string;
 }
 
+interface TronInfrastructureStatus {
+  mode: "remote-only";
+  writesEnabled: boolean;
+  readyForWrites: boolean;
+  legacyLocalKeyDetected: boolean;
+  limits: {
+    perTransactionUsdt: number;
+    dailyUsdt: number;
+    minTrxReserve: number;
+  };
+  node: {
+    healthy: boolean;
+    latencyMs: number;
+    blockNumber: number | null;
+    headAgeMs: number | null;
+    activePeers: number | null;
+  } | null;
+  nodeError: string | null;
+  signer: {
+    configured: boolean;
+    transport: string;
+    health: { healthy: boolean; writesEnabled: boolean } | null;
+    error: string | null;
+  };
+}
+
+function TronInfrastructureWidget({ status, loading, refresh }: {
+  status?: TronInfrastructureStatus;
+  loading: boolean;
+  refresh: () => void;
+}) {
+  const ready = Boolean(status?.readyForWrites);
+  const nodeHealthy = Boolean(status?.node?.healthy);
+  const signerHealthy = Boolean(status?.signer?.health?.healthy);
+  const items = [
+    {
+      label: "Nodo TRON",
+      ok: nodeHealthy,
+      detail: status?.node
+        ? `Bloque ${status.node.blockNumber?.toLocaleString() ?? "—"} · ${status.node.latencyMs} ms`
+        : status?.nodeError || "Sin conexión",
+    },
+    {
+      label: "Firmador",
+      ok: signerHealthy,
+      detail: status?.signer.configured
+        ? (status.signer.error || `${status.signer.transport} · ${signerHealthy ? "saludable" : "no disponible"}`)
+        : "No aprovisionado",
+    },
+    {
+      label: "Pagos",
+      ok: ready,
+      detail: ready ? "Habilitados por doble candado" : "Bloqueados de forma segura",
+    },
+  ];
+
+  return (
+    <Card className={ready ? "border-green-200" : "border-amber-200 bg-amber-50/30"}>
+      <CardContent className="px-5 py-4 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Network className="w-4 h-4 text-[#c8322b]" />
+            <div>
+              <p className="text-sm font-semibold">Infraestructura TRON corporativa</p>
+              <p className="text-[10px] text-muted-foreground">FullNode de lectura + firmador remoto aislado</p>
+            </div>
+          </div>
+          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={refresh} disabled={loading}>
+            <RefreshCw className={`w-3 h-3 mr-1 ${loading ? "animate-spin" : ""}`} />
+            Verificar
+          </Button>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {items.map(item => (
+            <div key={item.label} className="rounded-md border bg-background/80 p-3">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{item.label}</p>
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className={`w-2 h-2 rounded-full ${item.ok ? "bg-green-500" : "bg-amber-500"}`} />
+                <p className="text-xs font-medium">{loading && !status ? "Consultando…" : item.detail}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+        {!ready && (
+          <div className="flex items-start gap-2 rounded-md bg-amber-100/70 border border-amber-200 px-3 py-2">
+            <Lock className="w-3.5 h-3.5 text-amber-700 mt-0.5 shrink-0" />
+            <p className="text-[11px] text-amber-800">
+              Preparación segura: consultar saldos está permitido, pero ninguna dispersión puede firmarse
+              hasta aprovisionar el nodo y el firmador y activar ambos candados explícitamente.
+              {status?.legacyLocalKeyDetected && " También debe retirarse la llave heredada del proceso de la aplicación."}
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Dispersal Widget ──────────────────────────────────────────────────────────
 
 // Task #46: TRON base58 address regex — must start with T and be exactly 34 chars
 const TRON_ADDR_RE = /^T[a-zA-Z0-9]{33}$/;
 
-function DisperseWidget() {
+function DisperseWidget({ infrastructure }: { infrastructure?: TronInfrastructureStatus }) {
   const [toAddress,  setToAddress]  = useState("");
   const [amount,     setAmount]     = useState("");
   const [note,       setNote]       = useState("");
@@ -163,6 +261,7 @@ function DisperseWidget() {
   const [history,    setHistory]    = useState<Dispersion[]>([]);
   const [histLoading, setHistLoading] = useState(true);
   const [maxUsdt,    setMaxUsdt]    = useState<number>(5000);
+  const [idempotencyKey, setIdempotencyKey] = useState("");
   // Task #45: track which row IDs are being verified on-chain
   const [verifying,  setVerifying]  = useState<Set<number>>(new Set());
 
@@ -198,6 +297,10 @@ function DisperseWidget() {
 
   function openConfirm() {
     setError(null);
+    if (!infrastructure?.readyForWrites) {
+      setError("Dispersiones bloqueadas: el nodo y el firmador remoto aún no están habilitados");
+      return;
+    }
     // Task #46: guard — addrValid is already computed, but double-check before opening dialog
     if (!addrValid) {
       setError(addrError ?? "Dirección TRON inválida");
@@ -209,6 +312,7 @@ function DisperseWidget() {
       setError(`El monto excede el límite máximo por operación: $${fmt(maxUsdt)} USDT`);
       return;
     }
+    setIdempotencyKey(crypto.randomUUID());
     setPassword("");
     setShowDialog(true);
   }
@@ -234,10 +338,13 @@ function DisperseWidget() {
     try {
       const res = await fetch("/api/admin/hot-wallet/disperse", {
         method:  "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKey,
+        },
         body: JSON.stringify({
           toAddress,
-          amountUsdt: parseFloat(amount),
+          amountUsdt: amount,
           password,
           note: note || undefined,
         }),
@@ -247,6 +354,7 @@ function DisperseWidget() {
       setLastTxid(json.txid);
       setShowDialog(false);
       setToAddress(""); setAmount(""); setNote("");
+      setIdempotencyKey("");
       fetchHistory();
     } catch (e: any) {
       setError(e.message);
@@ -324,7 +432,7 @@ function DisperseWidget() {
               size="sm"
               className="bg-[#c8322b] hover:bg-[#a82820] text-white"
               onClick={executeDisperse}
-              disabled={loading || !password}
+              disabled={loading || !password || !idempotencyKey || !infrastructure?.readyForWrites}
             >
               {loading ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Enviando…</> : <><Send className="w-3.5 h-3.5 mr-1.5" />Firmar y enviar</>}
             </Button>
@@ -401,8 +509,8 @@ function DisperseWidget() {
                 </div>
                 <Input
                   type="number"
-                  min="0.01"
-                  step="0.01"
+                  min="0.000001"
+                  step="0.000001"
                   max={maxUsdt}
                   placeholder="0.00"
                   value={amount}
@@ -429,12 +537,20 @@ function DisperseWidget() {
                 <AlertCircle className="w-3 h-3" />{error}
               </p>
             )}
+            {!infrastructure?.readyForWrites && (
+              <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+                <Lock className="w-3.5 h-3.5 text-amber-700 mt-0.5 shrink-0" />
+                <p className="text-[11px] text-amber-800">
+                  Operación deshabilitada hasta que la infraestructura TRON esté aprovisionada y autorizada.
+                </p>
+              </div>
+            )}
             {/* Task #46: button disabled until address passes validation */}
             <Button
               onClick={openConfirm}
               className="bg-[#c8322b] hover:bg-[#a82820] text-white w-full sm:w-auto self-end disabled:opacity-50"
               size="sm"
-              disabled={addrTouched && !addrValid}
+              disabled={!infrastructure?.readyForWrites || !toAddress || !amount || !addrValid}
               title={addrTouched && !addrValid ? "Corrige la dirección TRON antes de continuar" : undefined}
             >
               <Send className="w-3.5 h-3.5 mr-1.5" />
@@ -1012,6 +1128,14 @@ function BrokerOpsPanel() {
 export default function AdminCajaUSDT() {
   const [copied, setCopied] = useState(false);
   const [expandedUser, setExpandedUser] = useState<number | null>(null);
+  const {
+    data: tronInfrastructure,
+    isFetching: tronInfrastructureLoading,
+    refetch: refreshTronInfrastructure,
+  } = useQuery<TronInfrastructureStatus>({
+    queryKey: ["/api/admin/tron/status"],
+    refetchInterval: 30_000,
+  });
 
   function copyAddress() {
     navigator.clipboard.writeText(WALLET_ADDRESS);
@@ -1038,10 +1162,16 @@ export default function AdminCajaUSDT() {
       </div>
 
       {/* ── Hot Wallet de dispersión USDT ── */}
+      <TronInfrastructureWidget
+        status={tronInfrastructure}
+        loading={tronInfrastructureLoading}
+        refresh={() => { void refreshTronInfrastructure(); }}
+      />
+
       <HotWalletWidget />
 
       {/* ── Dispersar USDT ── */}
-      <DisperseWidget />
+      <DisperseWidget infrastructure={tronInfrastructure} />
 
       {/* ── Broker OKX — envío a red + transferencia interna ── */}
       <BrokerOpsPanel />

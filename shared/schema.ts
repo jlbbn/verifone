@@ -317,6 +317,10 @@ export interface SystemSettings {
   terminalParams: { label: string; value: string }[];
   // Crypto — límite de dispersión por operación (USDT)
   maxDispersalUsdt: number;
+  // Crypto — límite agregado UTC por día (USDT). 0 = denegar toda escritura.
+  maxDailyDispersalUsdt: number;
+  // Crypto — reserva mínima de TRX antes de solicitar una firma.
+  minTrxReserve: number;
   // Anuncios de plataforma (visible en el dashboard de todos los usuarios)
   platformAnnouncement?: string;
 }
@@ -348,6 +352,8 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
     { symbol: "ADA/USD", value: "$0.82" },
   ],
   maxDispersalUsdt: 5000,
+  maxDailyDispersalUsdt: 0,
+  minTrxReserve: 40,
   platformAnnouncement: "",
   terminalParams: [
     { label: "APLICACION",    value: "RETAIL" },
@@ -479,6 +485,16 @@ export const hotWalletDispersions = pgTable("hot_wallet_dispersions", {
   txid:        text("txid"),
   status:      text("status").notNull().default("pending"),   // pending | broadcast | confirmed | failed
   note:        text("note"),
+  // Idempotencia y datos de intención. Nullable para conservar filas históricas
+  // creadas antes de que existiera el firmador remoto.
+  idempotencyKey: text("idempotency_key").unique(),
+  signerRequestId: text("signer_request_id"),
+  expectedAtomicAmount: text("expected_atomic_amount"),
+  expectedContract: text("expected_contract"),
+  network: text("network").notNull().default("mainnet"),
+  failureCode: text("failure_code"),
+  confirmedAt: timestamp("confirmed_at"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
   createdAt:   timestamp("created_at").defaultNow().notNull(),
 });
 export type HotWalletDispersion = typeof hotWalletDispersions.$inferSelect;

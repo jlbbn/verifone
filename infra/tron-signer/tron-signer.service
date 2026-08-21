@@ -1,0 +1,32 @@
+[Unit]
+Description=Banxico Plus isolated TRON signer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tron-signer
+Group=tron-signer
+WorkingDirectory=/opt/banxico-plus
+EnvironmentFile=/etc/tron-signer/tron-signer.env
+ExecStart=/usr/bin/node /opt/banxico-plus/infra/tron-signer/signer.mjs
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/var/lib/tron-signer
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallArchitectures=native
+MemoryDenyWriteExecute=false
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target
