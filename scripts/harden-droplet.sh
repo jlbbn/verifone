@@ -5,8 +5,24 @@
 set -euo pipefail
 
 USER_IP="186.96.190.247"
+AGENT_UFW_TTL_SECONDS=900
 
-echo ">>> [1/5] Endureciendo sshd_config..."
+# El runner de confianza deriva esta secuencia (con add-agent-to-ufw.sh
+# --print-knock-ports) y entrega únicamente los puertos al droplet. La semilla
+# SSH nunca se transmite ni se almacena aquí.
+[[ "${AGENT_UFW_KNOCK_PORTS:-}" =~ ^[0-9]+,[0-9]+,[0-9]+$ ]] || {
+  echo "falta AGENT_UFW_KNOCK_PORTS (tres puertos separados por coma)" >&2
+  exit 1
+}
+IFS=, read -r -a KNOCK_PORTS <<<"$AGENT_UFW_KNOCK_PORTS"
+declare -A seen_knock_ports=()
+for port in "${KNOCK_PORTS[@]}"; do
+  ((port >= 20000 && port < 50000)) || { echo "puerto de knock fuera de rango" >&2; exit 1; }
+  [[ -z "${seen_knock_ports[$port]:-}" ]] || { echo "puertos de knock repetidos" >&2; exit 1; }
+  seen_knock_ports[$port]=1
+done
+
+echo ">>> [1/6] Endureciendo sshd_config..."
 cat > /etc/ssh/sshd_config.d/99-hardening.conf <<'EOF'
 # Hardening aplicado por auditoría ago-2026
 PermitRootLogin prohibit-password
@@ -21,7 +37,7 @@ EOF
 sshd -t && (systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true)
 echo "    sshd recargado OK"
 
-echo ">>> [2/5] Ajustando UFW: restringir SSH a IP fija del usuario..."
+echo ">>> [2/6] Ajustando UFW: restringir SSH a IP fija del usuario..."
 # Eliminar reglas abiertas de SSH (ANY)
 ufw --force delete allow OpenSSH 2>/dev/null || true
 ufw --force delete allow 22/tcp 2>/dev/null || true
@@ -31,7 +47,210 @@ ufw --force enable
 ufw status verbose
 echo "    UFW OK"
 
-echo ">>> [3/5] Instalando y configurando fail2ban..."
+echo ">>> [3/6] Instalando acceso temporal del agente mediante knockd..."
+# knockd escucha paquetes UDP antes de que UFW los descarte. Solo el script
+# add-agent-to-ufw.sh abre esos puertos y SSH en el Cloud Firewall, por un
+# periodo corto y exclusivamente para la IP de salida actual del agente.
+DEBIAN_FRONTEND=noninteractive apt-get install -y -q knockd
+
+cat > /usr/local/sbin/agent-ufw-gate <<'EOF'
+#!/usr/bin/env bash
+# Se invoca exclusivamente desde knockd. Crea una regla SSH temporal para la
+# IP que superó el knock y programa su retiro aunque el cliente se desconecte.
+set -euo pipefail
+
+readonly USER_IP="186.96.190.247"
+readonly COMMENT_TAG="agent-ssh-temporary"
+readonly LEASE_DIR="/var/lib/agent-ufw-gate"
+
+usage() {
+  echo "uso: agent-ufw-gate open|close IPV4 [ttl-segundos]" >&2
+  exit 64
+}
+
+[[ $# -ge 2 ]] || usage
+action="$1"
+ip="$2"
+ttl="${3:-900}"
+
+python3 - "$ip" "$ttl" <<'PY'
+import ipaddress
+import sys
+
+ip = ipaddress.ip_address(sys.argv[1])
+ttl = int(sys.argv[2])
+if ip.version != 4 or not 60 <= ttl <= 3600:
+    raise SystemExit("IP o TTL inválido")
+PY
+
+# La IP de administración del usuario es una regla protegida y jamás se borra
+# por este mecanismo. Un knock desde ella es un no-op seguro.
+[[ "$ip" != "$USER_IP" ]] || exit 0
+
+mkdir -p /run/agent-ufw-gate
+exec 9>/run/agent-ufw-gate/lock
+flock -x 9
+install -d -o root -g root -m 700 "$LEASE_DIR"
+
+rule_numbers() {
+  ufw status numbered |
+    grep -F "$ip" |
+    grep -F "$COMMENT_TAG" |
+    sed -n 's/^[[:space:]]*\[[[:space:]]*\([0-9][0-9]*\)\].*/\1/p' || true
+}
+
+remove_temporary_rules() {
+  local number
+  # Borrar de mayor a menor evita que cambien los números de las reglas.
+  while IFS= read -r number; do
+    [[ -n "$number" ]] || continue
+    ufw --force delete "$number"
+  done < <(rule_numbers | sort -rn)
+}
+
+lease_file="${LEASE_DIR}/${ip}"
+
+write_lease() {
+  local expires_at tmp_file
+  expires_at="$(( $(date +%s) + ttl ))"
+  tmp_file="$(mktemp "${LEASE_DIR}/.${ip}.XXXXXX")"
+  printf '%s\n' "$expires_at" >"$tmp_file"
+  chmod 600 "$tmp_file"
+  mv -f "$tmp_file" "$lease_file"
+}
+
+case "$action" in
+  open)
+    # La reconciliación es persistente (también tras un reinicio). No se abre
+    # una regla si no está activa, pues no habría garantía de caducidad.
+    systemctl is-active --quiet agent-ufw-reconcile.timer
+    write_lease
+
+    if [[ -z "$(rule_numbers)" ]]; then
+      if ! ufw allow from "$ip" to any port 22 proto tcp comment "$COMMENT_TAG"; then
+        rm -f "$lease_file"
+        exit 1
+      fi
+    fi
+    ;;
+  close)
+    remove_temporary_rules
+    rm -f "$lease_file"
+    ;;
+  *)
+    usage
+    ;;
+esac
+EOF
+chmod 700 /usr/local/sbin/agent-ufw-gate
+
+cat > /usr/local/sbin/agent-ufw-reconcile <<'EOF'
+#!/usr/bin/env bash
+# Retira reglas efímeras vencidas y cualquier regla efímera que perdió su
+# concesión. Se ejecuta al arrancar y cada 30 segundos mediante systemd.
+set -euo pipefail
+
+readonly LEASE_DIR="/var/lib/agent-ufw-gate"
+readonly COMMENT_TAG="agent-ssh-temporary"
+now="$(date +%s)"
+
+valid_ipv4() {
+  python3 - "$1" <<'PY'
+import ipaddress
+import sys
+ip = ipaddress.ip_address(sys.argv[1])
+raise SystemExit(0 if ip.version == 4 else 1)
+PY
+}
+
+lease_is_current() {
+  local ip="$1" expiry
+  [[ -f "${LEASE_DIR}/${ip}" ]] || return 1
+  read -r expiry <"${LEASE_DIR}/${ip}" || return 1
+  [[ "$expiry" =~ ^[0-9]+$ ]] && ((expiry > now))
+}
+
+shopt -s nullglob
+for lease in "${LEASE_DIR}"/*; do
+  ip="${lease##*/}"
+  if ! valid_ipv4 "$ip" || ! lease_is_current "$ip"; then
+    /usr/local/sbin/agent-ufw-gate close "$ip" 2>/dev/null || rm -f "$lease"
+  fi
+done
+
+# Si se pierde el archivo de concesión durante un reinicio o una escritura
+# interrumpida, se elimina la regla marcada en vez de mantenerla abierta.
+while IFS= read -r line; do
+  number="$(printf '%s\n' "$line" | sed -n 's/^[[:space:]]*\[[[:space:]]*\([0-9][0-9]*\)\].*/\1/p')"
+  ip="$(printf '%s\n' "$line" | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -n1 || true)"
+  [[ -n "$number" && -n "$ip" ]] || continue
+  if ! valid_ipv4 "$ip" || ! lease_is_current "$ip"; then
+    ufw --force delete "$number"
+    rm -f "${LEASE_DIR}/${ip}"
+  fi
+done < <(ufw status numbered | grep -F "$COMMENT_TAG" || true)
+EOF
+chmod 700 /usr/local/sbin/agent-ufw-reconcile
+
+install -d -o root -g root -m 700 /var/lib/agent-ufw-gate
+cat > /etc/systemd/system/agent-ufw-reconcile.service <<'EOF'
+[Unit]
+Description=Retira reglas UFW temporales del agente vencidas
+After=ufw.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/agent-ufw-reconcile
+EOF
+
+cat > /etc/systemd/system/agent-ufw-reconcile.timer <<'EOF'
+[Unit]
+Description=Reconciliación persistente de reglas UFW temporales del agente
+
+[Timer]
+OnBootSec=15s
+OnUnitActiveSec=30s
+Persistent=true
+Unit=agent-ufw-reconcile.service
+
+[Install]
+WantedBy=timers.target
+EOF
+systemctl daemon-reload
+systemctl enable --now agent-ufw-reconcile.timer
+systemctl is-active --quiet agent-ufw-reconcile.timer
+
+PRIMARY_INTERFACE="$(ip route get 1.1.1.1 | awk '{for (i=1; i<=NF; i++) if ($i == "dev") {print $(i+1); exit}}')"
+[[ -n "$PRIMARY_INTERFACE" ]] || { echo "No se pudo detectar la interfaz de red para knockd" >&2; exit 1; }
+
+cat > /etc/knockd.conf <<EOF
+[options]
+        UseSyslog
+        Interface = ${PRIMARY_INTERFACE}
+
+[open-agent-ufw]
+        sequence    = ${KNOCK_PORTS[0]}:udp,${KNOCK_PORTS[1]}:udp,${KNOCK_PORTS[2]}:udp
+        seq_timeout = 8
+        command     = /usr/local/sbin/agent-ufw-gate open %IP% ${AGENT_UFW_TTL_SECONDS}
+
+[close-agent-ufw]
+        sequence    = ${KNOCK_PORTS[2]}:udp,${KNOCK_PORTS[1]}:udp,${KNOCK_PORTS[0]}:udp
+        seq_timeout = 8
+        command     = /usr/local/sbin/agent-ufw-gate close %IP%
+EOF
+chmod 600 /etc/knockd.conf
+
+# Ubuntu instala knockd deshabilitado por defecto.
+if grep -q '^START_KNOCKD=' /etc/default/knockd; then
+    sed -i 's/^START_KNOCKD=.*/START_KNOCKD=1/' /etc/default/knockd
+else
+    echo 'START_KNOCKD=1' >> /etc/default/knockd
+fi
+systemctl enable --now knockd
+systemctl is-active --quiet knockd
+echo "    knockd activo; UFW seguirá permitiendo SSH permanente solo a ${USER_IP}"
+
+echo ">>> [4/6] Instalando y configurando fail2ban..."
 DEBIAN_FRONTEND=noninteractive apt-get install -y -q fail2ban
 
 cat > /etc/fail2ban/jail.local <<EOF
@@ -209,11 +428,11 @@ sleep 1
 fail2ban-client status sshd
 echo "    fail2ban OK"
 
-echo ">>> [4/5] Verificando unattended-upgrades..."
+echo ">>> [5/6] Verificando unattended-upgrades..."
 systemctl is-active unattended-upgrades || systemctl enable --now unattended-upgrades
 apt-get -s upgrade 2>/dev/null | grep -c security || echo "    0 actualizaciones de seguridad pendientes"
 
-echo ">>> [5/5] Estado final..."
+echo ">>> [6/6] Estado final..."
 echo "--- UFW ---"
 ufw status verbose
 echo "--- sshd ---"
