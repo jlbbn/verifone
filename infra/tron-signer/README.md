@@ -1,0 +1,48 @@
+# Firmador TRON aislado
+
+Este servicio es el único componente que puede recibir la llave privada de la
+hot wallet. Banxico Plus se autentica con **mTLS + HMAC** y envía únicamente la
+intención validada de transferencia.
+
+## Estado de esta entrega
+
+- Código y unidad systemd preparados.
+- `TRON_SIGNER_WRITES_ENABLED=false` por defecto.
+- No se generó ni importó ninguna llave.
+- No se crearon certificados ni secretos.
+- No se transmitió ninguna transacción.
+
+## Controles
+
+1. Rechaza clientes sin certificado firmado por la CA privada.
+2. Verifica HMAC en tiempo constante, timestamp de 30 segundos y nonce anti-replay.
+3. Fija red `mainnet` y el contrato oficial USDT-TRC20.
+4. Aplica límites propios por operación y día, independientes de la aplicación.
+5. Verifica que la llave corresponda a la dirección pública configurada.
+6. Decodifica la transacción sin firmar y exige coincidencia exacta de owner,
+   contrato, selector, destino, monto atómico, fee, TAPOS y expiración.
+7. Solo acepta el origen privado fijado simultáneamente en `TRON_FULL_HOST` y
+   `TRON_APPROVED_NODE_ORIGIN`; no existe fallback a TronGrid.
+8. Persiste resultados por clave de idempotencia antes de responder.
+9. Mantiene la escritura cerrada hasta activar explícitamente el doble candado.
+
+## Aprovisionamiento posterior
+
+1. Crear un host aislado en la misma red privada del nodo y de la aplicación.
+2. Instalar la misma versión de Node usada por Banxico Plus y desplegar el repo.
+3. Crear el usuario sin login `tron-signer` y `/var/lib/tron-signer` con modo 0700.
+4. Emitir certificados servidor/cliente desde una CA privada guardada offline.
+5. Copiar `tron-signer.env.example` a `tron-signer.env` en el host y completar
+   IPs privadas, rutas TLS y límites con escrituras todavía apagadas.
+6. Activar primero un baseline UFW `deny incoming`; reflejar el mismo allowlist
+   en DigitalOcean Cloud Firewall.
+7. Ejecutar `bash infra/tron-signer/install.sh` (dry-run) y después
+   `sudo bash infra/tron-signer/install.sh --execute`.
+8. Verificar que la llave TLS queda `root:tron-signer` modo 0640 y que el
+   servicio solo escucha en la IP privada.
+9. Mantener escrituras apagadas y probar `/health`.
+10. Ejecutar pruebas con Nile antes de considerar mainnet.
+
+La llave nunca debe guardarse en Replit, el repositorio, el host de la app o el
+nodo FullNode. La restauración y rotación requiere el procedimiento de
+`docs/tron-node-runbook.md`.

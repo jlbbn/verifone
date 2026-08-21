@@ -1,0 +1,37 @@
+[Unit]
+Description=TRON Mainnet FullNode (java-tron)
+Documentation=https://developers.tron.network/docs/deploy-the-fullnode-or-supernode
+After=network-online.target time-sync.target
+Wants=network-online.target time-sync.target
+
+[Service]
+Type=simple
+User=tron
+Group=tron
+EnvironmentFile=/etc/tron-node/tron-node.env
+WorkingDirectory=/var/lib/tron
+ExecStart=/usr/bin/java -Xms${TRON_JAVA_XMS} -Xmx${TRON_JAVA_XMX} -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/var/log/tron -jar /opt/tron/FullNode.jar -c /opt/tron/config.conf
+Restart=on-failure
+RestartSec=15
+TimeoutStopSec=300
+KillSignal=SIGTERM
+SuccessExitStatus=143
+UMask=0077
+LimitNOFILE=65536
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/var/lib/tron /var/log/tron
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallArchitectures=native
+# Java requires executable memory for JIT; MemoryDenyWriteExecute cannot be enabled.
+MemoryDenyWriteExecute=false
+
+[Install]
+WantedBy=multi-user.target

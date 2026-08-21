@@ -1,0 +1,11 @@
+# Reference only. install.sh adds these rules without resetting existing UFW.
+# Prerequisite (not changed by install.sh): UFW active with default deny incoming.
+ufw allow from ADMIN_SSH_CIDR to any port 22 proto tcp
+ufw allow 18888/tcp
+ufw allow 18888/udp
+# For every private API port, insert allow at position 1 then deny at position 2.
+# This overrides any older broad allow while preserving VPC access:
+ufw insert 1 deny to any port 8090 proto tcp
+ufw insert 1 allow from TRON_RPC_ALLOWED_CIDR to any port 8090 proto tcp
+# Repeat for 8091, 8092, 50051, 50061, 50071 and 9527.
+ufw insert 1 deny to any port 8545 proto tcp

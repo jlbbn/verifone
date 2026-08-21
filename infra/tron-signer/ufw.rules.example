@@ -1,0 +1,5 @@
+# Reference only; install.sh validates values and preserves existing rules.
+ufw insert 1 allow from APP_ALLOWED_CIDR to SIGNER_PRIVATE_IP port 9443 proto tcp
+ufw insert 2 deny to SIGNER_PRIVATE_IP port 9443 proto tcp
+ufw allow from ADMIN_SSH_CIDR to any port 22 proto tcp
+# Prerequisite (not changed by install.sh): UFW active with default deny incoming.

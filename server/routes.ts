@@ -17,6 +17,14 @@ import * as OKXClient    from "./crypto/okx-client.js";
 import * as KrakenClient from "./crypto/kraken-client.js";
 import { executeSwap, availableBroker, bitstampTradingEnabled } from "./crypto/broker-executor.js";
 import * as TronClient from "./crypto/tron-client.js";
+import * as TronSigner from "./crypto/tron-signer-client.js";
+import {
+  configuredDailyLimit,
+  configuredDailyLimitAmount,
+  legacyLocalSigningKeyPresent,
+  parseUsdtAmount,
+  tronWalletWritesEnabled,
+} from "./crypto/tron-policy.js";
 import * as Bitstamp from "./crypto/bitstamp-client.js";
 import { ensureBitstampFeed, bitstampFeedSnapshot } from "./crypto/bitstamp-ws-feed.js";
 
@@ -848,7 +856,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!info.configured) {
         return res.status(503).json({
           error: "Hot wallet no configurada",
-          detail: "Faltan PLATFORM_TRON_ADDRESS y/o PLATFORM_TRON_PRIVATE_KEY",
+          detail: "Falta PLATFORM_TRON_ADDRESS",
           address: info.address,
           network: info.network,
           token:   info.token,
@@ -870,18 +878,101 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ── Infraestructura TRON: nodo de lectura + firmador aislado ─────────────
+  app.get("/api/admin/tron/status", requireRole("ADMIN"), async (_req, res) => {
+    const wallet = TronClient.platformWalletInfo();
+    const signer = TronSigner.signerConfiguration();
+    let node: Awaited<ReturnType<typeof TronClient.getNodeHealth>> | null = null;
+    let nodeError: string | null = null;
+    let signerHealth: Awaited<ReturnType<typeof TronSigner.getSignerHealth>> | null = null;
+    let signerError: string | null = null;
+
+    try { node = await TronClient.getNodeHealth(); }
+    catch (err) { nodeError = (err as Error).message; }
+    if (signer.configured) {
+      try { signerHealth = await TronSigner.getSignerHealth(); }
+      catch (err) { signerError = (err as Error).message; }
+    }
+
+    const settings = await storage.getSettings();
+    const envDaily = configuredDailyLimit();
+    const settingsDaily = Number(settings.maxDailyDispersalUsdt ?? 0);
+    const effectiveDailyLimit = envDaily && settingsDaily > 0
+      ? Math.min(envDaily, settingsDaily)
+      : envDaily ?? settingsDaily;
+
+    res.json({
+      mode: "remote-only",
+      network: "mainnet",
+      wallet,
+      writesEnabled: tronWalletWritesEnabled(),
+      limits: {
+        perTransactionUsdt: Number(settings.maxDispersalUsdt ?? 0),
+        dailyUsdt: effectiveDailyLimit,
+        minTrxReserve: Number(settings.minTrxReserve ?? 40),
+      },
+      node,
+      nodeError,
+      signer: { ...signer, health: signerHealth, error: signerError },
+      legacyLocalKeyDetected: legacyLocalSigningKeyPresent(),
+      readyForWrites: Boolean(
+        tronWalletWritesEnabled()
+        && !legacyLocalSigningKeyPresent()
+        && signer.configured
+        && signerHealth?.healthy
+        && node?.healthy
+        && effectiveDailyLimit > 0
+      ),
+      checkedAt: new Date().toISOString(),
+    });
+  });
+
   // ── Dispersar USDT desde la hot wallet ──────────────────────────────────
   app.post("/api/admin/hot-wallet/disperse", requireRole("ADMIN"), async (req, res) => {
     const schema = z.object({
       // Fix #2: tightened from min(30) to a proper base58 length range;
       // isValidAddress() performs the real validation below.
       toAddress:  z.string().min(34).max(34),
-      amountUsdt: z.number().positive().finite(),
+      amountUsdt: z.union([z.string(), z.number()]),
       password:   z.string().min(1),
       note:       z.string().optional(),
     });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Datos inválidos", detail: parsed.error.issues });
+
+    // Fail closed: provisioning a key or signer is insufficient by itself.
+    // Both the app and the isolated signer have independent write gates.
+    if (!tronWalletWritesEnabled()) {
+      return res.status(503).json({
+        error: "Dispersiones TRON desactivadas por política",
+        code: "TRON_WRITES_DISABLED",
+      });
+    }
+    if (legacyLocalSigningKeyPresent()) {
+      return res.status(503).json({
+        error: "Configuración TRON ambigua: retire la llave local antes de habilitar el firmador remoto",
+        code: "LEGACY_LOCAL_SIGNING_KEY_PRESENT",
+      });
+    }
+    if (!TronSigner.signerConfiguration().configured) {
+      return res.status(503).json({
+        error: "Firmador TRON aislado no configurado",
+        code: "TRON_SIGNER_UNAVAILABLE",
+      });
+    }
+
+    let amount;
+    try { amount = parseUsdtAmount(parsed.data.amountUsdt); }
+    catch (err) {
+      return res.status(400).json({ error: (err as Error).message, code: "INVALID_USDT_AMOUNT" });
+    }
+    const idempotencyKey = req.get("Idempotency-Key")?.trim() ?? "";
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{15,127}$/.test(idempotencyKey)) {
+      return res.status(400).json({
+        error: "Falta una clave de idempotencia válida",
+        code: "INVALID_IDEMPOTENCY_KEY",
+      });
+    }
 
     const admin = req.currentUser!;
     // Verify admin password before signing
@@ -901,7 +992,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Validate against configurable max dispersal limit
     const settings = await storage.getSettings();
     const maxUsdt = settings.maxDispersalUsdt ?? 5000;
-    if (parsed.data.amountUsdt > maxUsdt) {
+    let maxPerTransactionAtomic: bigint;
+    try {
+      maxPerTransactionAtomic = BigInt(parseUsdtAmount(String(maxUsdt)).atomic);
+    } catch {
+      return res.status(503).json({
+        error: "Límite por operación TRON inválido; dispersiones bloqueadas",
+        code: "INVALID_TRON_PER_TX_LIMIT",
+      });
+    }
+    if (BigInt(amount.atomic) > maxPerTransactionAtomic) {
       return res.status(400).json({
         error: `El monto excede el límite máximo configurado de $${maxUsdt.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT por operación.`,
         code: "EXCEEDS_MAX_DISPERSAL",
@@ -916,30 +1016,193 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!info.configured) {
       return res.status(503).json({ error: "Hot wallet no configurada" });
     }
+    if (!info.nodeApproved || !info.nodeEndpoint) {
+      return res.status(503).json({
+        error: "Nodo TRON corporativo privado no configurado o no aprobado",
+        code: "TRON_PRIVATE_NODE_NOT_APPROVED",
+      });
+    }
 
-    // Insert with "pending" status — updated to "broadcast" or "failed" below.
-    const [row] = await db.insert(hotWalletDispersions).values({
-      adminId:    admin.id,
-      toAddress:  parsed.data.toAddress,
-      amountUsdt: String(parsed.data.amountUsdt),
-      status:     "pending",
-      note:       parsed.data.note ?? null,
-    }).returning();
+    let nodeHealth;
+    let signerHealth;
+    try {
+      [nodeHealth, signerHealth] = await Promise.all([
+        TronClient.getNodeHealth(),
+        TronSigner.getSignerHealth(),
+      ]);
+    } catch {
+      return res.status(503).json({
+        error: "Infraestructura TRON no disponible; firma bloqueada",
+        code: "TRON_INFRASTRUCTURE_UNHEALTHY",
+      });
+    }
+    if (!nodeHealth.healthy || !signerHealth.healthy || !signerHealth.writesEnabled) {
+      return res.status(503).json({
+        error: "Nodo o firmador TRON no está listo para escrituras",
+        code: "TRON_INFRASTRUCTURE_UNHEALTHY",
+      });
+    }
+    if (signerHealth.address !== info.address) {
+      return res.status(503).json({
+        error: "La identidad del firmador no coincide con la hot wallet configurada",
+        code: "TRON_SIGNER_WALLET_MISMATCH",
+      });
+    }
+    if (signerHealth.nodeEndpoint !== info.nodeEndpoint) {
+      return res.status(503).json({
+        error: "El firmador no está conectado al nodo TRON aprobado",
+        code: "TRON_SIGNER_NODE_MISMATCH",
+      });
+    }
+
+    const balance = await TronClient.getBalance();
+    const minTrxReserve = Number(settings.minTrxReserve ?? 40);
+    if (balance.trxBalance < minTrxReserve) {
+      return res.status(503).json({
+        error: `Saldo TRX insuficiente: se requieren al menos ${minTrxReserve} TRX`,
+        code: "INSUFFICIENT_TRX_RESERVE",
+      });
+    }
+
+    let envDailyAmount;
+    let settingsDailyAmount;
+    try {
+      envDailyAmount = configuredDailyLimitAmount();
+      const settingsDaily = Number(settings.maxDailyDispersalUsdt ?? 0);
+      settingsDailyAmount = settingsDaily > 0
+        ? parseUsdtAmount(String(settings.maxDailyDispersalUsdt))
+        : null;
+    } catch {
+      return res.status(503).json({
+        error: "Límite diario TRON inválido; dispersiones bloqueadas",
+        code: "INVALID_TRON_DAILY_LIMIT",
+      });
+    }
+    const dailyAtomicCandidates = [envDailyAmount, settingsDailyAmount]
+      .filter((value): value is NonNullable<typeof value> => Boolean(value))
+      .map((value) => BigInt(value.atomic));
+    if (dailyAtomicCandidates.length === 0) {
+      return res.status(503).json({
+        error: "Límite diario TRON no configurado; dispersiones bloqueadas",
+        code: "TRON_DAILY_LIMIT_DISABLED",
+      });
+    }
+    const maxDailyAtomic = dailyAtomicCandidates.reduce(
+      (lowest, current) => current < lowest ? current : lowest,
+    );
+    const maxDailyUsdt = Number(maxDailyAtomic) / 1_000_000;
+
+    // Reserve the daily allowance transactionally. pg_advisory_xact_lock makes
+    // concurrent requests serialize before reading the aggregate.
+    const reservation = await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('banxico-plus-tron-daily-limit'))`);
+      const existingResult = await tx.execute(sql`
+        SELECT * FROM hot_wallet_dispersions
+        WHERE idempotency_key = ${idempotencyKey}
+        LIMIT 1
+      `);
+      const existing = (existingResult.rows?.[0] ?? null) as any;
+      if (existing) return { duplicate: true as const, row: existing };
+
+      const sumResult = await tx.execute(sql`
+        SELECT COALESCE(SUM(amount_usdt * 1000000), 0)::text AS total_atomic
+        FROM hot_wallet_dispersions
+        WHERE status IN ('pending', 'uncertain', 'broadcast', 'confirmed')
+          AND created_at >= date_trunc('day', NOW() AT TIME ZONE 'UTC')
+      `);
+      const usedTodayAtomic = BigInt((sumResult.rows?.[0] as any)?.total_atomic ?? "0");
+      if (usedTodayAtomic + BigInt(amount.atomic) > maxDailyAtomic) {
+        return { limitExceeded: true as const, usedTodayAtomic };
+      }
+
+      const [row] = await tx.insert(hotWalletDispersions).values({
+        adminId: admin.id,
+        toAddress: parsed.data.toAddress,
+        amountUsdt: amount.normalized,
+        status: "pending",
+        note: parsed.data.note ?? null,
+        idempotencyKey,
+        expectedAtomicAmount: amount.atomic,
+        expectedContract: TronClient.USDT_CONTRACT,
+        network: "mainnet",
+        updatedAt: new Date(),
+      }).returning();
+      return { duplicate: false as const, row };
+    });
+
+    if ("limitExceeded" in reservation) {
+      return res.status(400).json({
+        error: "La operación excede el límite diario de la hot wallet",
+        code: "EXCEEDS_DAILY_DISPERSAL",
+        maxDailyUsdt,
+        usedToday: Number(reservation.usedTodayAtomic) / 1_000_000,
+      });
+    }
+    if (reservation.duplicate) {
+      if (!reservation.row.txid && ["pending", "uncertain"].includes(reservation.row.status)) {
+        try {
+          const remote = await TronSigner.getTransferStatus(idempotencyKey);
+          if (remote.status === "broadcast" && remote.txid) {
+            await db.update(hotWalletDispersions)
+              .set({
+                txid: remote.txid,
+                signerRequestId: remote.requestId,
+                status: "broadcast",
+                failureCode: null,
+                updatedAt: new Date(),
+              })
+              .where(eq(hotWalletDispersions.id, reservation.row.id));
+            return res.status(200).json({
+              success: true,
+              duplicate: true,
+              reconciled: true,
+              id: reservation.row.id,
+              txid: remote.txid,
+              status: "broadcast",
+            });
+          }
+        } catch {
+          // Fail closed. A missing/ambiguous remote result must be investigated;
+          // it must never trigger a second signature with a new key.
+        }
+      }
+      return res.status(200).json({
+        success: reservation.row.status === "broadcast" || reservation.row.status === "confirmed",
+        duplicate: true,
+        id: reservation.row.id,
+        txid: reservation.row.txid,
+        status: reservation.row.status,
+      });
+    }
+    const row = reservation.row;
 
     try {
-      const result = await TronClient.transfer(parsed.data.toAddress, parsed.data.amountUsdt);
+      const result = await TronSigner.requestTransfer({
+        idempotencyKey,
+        toAddress: parsed.data.toAddress,
+        amountAtomic: amount.atomic,
+      });
 
       // Fix #1: Status is "broadcast" — the TX was accepted by the TRON network
       // but on-chain confirmation is asynchronous. Poll getTransaction(txid) to
       // verify final "SUCCESS" | "FAILED" settlement before treating as confirmed.
       await db.update(hotWalletDispersions)
-        .set({ txid: result.txid, status: "broadcast" })
+        .set({
+          txid: result.txid,
+          signerRequestId: result.requestId,
+          status: "broadcast",
+          updatedAt: new Date(),
+        })
         .where(eq(hotWalletDispersions.id, row.id));
 
       return res.json({ success: true, txid: result.txid, id: row.id, status: "broadcast" });
     } catch (err: any) {
       await db.update(hotWalletDispersions)
-        .set({ status: "failed", note: (parsed.data.note ?? "") + " | ERR: " + err.message })
+        .set({
+          status: "uncertain",
+          failureCode: "SIGNER_RESULT_UNKNOWN",
+          updatedAt: new Date(),
+        })
         .where(eq(hotWalletDispersions.id, row.id));
       return res.status(500).json({ error: err.message });
     }
@@ -988,9 +1251,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Auto-resolve if TRON has finalized the TX
       if (onChain.status === "SUCCESS" || onChain.status === "FAILED") {
-        const newStatus = onChain.status === "SUCCESS" ? "confirmed" : "failed";
+        const intentMatches = onChain.contractAddress === (row.expectedContract ?? TronClient.USDT_CONTRACT)
+          && onChain.fromAddress === TronClient.platformWalletInfo().address
+          && onChain.toAddress === row.toAddress
+          && onChain.usdtAtomicAmount === row.expectedAtomicAmount;
+        const newStatus = onChain.status === "SUCCESS" && intentMatches ? "confirmed" : "failed";
         await db.update(hotWalletDispersions)
-          .set({ status: newStatus })
+          .set({
+            status: newStatus,
+            confirmedAt: newStatus === "confirmed" ? new Date() : null,
+            failureCode: onChain.status === "SUCCESS" && !intentMatches
+              ? "ONCHAIN_INTENT_MISMATCH"
+              : onChain.status === "FAILED" ? "ONCHAIN_FAILED" : null,
+            updatedAt: new Date(),
+          })
           .where(eq(hotWalletDispersions.id, row.id));
         return res.json({ id: row.id, status: newStatus, txid: row.txid, onChain });
       }
