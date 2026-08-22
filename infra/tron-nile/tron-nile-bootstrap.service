@@ -1,0 +1,12 @@
+[Unit]
+Description=Download, verify, and extract TRON Nile Lite snapshot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/tron-nile/bootstrap.env
+ExecStart=/opt/tron-nile/bootstrap-snapshot.sh --execute
+TimeoutStartSec=7200
+StandardOutput=journal
+StandardError=journal

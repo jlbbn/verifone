@@ -1,0 +1,24 @@
+[Unit]
+Description=TRON Nile Lite FullNode (experimental under-provisioned profile)
+Documentation=https://nileex.io/run/getRunPage
+After=docker.service network-online.target time-sync.target
+Requires=docker.service
+Wants=network-online.target time-sync.target
+ConditionPathIsDirectory=/var/lib/tron-nile/output-directory
+StartLimitIntervalSec=600
+StartLimitBurst=3
+
+[Service]
+Type=simple
+ExecStartPre=-/usr/bin/docker rm -f tron-nile-node
+ExecStartPre=/usr/bin/install -d -o 65532 -g 65532 -m 0700 /var/log/tron-nile
+ExecStart=/usr/bin/docker run --rm --name tron-nile-node --network host --user 65532:65532 --workdir /var/lib/tron --entrypoint /java-tron/bin/FullNode --memory 6g --memory-swap 10g --pids-limit 4096 --ulimit nofile=65536:65536 --security-opt no-new-privileges --cap-drop ALL -e "JAVA_OPTS=-Xms2G -Xmx4G -XX:MaxDirectMemorySize=512M -XX:MaxMetaspaceSize=384M -XX:+HeapDumpOnOutOfMemoryError" -v /var/log/tron-nile:/var/lib/tron -v /var/lib/tron-nile/output-directory:/var/lib/tron/output-directory tronnile/java-tron@sha256:aee489cb1949a05df2f9055970c67da76b8d56ad1011bb0d47b1fc3ce29716ae -c /java-tron/config.conf
+ExecStop=/usr/bin/docker stop --time 120 tron-nile-node
+Restart=on-failure
+RestartSec=15
+TimeoutStartSec=0
+TimeoutStopSec=180
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

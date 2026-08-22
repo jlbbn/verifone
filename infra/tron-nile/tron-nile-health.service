@@ -1,0 +1,7 @@
+[Unit]
+Description=Validate TRON Nile head freshness and active peers
+After=tron-nile-node.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/tron-nile/healthcheck.sh
