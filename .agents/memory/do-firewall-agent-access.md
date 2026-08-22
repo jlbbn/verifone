@@ -20,3 +20,15 @@ are derived only in the trusted runner; pass their derived values to setup, not
 the SSH seed. If an outer firewall cleanup is interrupted, it is not sufficient
 to open UFW without the derived signal, but stale outer entries should still be
 reconciled later.
+
+**Administrator recovery:** A strict UFW allowlist for SSH also blocks
+DigitalOcean's ordinary Droplet Console, because that console is network-attached
+like SSH. Before removing a setup access path, verify the user's own SSH access
+from its intended network and retain a tested Recovery Console path with a root
+or sudo password. Recovery Console is out-of-band, but requires password
+authentication.
+
+**Why:** A newly isolated host can otherwise remain healthy while both the user's
+new-network SSH path and the ordinary browser console are denied by the inner
+firewall. The cloud firewall API cannot run commands inside the guest to repair
+UFW.
