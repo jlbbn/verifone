@@ -26,3 +26,4 @@
 - [Bitstamp integration](bitstamp-integration.md) — auth v2 omite Content-Type sin cuerpo; balance real es account_balances; sin WS sandbox; swaps exigen doble candado (flag + credenciales).
 - [Nested node:test runner pitfalls](nested-node-test-runner.md) — strip NODE_TEST* env en spawns anidados; nunca correr tsx --test sin archivos explícitos; forzar --test-reporter=tap al parsear.
 - [TRON signer delivery guarantees](tron-signer-delivery.md) — persist a deterministic signed txid before broadcast; readiness requires fresh, peer-connected node health at both app and signer.
+- [DigitalOcean firewall tags](do-firewall-tags.md) — create a tag before targeting it from a Cloud Firewall; tagged droplets may apply while `droplet_ids` stays empty.
