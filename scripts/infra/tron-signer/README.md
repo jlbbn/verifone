@@ -28,6 +28,8 @@ intención validada de transferencia.
 9. Mantiene la escritura cerrada hasta activar explícitamente el doble candado.
 10. Liga el archivo de estado a una sola red y contrato; Nile debe usar una
     wallet y un `TRON_SIGNER_STATE_PATH` separados de mainnet.
+11. Verifica la identidad de la cadena con el bloque génesis del perfil o, si el
+    nodo es lite y cierra esa API, con el `p2pVersion` de la red.
 
 ## Aprovisionamiento posterior
 

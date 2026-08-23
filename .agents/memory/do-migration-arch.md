@@ -71,3 +71,12 @@ description: Production app + DB are migrating from Replit hosting to DigitalOce
    withdraw (hallazgo: llave sin restricción de IP con permisos read_only,withdraw,trade).
 - Env file /etc/banxico-plus.env es formato systemd, NO sourceable por bash (RESEND_FROM lleva
   espacios): extraer valores con grep|cut.
+
+## Límites duros de la cuenta DO (verificados 2026-08-23)
+- droplet_limit=3 (llenos), cuota de VPC peerings=0 (las VPCs NO se rutean entre sí → lo que
+  deba hablar en privado debe vivir en la MISMA VPC), sin tamaños ≥16GB disponibles (tope
+  s-4vcpu-8gb $48), estado de cuenta "warning". Solo el usuario puede pedir aumentos desde
+  su panel DO.
+- Snapshot lite de TRON mainnet ≈ 68 GB comprimido (mirrors 34.86.86.229 / 34.143.247.77,
+  dirs backupYYYYMMDD) → el nodo mainnet necesita volumen extra (~200GB, ~$20/mes) además
+  del disco de 160GB; extraer por streaming (curl | tar) para no almacenar el tgz.

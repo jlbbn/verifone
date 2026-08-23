@@ -106,3 +106,27 @@ El FullNode puede permanecer activo durante una pausa: no puede firmar por sí s
 - Firmador: restaurar configuración, certificados y estado idempotente cifrado.
 - Wallet: usar el material de custodia offline; nunca el backup del FullNode.
 - Aplicación: restaurar PostgreSQL y conciliar cada txid con contrato/destino/monto.
+
+## Checklist de activación mainnet del firmante
+
+Condiciones obligatorias antes de poner `TRON_SIGNER_WRITES_ENABLED=true` en mainnet
+(origen: revisión de arquitectura 2026-08-23, veredicto PASS condicionado):
+
+1. `TRON_NODE_LITE=true` en el env del firmante cuando el nodo venga de snapshot
+   lite (siempre, en esta operación). Semántica fail-closed: sin esa declaración,
+   el cierre del génesis del nodo lite deja `healthy=false` y las escrituras
+   bloqueadas. Diagnóstico típico: `genesisStatus=closed_lite_node` con
+   `liteMode=false`.
+2. Alerta compuesta del lado de la app: solo se considera sano el firmante si
+   `/health` muestra SIMULTÁNEAMENTE `healthy=true`, `liteMode=true`,
+   `genesisStatus=closed_lite_node`, `chainIdentityMethod=p2pVersion` y
+   `p2pVersion=11111`. Cualquier otra combinación = no escribir + alertar.
+3. Egress del firmante restringido por UFW OUTBOUND exclusivamente al nodo
+   privado (IP:8090) además del deny incoming actual (regla a añadir en la
+   ceremonia mainnet).
+4. Contabilidad: una dispersión SOLO se marca liquidada con recibo on-chain
+   SUCCESS + evento `Transfer` exacto (fuente, destino, contrato, monto
+   atómico). El estado `broadcast` del firmante NO es liquidación. Re-verificar
+   este consumo en la capa de la app durante el wiring mainnet.
+5. Snapshot con checksum md5 verificado e imagen java-tron pinneada
+   (GreatVoyage v4.8.2.1), aprovisionado por nosotros.

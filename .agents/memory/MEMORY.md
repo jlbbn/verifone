@@ -26,5 +26,5 @@
 - [Sandbox droplet isolation history](sandbox-droplet-shared-prod.md) — sandbox shared prod DB/keys, then was isolated (own local Postgres, no real secrets) after a security scare; re-check live state before assuming either way.
 - [Bitstamp integration](bitstamp-integration.md) — auth v2 omite Content-Type sin cuerpo; balance real es account_balances; sin WS sandbox; swaps exigen doble candado (flag + credenciales).
 - [Nested node:test runner pitfalls](nested-node-test-runner.md) — strip NODE_TEST* env en spawns anidados; nunca correr tsx --test sin archivos explícitos; forzar --test-reporter=tap al parsear.
-- [TRON signer delivery guarantees](tron-signer-delivery.md) — persist a deterministic signed txid before broadcast; readiness requires fresh, peer-connected node health at both app and signer.
+- [TRON signer delivery guarantees](tron-signer-delivery.md) — deterministic signed txid persisted pre-broadcast; lite nodes close genesis API → p2pVersion identity fallback (string compare).
 - [DigitalOcean firewall tags](do-firewall-tags.md) — create a tag before targeting it from a Cloud Firewall; tagged droplets may apply while `droplet_ids` stays empty.
