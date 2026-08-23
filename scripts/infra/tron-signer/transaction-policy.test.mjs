@@ -23,11 +23,13 @@ test("signer network profile is explicit, defaults to mainnet and rejects unknow
   assert.deepEqual(configuredSignerNetwork({}), {
     network: "mainnet",
     usdtContract: USDT,
+    p2pVersion: "11111",
     genesisBlockId: MAINNET_GENESIS,
   });
   assert.deepEqual(configuredSignerNetwork({ TRON_NETWORK: "nile" }), {
     network: "nile",
     usdtContract: "TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj",
+    p2pVersion: "201910292",
     genesisBlockId: NILE_GENESIS,
   });
   assert.throws(

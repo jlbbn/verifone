@@ -16,10 +16,14 @@ import {
   validateUnsignedTransferTransaction,
 } from "./transaction-policy.mjs";
 import {
+  chainIdentityEvidence,
+  classifyGenesisProbe,
   configuredSignerNetwork,
   validateSignerStateProfile,
   validateSignerStatePath,
 } from "./network-profile.mjs";
+
+const LITE_NODE_MODE = String(process.env.TRON_NODE_LITE ?? "").toLowerCase() === "true";
 
 const NETWORK_PROFILE = configuredSignerNetwork();
 const NETWORK = NETWORK_PROFILE.network;
@@ -383,6 +387,7 @@ async function health(res) {
     address: WALLET_ADDRESS,
     nodeEndpoint: approvedNodeOrigin,
     expectedGenesisBlockId: NETWORK_PROFILE.genesisBlockId,
+    expectedP2pVersion: NETWORK_PROFILE.p2pVersion,
     checkedAt: new Date().toISOString(),
   });
 }
@@ -393,24 +398,38 @@ async function inspectNode() {
   let headAgeMs = null;
   let activePeers = null;
   let genesisBlockId = null;
+  let genesisStatus = null;
+  let p2pVersion = null;
   let chainIdentityMatches = null;
+  let chainIdentityMethod = null;
   let nodeError = null;
   try {
     const readOnly = tron || new TronWeb({ fullHost: FULL_HOST });
-    const [block, nodeInfo, genesisBlock] = await withTimeout(Promise.all([
+    const [block, nodeInfo, genesisProbe] = await withTimeout(Promise.all([
       readOnly.trx.getCurrentBlock(),
       readOnly.trx.getNodeInfo(),
-      readOnly.trx.getBlockByNumber(0),
+      readOnly.trx.getBlockByNumber(0).then((value) => ({ ok: true, value }), (error) => ({ ok: false, error })),
     ]), 8_000);
     blockNumber = Number(block?.block_header?.raw_data?.number || 0) || null;
     const blockTimestamp = Number(block?.block_header?.raw_data?.timestamp || 0) || null;
     headAgeMs = blockTimestamp ? Math.max(0, Date.now() - blockTimestamp) : null;
     const peersValue = Number(nodeInfo?.activeConnectCount);
     activePeers = Number.isFinite(peersValue) ? peersValue : null;
-    genesisBlockId = typeof genesisBlock?.blockID === "string"
-      ? genesisBlock.blockID
-      : null;
-    chainIdentityMatches = genesisBlockId === NETWORK_PROFILE.genesisBlockId;
+    const probe = classifyGenesisProbe(genesisProbe);
+    genesisBlockId = probe.genesisBlockId;
+    genesisStatus = probe.status;
+    const rawP2pVersion = nodeInfo?.configNodeInfo?.p2pVersion;
+    p2pVersion = rawP2pVersion === undefined || rawP2pVersion === null || rawP2pVersion === ""
+      ? null
+      : String(rawP2pVersion);
+    const identity = chainIdentityEvidence({
+      genesisBlockId,
+      genesisClosedForLiteNode: genesisStatus === "closed_lite_node",
+      p2pVersion,
+      liteModeConfigured: LITE_NODE_MODE,
+    }, NETWORK_PROFILE);
+    chainIdentityMatches = identity.matches;
+    chainIdentityMethod = identity.method;
     nodeHealthy = Boolean(
       blockNumber
       && headAgeMs !== null
@@ -428,7 +447,11 @@ async function inspectNode() {
     headAgeMs,
     activePeers,
     genesisBlockId,
+    genesisStatus,
+    liteMode: LITE_NODE_MODE,
+    p2pVersion,
     chainIdentityMatches,
+    chainIdentityMethod,
     nodeError,
   };
 }

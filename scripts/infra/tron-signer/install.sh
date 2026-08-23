@@ -80,7 +80,7 @@ ufw_status="$(ufw status verbose)"
 grep -q '^Status: active' <<<"$ufw_status" || {
   echo "UFW must already be active; establish and verify the host baseline first." >&2; exit 1;
 }
-grep -Eq '^Default: deny \\(incoming\\)' <<<"$ufw_status" || {
+grep -Eq '^Default: deny \(incoming\)' <<<"$ufw_status" || {
   echo "UFW baseline must already default-deny incoming traffic." >&2; exit 1;
 }
 ufw show added > "/var/backups/tron-signer/ufw-before-install-$(date -u +%Y%m%dT%H%M%SZ).rules"
