@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, decimal, integer, boolean, doublePrecision, unique, jsonb, serial, numeric } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, decimal, integer, boolean, doublePrecision, unique, uniqueIndex, jsonb, serial, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -487,7 +487,7 @@ export const hotWalletDispersions = pgTable("hot_wallet_dispersions", {
   note:        text("note"),
   // Idempotencia y datos de intención. Nullable para conservar filas históricas
   // creadas antes de que existiera el firmador remoto.
-  idempotencyKey: text("idempotency_key").unique(),
+  idempotencyKey: text("idempotency_key"),
   signerRequestId: text("signer_request_id"),
   expectedAtomicAmount: text("expected_atomic_amount"),
   expectedContract: text("expected_contract"),
@@ -496,7 +496,11 @@ export const hotWalletDispersions = pgTable("hot_wallet_dispersions", {
   confirmedAt: timestamp("confirmed_at"),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   createdAt:   timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+  uniqueIndex("idx_hot_wallet_dispersions_network_idempotency")
+    .on(table.network, table.idempotencyKey)
+    .where(sql`${table.idempotencyKey} IS NOT NULL`),
+]);
 export type HotWalletDispersion = typeof hotWalletDispersions.$inferSelect;
 
 // ─── OKX Webhook Events audit log ────────────────────────────────────────────

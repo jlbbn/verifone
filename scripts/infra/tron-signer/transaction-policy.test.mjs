@@ -6,11 +6,88 @@ import {
   approvedPrivateNodeOrigin,
   validateUnsignedTransferTransaction,
 } from "./transaction-policy.mjs";
+import {
+  configuredSignerNetwork,
+  validateSignerStateProfile,
+  validateSignerStatePath,
+} from "./network-profile.mjs";
 
 const OWNER = "TJRabPrwbZy45sbavfcjinPJC18kjpRTv8";
 const USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
+const MAINNET_GENESIS = "00000000000000001ebf88508a03865c71d452e25f4d51194196a1d22b6653dc";
+const NILE_GENESIS = "0000000000000000d698d4192c56cb6be724a558448e2684802de4d6cd8690dc";
 const AMOUNT = "1000001";
 const FEE_LIMIT = 40_000_000;
+
+test("signer network profile is explicit, defaults to mainnet and rejects unknown values", () => {
+  assert.deepEqual(configuredSignerNetwork({}), {
+    network: "mainnet",
+    usdtContract: USDT,
+    genesisBlockId: MAINNET_GENESIS,
+  });
+  assert.deepEqual(configuredSignerNetwork({ TRON_NETWORK: "nile" }), {
+    network: "nile",
+    usdtContract: "TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj",
+    genesisBlockId: NILE_GENESIS,
+  });
+  assert.throws(
+    () => configuredSignerNetwork({ TRON_NETWORK: "shasta" }),
+    /TRON_NETWORK must be exactly/,
+  );
+});
+
+test("signer state cannot be reused across mainnet and Nile profiles", () => {
+  assert.deepEqual(validateSignerStateProfile({}, {}), {
+    network: "mainnet",
+    contract: USDT,
+  });
+  assert.deepEqual(validateSignerStateProfile({
+    network: "nile",
+    contract: "TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj",
+  }, { TRON_NETWORK: "nile" }), {
+    network: "nile",
+    contract: "TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj",
+  });
+  assert.throws(
+    () => validateSignerStateProfile({}, { TRON_NETWORK: "nile" }),
+    /state belongs to a different network profile/,
+  );
+  assert.throws(
+    () => validateSignerStateProfile({
+      network: "nile",
+      contract: USDT,
+    }, { TRON_NETWORK: "nile" }),
+    /state belongs to a different network profile/,
+  );
+});
+
+test("Nile signer requires an explicit profile-scoped state path", () => {
+  assert.equal(
+    validateSignerStatePath("/var/lib/tron-signer/state.json", {}),
+    "/var/lib/tron-signer/state.json",
+  );
+  assert.equal(
+    validateSignerStatePath(
+      "/var/lib/tron-signer/nile-state.json",
+      { TRON_NETWORK: "nile" },
+    ),
+    "/var/lib/tron-signer/nile-state.json",
+  );
+  assert.throws(
+    () => validateSignerStatePath(
+      "/var/lib/tron-signer/state.json",
+      { TRON_NETWORK: "nile" },
+    ),
+    /Nile requires an explicit profile-scoped/,
+  );
+  assert.throws(
+    () => validateSignerStatePath(
+      "/var/lib/tron-signer/test-state.json",
+      { TRON_NETWORK: "nile" },
+    ),
+    /Nile requires an explicit profile-scoped/,
+  );
+});
 
 function transferData(toAddress, amountAtomic) {
   return "a9059cbb"

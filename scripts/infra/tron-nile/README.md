@@ -36,7 +36,7 @@ a Internet. Para administración remota se usa un túnel SSH:
 
 ```bash
 ssh -L 18090:127.0.0.1:8090 root@NILE_NODE
-TRON_HTTP_URL=http://127.0.0.1:18090 bash infra/tron-nile/healthcheck.sh
+TRON_HTTP_URL=http://127.0.0.1:18090 bash scripts/infra/tron-nile/healthcheck.sh
 ```
 
 ## Bootstrap reproducible
@@ -57,25 +57,29 @@ bootstrap:
 export NILE_SNAPSHOT_URL='https://snapshots.nileex.io/backupYYYYMMDD/LiteFullNode_output-directory.tgz'
 export NILE_SNAPSHOT_MD5='32_HEX_PUBLICADO'
 export NILE_SNAPSHOT_BYTES='CONTENT_LENGTH'
-sudo -E bash infra/tron-nile/bootstrap-snapshot.sh
-sudo -E bash infra/tron-nile/bootstrap-snapshot.sh --execute
+sudo -E bash scripts/infra/tron-nile/bootstrap-snapshot.sh
+sudo -E bash scripts/infra/tron-nile/bootstrap-snapshot.sh --execute
 ```
 
 El segundo comando instala la base pero no habilita firma. El servicio del nodo
 se arranca por separado:
 
 ```bash
-sudo install -m 0644 infra/tron-nile/tron-nile-node.service /etc/systemd/system/
-sudo install -m 0644 infra/tron-nile/tron-nile-bootstrap.service /etc/systemd/system/
-sudo install -m 0644 infra/tron-nile/tron-nile-health.service /etc/systemd/system/
-sudo install -m 0644 infra/tron-nile/tron-nile-health.timer /etc/systemd/system/
-sudo install -D -m 0600 infra/tron-nile/tron-nile-bootstrap.env.example /etc/tron-nile/bootstrap.env
+sudo install -d -m 0755 /opt/tron-nile
+sudo install -m 0755 scripts/infra/tron-nile/healthcheck.sh /opt/tron-nile/
+sudo install -m 0755 scripts/infra/tron-nile/bootstrap-snapshot.sh /opt/tron-nile/
+sudo install -m 0755 scripts/infra/tron-nile/stream-extract.py /opt/tron-nile/
+sudo install -m 0644 scripts/infra/tron-nile/tron-nile-node.service /etc/systemd/system/
+sudo install -m 0644 scripts/infra/tron-nile/tron-nile-bootstrap.service /etc/systemd/system/
+sudo install -m 0644 scripts/infra/tron-nile/tron-nile-health.service /etc/systemd/system/
+sudo install -m 0644 scripts/infra/tron-nile/tron-nile-health.timer /etc/systemd/system/
+sudo install -D -m 0600 scripts/infra/tron-nile/tron-nile-bootstrap.env.example /etc/tron-nile/bootstrap.env
 # Reemplazar YYYYMMDD, MD5 y Content-Length por los datos actuales del índice Nile.
 sudo systemctl daemon-reload
 sudo systemctl start tron-nile-bootstrap
 sudo systemctl enable --now tron-nile-node
 sudo systemctl enable --now tron-nile-health.timer
-sudo bash infra/tron-nile/healthcheck.sh
+sudo bash scripts/infra/tron-nile/healthcheck.sh
 ```
 
 El timer no envía datos fuera del host: registra cada resultado en journald y

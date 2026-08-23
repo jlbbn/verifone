@@ -16,8 +16,18 @@ ENV_FILE="${TRON_SIGNER_ENV_FILE:-$BUNDLE_DIR/tron-signer.env}"
 source "$ENV_FILE"
 : "${TRON_SIGNER_HOST:?TRON_SIGNER_HOST required}"
 : "${TRON_SIGNER_PORT:=9443}"
+: "${TRON_NETWORK:=mainnet}"
+: "${TRON_SIGNER_STATE_PATH:=/var/lib/tron-signer/state.json}"
 : "${APP_ALLOWED_CIDR:?APP_ALLOWED_CIDR required}"
 : "${ADMIN_SSH_CIDR:?ADMIN_SSH_CIDR required}"
+[[ "$TRON_NETWORK" == "mainnet" || "$TRON_NETWORK" == "nile" ]] || {
+  echo "TRON_NETWORK must be exactly mainnet or nile." >&2; exit 1;
+}
+if [[ "$TRON_NETWORK" == "nile" ]]; then
+  [[ "$TRON_SIGNER_STATE_PATH" != "/var/lib/tron-signer/state.json" && "${TRON_SIGNER_STATE_PATH,,}" == *nile* ]] || {
+    echo "Nile requires a separate TRON_SIGNER_STATE_PATH containing 'nile'." >&2; exit 1;
+  }
+fi
 
 python3 - "$TRON_SIGNER_HOST" "$APP_ALLOWED_CIDR" "$ADMIN_SSH_CIDR" <<'PY'
 import ipaddress, sys
@@ -38,6 +48,7 @@ PY
 cat <<EOF
 Validated signer plan:
   - Bind only to private address $TRON_SIGNER_HOST:$TRON_SIGNER_PORT
+  - Network profile $TRON_NETWORK with state $TRON_SIGNER_STATE_PATH
   - Allow signer ingress only from $APP_ALLOWED_CIDR
   - Preserve existing UFW rules and allow SSH only from $ADMIN_SSH_CIDR
   - Install service with writes enabled=${TRON_SIGNER_WRITES_ENABLED:-false}

@@ -15,11 +15,21 @@ import {
   approvedPrivateNodeOrigin,
   validateUnsignedTransferTransaction,
 } from "./transaction-policy.mjs";
+import {
+  configuredSignerNetwork,
+  validateSignerStateProfile,
+  validateSignerStatePath,
+} from "./network-profile.mjs";
 
-const USDT_CONTRACT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
+const NETWORK_PROFILE = configuredSignerNetwork();
+const NETWORK = NETWORK_PROFILE.network;
+const USDT_CONTRACT = NETWORK_PROFILE.usdtContract;
 const PORT = positiveInt(process.env.TRON_SIGNER_PORT || "9443", "TRON_SIGNER_PORT");
 const HOST = required("TRON_SIGNER_HOST");
-const STATE_PATH = process.env.TRON_SIGNER_STATE_PATH || "/var/lib/tron-signer/state.json";
+const STATE_PATH = validateSignerStatePath(
+  process.env.TRON_SIGNER_STATE_PATH || "/var/lib/tron-signer/state.json",
+  process.env,
+);
 const FULL_HOST = required("TRON_FULL_HOST");
 const APPROVED_NODE_ORIGIN = required("TRON_APPROVED_NODE_ORIGIN");
 const KEY_ID = required("TRON_SIGNER_KEY_ID");
@@ -152,6 +162,8 @@ server.listen(PORT, HOST, () => {
   log("signer_started", {
     host: HOST,
     port: PORT,
+    network: NETWORK,
+    contract: USDT_CONTRACT,
     writesEnabled: WRITES_ENABLED,
     wallet: maskAddress(WALLET_ADDRESS),
   });
@@ -200,6 +212,18 @@ async function processTransfer(body) {
   }
   if (BigInt(state.totalAtomic) + amountAtomic > MAX_DAILY_ATOMIC) {
     throw publicError(400, "EXCEEDS_SIGNER_DAILY_LIMIT", "Transfer exceeds signer daily limit");
+  }
+
+  const nodeReadiness = await inspectNode();
+  if (!nodeReadiness.healthy) {
+    const identityMismatch = nodeReadiness.chainIdentityMatches === false;
+    throw publicError(
+      503,
+      identityMismatch ? "TRON_NETWORK_IDENTITY_MISMATCH" : "TRON_NODE_UNHEALTHY",
+      identityMismatch
+        ? "TRON node identity does not match the configured network"
+        : "TRON node is stale, peerless, or unavailable",
+    );
   }
 
   const trxBalance = Number(await withTimeout(tron.trx.getBalance(WALLET_ADDRESS), 8_000)) / 1_000_000;
@@ -318,7 +342,7 @@ function validateTransfer(body) {
   if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{15,127}$/.test(body.idempotencyKey || "")) {
     throw publicError(400, "INVALID_IDEMPOTENCY_KEY", "Invalid idempotency key");
   }
-  if (body.network !== "mainnet" || body.contract !== USDT_CONTRACT) {
+  if (body.network !== NETWORK || body.contract !== USDT_CONTRACT) {
     throw publicError(400, "NETWORK_OR_CONTRACT_REJECTED", "Network or contract rejected");
   }
   if (!TronWeb.isAddress(body.toAddress || "")) {
@@ -349,54 +373,89 @@ function authenticate(headers, raw) {
 }
 
 async function health(res) {
+  const node = await inspectNode();
+  return json(res, 200, {
+    ...node,
+    configured: Boolean(WALLET_ADDRESS && TLS_KEY_PATH && TLS_CERT_PATH),
+    writesEnabled: WRITES_ENABLED,
+    network: NETWORK,
+    contract: USDT_CONTRACT,
+    address: WALLET_ADDRESS,
+    nodeEndpoint: approvedNodeOrigin,
+    expectedGenesisBlockId: NETWORK_PROFILE.genesisBlockId,
+    checkedAt: new Date().toISOString(),
+  });
+}
+
+async function inspectNode() {
   let nodeHealthy = false;
   let blockNumber = null;
   let headAgeMs = null;
   let activePeers = null;
+  let genesisBlockId = null;
+  let chainIdentityMatches = null;
   let nodeError = null;
   try {
     const readOnly = tron || new TronWeb({ fullHost: FULL_HOST });
-    const [block, nodeInfo] = await withTimeout(Promise.all([
+    const [block, nodeInfo, genesisBlock] = await withTimeout(Promise.all([
       readOnly.trx.getCurrentBlock(),
       readOnly.trx.getNodeInfo(),
+      readOnly.trx.getBlockByNumber(0),
     ]), 8_000);
     blockNumber = Number(block?.block_header?.raw_data?.number || 0) || null;
     const blockTimestamp = Number(block?.block_header?.raw_data?.timestamp || 0) || null;
     headAgeMs = blockTimestamp ? Math.max(0, Date.now() - blockTimestamp) : null;
     const peersValue = Number(nodeInfo?.activeConnectCount);
     activePeers = Number.isFinite(peersValue) ? peersValue : null;
+    genesisBlockId = typeof genesisBlock?.blockID === "string"
+      ? genesisBlock.blockID
+      : null;
+    chainIdentityMatches = genesisBlockId === NETWORK_PROFILE.genesisBlockId;
     nodeHealthy = Boolean(
       blockNumber
       && headAgeMs !== null
       && headAgeMs <= MAX_HEAD_AGE_MS
       && activePeers !== null
       && activePeers >= MIN_ACTIVE_PEERS
+      && chainIdentityMatches
     );
   } catch (err) {
     nodeError = err.message;
   }
-  return json(res, 200, {
+  return {
     healthy: nodeHealthy,
-    configured: Boolean(WALLET_ADDRESS && TLS_KEY_PATH && TLS_CERT_PATH),
-    writesEnabled: WRITES_ENABLED,
-    address: WALLET_ADDRESS,
-    nodeEndpoint: approvedNodeOrigin,
     blockNumber,
     headAgeMs,
     activePeers,
+    genesisBlockId,
+    chainIdentityMatches,
     nodeError,
-    checkedAt: new Date().toISOString(),
-  });
+  };
 }
 
 async function loadState() {
   try {
     const parsed = JSON.parse(await readFile(STATE_PATH, "utf8"));
-    if (parsed && typeof parsed === "object" && parsed.requests) return parsed;
+    if (parsed && typeof parsed === "object" && parsed.requests) {
+      const persistedProfile = validateSignerStateProfile(parsed, {
+        TRON_NETWORK: NETWORK,
+      });
+      return {
+        ...parsed,
+        network: persistedProfile.network,
+        contract: persistedProfile.contract,
+      };
+    }
   } catch (err) {
     if (err.code !== "ENOENT") throw err;
   }
-  return { date: utcDate(), totalAtomic: "0", requests: {} };
+  return {
+    network: NETWORK,
+    contract: USDT_CONTRACT,
+    date: utcDate(),
+    totalAtomic: "0",
+    requests: {},
+  };
 }
 
 function rotateDailyState() {

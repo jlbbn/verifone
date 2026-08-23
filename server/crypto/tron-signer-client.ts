@@ -1,7 +1,7 @@
 import { createHmac, randomBytes, randomUUID } from "crypto";
 import { readFileSync } from "fs";
 import https from "https";
-import { USDT_CONTRACT } from "./tron-client";
+import { configuredTronNetwork, type TronNetwork } from "./tron-network";
 
 const REQUEST_TIMEOUT_MS = Number(process.env.TRON_SIGNER_TIMEOUT_MS ?? 12_000);
 
@@ -22,6 +22,9 @@ export interface SignerHealth {
   healthy: boolean;
   configured: boolean;
   writesEnabled: boolean;
+  network: TronNetwork;
+  contract: string;
+  genesisBlockId: string | null;
   address: string | null;
   nodeEndpoint: string | null;
   blockNumber?: number | null;
@@ -50,6 +53,7 @@ function signerUrl(env: NodeJS.ProcessEnv = process.env): URL | null {
 
 export function signerConfiguration(env: NodeJS.ProcessEnv = process.env) {
   const url = signerUrl(env);
+  const profile = configuredTronNetwork(env);
   const hasHmac = Boolean(
     env.TRON_SIGNER_KEY_ID?.trim()
     && env.TRON_SIGNER_HMAC_SECRET?.trim(),
@@ -63,7 +67,19 @@ export function signerConfiguration(env: NodeJS.ProcessEnv = process.env) {
     configured: Boolean(url && hasHmac && hasMtls),
     endpoint: url ? url.origin : null,
     transport: "mTLS+HMAC" as const,
+    network: profile.network,
+    contract: profile.usdtContract,
   };
+}
+
+export function signerProfileMatches(
+  health: Pick<SignerHealth, "network" | "contract" | "genesisBlockId">,
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  const expected = configuredTronNetwork(env);
+  return health.network === expected.network
+    && health.contract === expected.usdtContract
+    && health.genesisBlockId === expected.genesisBlockId;
 }
 
 export function buildSignerAuthentication(
@@ -155,14 +171,27 @@ function requestJson<T>(
 
 export async function requestTransfer(input: SignerTransferRequest): Promise<SignerTransferResult> {
   const requestId = randomUUID();
-  return requestJson<SignerTransferResult>("/v1/transfers", "POST", {
+  return requestJson<SignerTransferResult>(
+    "/v1/transfers",
+    "POST",
+    buildSignerTransferPayload(input, requestId),
+  );
+}
+
+export function buildSignerTransferPayload(
+  input: SignerTransferRequest,
+  requestId: string,
+  env: NodeJS.ProcessEnv = process.env,
+) {
+  const profile = configuredTronNetwork(env);
+  return {
     requestId,
     idempotencyKey: input.idempotencyKey,
-    network: "mainnet",
-    contract: USDT_CONTRACT,
+    network: profile.network,
+    contract: profile.usdtContract,
     toAddress: input.toAddress,
     amountAtomic: input.amountAtomic,
-  });
+  };
 }
 
 export async function getTransferStatus(idempotencyKey: string): Promise<SignerTransferStatus> {

@@ -283,13 +283,23 @@ export class DatabaseStorage implements IStorage {
         ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NOT NULL DEFAULT NOW()
     `);
     await db.execute(sql`
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_hot_wallet_dispersions_idempotency
-        ON hot_wallet_dispersions (idempotency_key)
+      ALTER TABLE hot_wallet_dispersions
+        DROP CONSTRAINT IF EXISTS hot_wallet_dispersions_idempotency_key_unique
+    `);
+    await db.execute(sql`
+      DROP INDEX IF EXISTS idx_hot_wallet_dispersions_idempotency
+    `);
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_hot_wallet_dispersions_network_idempotency
+        ON hot_wallet_dispersions (network, idempotency_key)
         WHERE idempotency_key IS NOT NULL
     `);
     await db.execute(sql`
-      CREATE INDEX IF NOT EXISTS idx_hot_wallet_dispersions_daily
-        ON hot_wallet_dispersions (created_at, status)
+      DROP INDEX IF EXISTS idx_hot_wallet_dispersions_daily
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_hot_wallet_dispersions_network_daily
+        ON hot_wallet_dispersions (network, created_at, status)
     `);
 
     // --- Ensure user_crypto_balances table exists (saldos internos por usuario/activo) ---

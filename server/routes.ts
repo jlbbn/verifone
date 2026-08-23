@@ -868,7 +868,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         usdtBalance: balance.usdtBalance,
         trxBalance:  balance.trxBalance,
         rawUsdt:     balance.rawUsdt,
-        network:     "TRON (TRC-20)",
+        network:     info.network,
         token:       "USDT",
         contract:    TronClient.USDT_CONTRACT,
         fetchedAt:   new Date().toISOString(),
@@ -903,7 +903,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     res.json({
       mode: "remote-only",
-      network: "mainnet",
+      network: TronClient.TRON_NETWORK,
       wallet,
       writesEnabled: tronWalletWritesEnabled(),
       limits: {
@@ -913,13 +913,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       },
       node,
       nodeError,
-      signer: { ...signer, health: signerHealth, error: signerError },
+      signer: {
+        ...signer,
+        health: signerHealth,
+        error: signerError,
+        profileAligned: Boolean(
+          signerHealth && TronSigner.signerProfileMatches(signerHealth),
+        ),
+      },
       legacyLocalKeyDetected: legacyLocalSigningKeyPresent(),
       readyForWrites: Boolean(
         tronWalletWritesEnabled()
         && !legacyLocalSigningKeyPresent()
         && signer.configured
         && signerHealth?.healthy
+        && TronSigner.signerProfileMatches(signerHealth)
         && node?.healthy
         && effectiveDailyLimit > 0
       ),
@@ -1042,6 +1050,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         code: "TRON_INFRASTRUCTURE_UNHEALTHY",
       });
     }
+    if (!TronSigner.signerProfileMatches(signerHealth)) {
+      return res.status(503).json({
+        error: "El perfil de red o contrato del firmador no coincide con la aplicación",
+        code: "TRON_SIGNER_PROFILE_MISMATCH",
+      });
+    }
     if (signerHealth.address !== info.address) {
       return res.status(503).json({
         error: "La identidad del firmador no coincide con la hot wallet configurada",
@@ -1099,6 +1113,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const existingResult = await tx.execute(sql`
         SELECT * FROM hot_wallet_dispersions
         WHERE idempotency_key = ${idempotencyKey}
+          AND network = ${TronClient.TRON_NETWORK}
         LIMIT 1
       `);
       const existing = (existingResult.rows?.[0] ?? null) as any;
@@ -1107,7 +1122,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sumResult = await tx.execute(sql`
         SELECT COALESCE(SUM(amount_usdt * 1000000), 0)::text AS total_atomic
         FROM hot_wallet_dispersions
-        WHERE status IN ('pending', 'uncertain', 'broadcast', 'confirmed')
+        WHERE network = ${TronClient.TRON_NETWORK}
+          AND status IN ('pending', 'uncertain', 'broadcast', 'confirmed')
           AND created_at >= date_trunc('day', NOW() AT TIME ZONE 'UTC')
       `);
       const usedTodayAtomic = BigInt((sumResult.rows?.[0] as any)?.total_atomic ?? "0");
@@ -1124,7 +1140,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         idempotencyKey,
         expectedAtomicAmount: amount.atomic,
         expectedContract: TronClient.USDT_CONTRACT,
-        network: "mainnet",
+        network: TronClient.TRON_NETWORK,
         updatedAt: new Date(),
       }).returning();
       return { duplicate: false as const, row };
@@ -1241,6 +1257,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!row) return res.status(404).json({ error: "Dispersión no encontrada" });
       if (!row.txid) return res.status(400).json({ error: "Sin txid — la TX no fue enviada" });
+      if (row.network !== TronClient.TRON_NETWORK) {
+        return res.status(409).json({
+          error: "La dispersión pertenece a otro perfil de red TRON",
+          code: "TRON_NETWORK_MISMATCH",
+        });
+      }
 
       // Already resolved — no need to re-query TRON
       if (row.status === "confirmed" || row.status === "failed") {

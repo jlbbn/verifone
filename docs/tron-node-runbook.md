@@ -24,6 +24,10 @@ No se salta del estado 1 al 5.
 - [ ] RPC y métricas solo son accesibles desde la VPC.
 - [ ] App y firmador tienen el mismo `TRON_FULL_HOST` privado y el mismo
   `TRON_APPROVED_NODE_ORIGIN`; no hay endpoint público/default.
+- [ ] App y firmador reportan el mismo `TRON_NETWORK` y contrato USDT; Nile usa
+  wallet y archivo de estado exclusivos, nunca reutilizados en mainnet.
+- [ ] App y firmador validan que el bloque génesis del RPC coincide con el perfil;
+  una etiqueta `nile` sin identidad de cadena Nile no cuenta como saludable.
 - [ ] Firewall de DigitalOcean replica el allowlist de UFW.
 - [ ] UFW ya estaba activo con `deny incoming` antes de ejecutar instaladores.
 - [ ] Reglas UFW prioritarias fueron revisadas y se autorizó
@@ -36,6 +40,7 @@ No se salta del estado 1 al 5.
 - [ ] Conciliación verifica contrato, destinatario y monto antes de confirmar.
 - [ ] Pruebas adversariales del firmador rechazan payload, owner, contrato, fee,
   expiración o txid alterados por el nodo antes de firmar.
+- [ ] `npm run test:tron` pasa offline con ambos candados apagados.
 - [ ] Hook de alertas aprobado, responsable asignado y prueba de entrega confirmada.
 
 ## Certificados y alertas
