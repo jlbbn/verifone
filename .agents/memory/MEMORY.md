@@ -28,3 +28,4 @@
 - [Nested node:test runner pitfalls](nested-node-test-runner.md) — strip NODE_TEST* env en spawns anidados; nunca correr tsx --test sin archivos explícitos; forzar --test-reporter=tap al parsear.
 - [TRON signer delivery guarantees](tron-signer-delivery.md) — deterministic signed txid persisted pre-broadcast; lite nodes close genesis API → p2pVersion identity fallback (string compare).
 - [DigitalOcean firewall tags](do-firewall-tags.md) — create a tag before targeting it from a Cloud Firewall; tagged droplets may apply while `droplet_ids` stays empty.
+- [DO account limits & token access](do-account-limits.md) — status "warning" = tope 3/3 droplets (no billing); límites solo se amplían desde el panel del dueño; token ya en env → shell, nunca requestSecrets.
