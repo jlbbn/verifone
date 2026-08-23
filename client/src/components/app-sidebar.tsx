@@ -107,7 +107,7 @@ export function AppSidebar() {
 
   return (
     <div
-      className="h-full flex-shrink-0"
+      className="flex-shrink-0 md:h-full"
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
     >
