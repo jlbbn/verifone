@@ -15,15 +15,20 @@
 
 import { TronWeb } from "tronweb";
 import { approvedPrivateTronNodeConfiguration } from "./tron-policy";
+import {
+  configuredTronNetwork,
+  tronChainIdentityMatches,
+} from "./tron-network";
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 
 const FULL_HOST        = process.env.TRON_FULL_HOST?.trim()    ?? "";
 const PLATFORM_ADDRESS = process.env.PLATFORM_TRON_ADDRESS     ?? "";
 const NODE_TIMEOUT_MS   = Number(process.env.TRON_NODE_TIMEOUT_MS ?? 8_000);
+const NETWORK_PROFILE   = configuredTronNetwork();
 
-/** TRC-20 USDT contract on TRON mainnet */
-export const USDT_CONTRACT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
+export const TRON_NETWORK = NETWORK_PROFILE.network;
+export const USDT_CONTRACT = NETWORK_PROFILE.usdtContract;
 
 /** Decimals for USDT TRC-20 */
 const USDT_DECIMALS = 6;
@@ -117,12 +122,16 @@ export async function getBalance(address?: string): Promise<HotWalletBalance> {
 
 export interface TronNodeHealth {
   healthy: boolean;
+  network: typeof TRON_NETWORK;
   endpoint: string;
   latencyMs: number;
   blockNumber: number | null;
   blockTimestamp: number | null;
   headAgeMs: number | null;
   activePeers: number | null;
+  genesisBlockId: string | null;
+  expectedGenesisBlockId: string;
+  chainIdentityMatches: boolean;
   checkedAt: string;
 }
 
@@ -148,10 +157,11 @@ export function isHealthyTronHead(
 export async function getNodeHealth(): Promise<TronNodeHealth> {
   const started = Date.now();
   const tw = getClient();
-  const [block, nodeInfo] = await withTimeout(
+  const [block, nodeInfo, genesisBlock] = await withTimeout(
     Promise.all([
       tw.trx.getCurrentBlock(),
       tw.trx.getNodeInfo(),
+      tw.trx.getBlockByNumber(0),
     ]),
     "health check",
   );
@@ -161,22 +171,31 @@ export async function getNodeHealth(): Promise<TronNodeHealth> {
   const headAgeMs = blockTimestamp ? Math.max(0, Date.now() - blockTimestamp) : null;
   const activePeersRaw = (nodeInfo as any)?.activeConnectCount;
   const activePeers = Number.isFinite(Number(activePeersRaw)) ? Number(activePeersRaw) : null;
+  const genesisBlockId = typeof (genesisBlock as any)?.blockID === "string"
+    ? (genesisBlock as any).blockID
+    : null;
+  const chainIdentityMatches = tronChainIdentityMatches(genesisBlockId);
   const maxHeadAgeMs = Number(process.env.TRON_NODE_MAX_HEAD_AGE_MS ?? 180_000);
   const minActivePeers = Number(process.env.TRON_NODE_MIN_ACTIVE_PEERS ?? 3);
   return {
-    healthy: isHealthyTronHead(
-      blockNumber,
-      headAgeMs,
-      activePeers,
-      maxHeadAgeMs,
-      minActivePeers,
-    ),
+    healthy: chainIdentityMatches
+      && isHealthyTronHead(
+        blockNumber,
+        headAgeMs,
+        activePeers,
+        maxHeadAgeMs,
+        minActivePeers,
+      ),
+    network: TRON_NETWORK,
     endpoint: safeNodeEndpoint(),
     latencyMs: Date.now() - started,
     blockNumber,
     blockTimestamp,
     headAgeMs,
     activePeers,
+    genesisBlockId,
+    expectedGenesisBlockId: NETWORK_PROFILE.genesisBlockId,
+    chainIdentityMatches,
     checkedAt: new Date().toISOString(),
   };
 }
@@ -297,7 +316,8 @@ export function platformWalletInfo() {
   const node = approvedPrivateTronNodeConfiguration();
   return {
     address:    PLATFORM_ADDRESS || "(not configured)",
-    network:    "TRON (TRC-20)",
+    network:    NETWORK_PROFILE.label,
+    networkId:  TRON_NETWORK,
     token:      "USDT",
     contract:   USDT_CONTRACT,
     configured: Boolean(PLATFORM_ADDRESS),

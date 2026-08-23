@@ -16,7 +16,8 @@ intención validada de transferencia.
 
 1. Rechaza clientes sin certificado firmado por la CA privada.
 2. Verifica HMAC en tiempo constante, timestamp de 30 segundos y nonce anti-replay.
-3. Fija red `mainnet` y el contrato oficial USDT-TRC20.
+3. Fija un perfil completo de red y contrato. El default es `mainnet`; `nile`
+   solo se acepta de forma explícita mediante `TRON_NETWORK=nile`.
 4. Aplica límites propios por operación y día, independientes de la aplicación.
 5. Verifica que la llave corresponda a la dirección pública configurada.
 6. Decodifica la transacción sin firmar y exige coincidencia exacta de owner,
@@ -25,6 +26,8 @@ intención validada de transferencia.
    `TRON_APPROVED_NODE_ORIGIN`; no existe fallback a TronGrid.
 8. Persiste resultados por clave de idempotencia antes de responder.
 9. Mantiene la escritura cerrada hasta activar explícitamente el doble candado.
+10. Liga el archivo de estado a una sola red y contrato; Nile debe usar una
+    wallet y un `TRON_SIGNER_STATE_PATH` separados de mainnet.
 
 ## Aprovisionamiento posterior
 
@@ -36,12 +39,16 @@ intención validada de transferencia.
    IPs privadas, rutas TLS y límites con escrituras todavía apagadas.
 6. Activar primero un baseline UFW `deny incoming`; reflejar el mismo allowlist
    en DigitalOcean Cloud Firewall.
-7. Ejecutar `bash infra/tron-signer/install.sh` (dry-run) y después
-   `sudo bash infra/tron-signer/install.sh --execute`.
+7. Ejecutar `bash scripts/infra/tron-signer/install.sh` (dry-run) y después
+   `sudo bash scripts/infra/tron-signer/install.sh --execute`.
 8. Verificar que la llave TLS queda `root:tron-signer` modo 0640 y que el
    servicio solo escucha en la IP privada.
 9. Mantener escrituras apagadas y probar `/health`.
 10. Ejecutar pruebas con Nile antes de considerar mainnet.
+
+Para el ensayo Nile, configurar `TRON_NETWORK=nile`, una dirección/llave
+exclusivamente testnet y un archivo de estado exclusivo. Ambos candados
+permanecen en `false` durante instalación y validación sin broadcast.
 
 La llave nunca debe guardarse en Replit, el repositorio, el host de la app o el
 nodo FullNode. La restauración y rotación requiere el procedimiento de

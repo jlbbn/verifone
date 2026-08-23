@@ -8,7 +8,16 @@ import {
   parseUsdtAmount,
   tronWalletWritesEnabled,
 } from "./tron-policy.js";
-import { buildSignerAuthentication, signerConfiguration } from "./tron-signer-client.js";
+import {
+  buildSignerAuthentication,
+  buildSignerTransferPayload,
+  signerConfiguration,
+  signerProfileMatches,
+} from "./tron-signer-client.js";
+import {
+  configuredTronNetwork,
+  tronChainIdentityMatches,
+} from "./tron-network.js";
 import {
   decodeUsdtTransferLog,
   isHealthyTronHead,
@@ -16,6 +25,9 @@ import {
   USDT_CONTRACT,
 } from "./tron-client.js";
 import { TronWeb } from "tronweb";
+
+const MAINNET_GENESIS = "00000000000000001ebf88508a03865c71d452e25f4d51194196a1d22b6653dc";
+const NILE_GENESIS = "0000000000000000d698d4192c56cb6be724a558448e2684802de4d6cd8690dc";
 
 test("USDT parser preserves six-decimal atomic precision", () => {
   assert.deepEqual(parseUsdtAmount("100.000001"), {
@@ -40,6 +52,29 @@ test("wallet write gate is explicit and detects legacy local signing key", () =>
   assert.equal(legacyLocalSigningKeyPresent({ PLATFORM_TRON_PRIVATE_KEY: "  " }), false);
 });
 
+test("TRON network profile defaults to mainnet, selects Nile explicitly and rejects unknown values", () => {
+  assert.deepEqual(configuredTronNetwork({}), {
+    network: "mainnet",
+    label: "TRON Mainnet (TRC-20)",
+    usdtContract: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
+    genesisBlockId: MAINNET_GENESIS,
+  });
+  assert.deepEqual(configuredTronNetwork({ TRON_NETWORK: "nile" }), {
+    network: "nile",
+    label: "TRON Nile Testnet (TRC-20)",
+    usdtContract: "TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj",
+    genesisBlockId: NILE_GENESIS,
+  });
+  assert.throws(
+    () => configuredTronNetwork({ TRON_NETWORK: "shasta" }),
+    /TRON_NETWORK must be exactly/,
+  );
+  assert.equal(tronChainIdentityMatches(MAINNET_GENESIS, {}), true);
+  assert.equal(tronChainIdentityMatches(NILE_GENESIS, {}), false);
+  assert.equal(tronChainIdentityMatches(NILE_GENESIS, { TRON_NETWORK: "nile" }), true);
+  assert.equal(tronWalletWritesEnabled({ TRON_NETWORK: "nile" }), false);
+});
+
 test("daily limit rejects absent, zero and malformed values", () => {
   assert.equal(configuredDailyLimit({}), null);
   assert.equal(configuredDailyLimit({ TRON_DAILY_LIMIT_USDT: "0" }), null);
@@ -59,6 +94,36 @@ test("remote signer configuration requires HTTPS, HMAC and all mTLS paths", () =
   assert.equal(signerConfiguration(complete).configured, true);
   assert.equal(signerConfiguration({ ...complete, TRON_SIGNER_URL: "http://10.10.0.4:9443" }).configured, false);
   assert.equal(signerConfiguration({ ...complete, TRON_SIGNER_CA_PATH: "" }).configured, false);
+});
+
+test("signer payload and health profile are bound to the selected network contract", () => {
+  const input = {
+    idempotencyKey: "nile-test-request-0001",
+    toAddress: "TJRabPrwbZy45sbavfcjinPJC18kjpRTv8",
+    amountAtomic: "1000001",
+  };
+  const payload = buildSignerTransferPayload(
+    input,
+    "123e4567-e89b-12d3-a456-426614174000",
+    { TRON_NETWORK: "nile" },
+  );
+  assert.equal(payload.network, "nile");
+  assert.equal(payload.contract, "TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj");
+  assert.equal(signerProfileMatches({
+    network: "nile",
+    contract: payload.contract,
+    genesisBlockId: NILE_GENESIS,
+  }, { TRON_NETWORK: "nile" }), true);
+  assert.equal(signerProfileMatches({
+    network: "mainnet",
+    contract: USDT_CONTRACT,
+    genesisBlockId: MAINNET_GENESIS,
+  }, { TRON_NETWORK: "nile" }), false);
+  assert.equal(signerProfileMatches({
+    network: "nile",
+    contract: payload.contract,
+    genesisBlockId: MAINNET_GENESIS,
+  }, { TRON_NETWORK: "nile" }), false);
 });
 
 test("HMAC authentication covers timestamp, nonce and exact body", () => {
