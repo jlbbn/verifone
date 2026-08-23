@@ -935,6 +935,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // ── Evidencia Nile: solo nodo + auditoría DB; nunca contacta al firmador ─
+  app.get("/api/admin/tron/nile-evidence", requireRole("ADMIN"), async (_req, res) => {
+    const network = TronClient.TRON_NETWORK;
+    let node: Awaited<ReturnType<typeof TronClient.getNodeHealth>> | null = null;
+    let nodeError: string | null = null;
+    let latestConfirmed: {
+      id: number;
+      network: string;
+      toAddress: string;
+      amountUsdt: string;
+      txid: string | null;
+      status: string;
+      note: string | null;
+      createdAt: Date;
+    } | null = null;
+    let auditError: string | null = null;
+
+    // This room is specifically for Nile. Do not probe another configured
+    // network merely to populate a presentation panel.
+    if (network === "nile") {
+      try { node = await TronClient.getNodeHealth(); }
+      catch (err) { nodeError = (err as Error).message; }
+    }
+
+    try {
+      const [row] = await db
+        .select({
+          id: hotWalletDispersions.id,
+          network: hotWalletDispersions.network,
+          toAddress: hotWalletDispersions.toAddress,
+          amountUsdt: hotWalletDispersions.amountUsdt,
+          txid: hotWalletDispersions.txid,
+          status: hotWalletDispersions.status,
+          note: hotWalletDispersions.note,
+          createdAt: hotWalletDispersions.createdAt,
+        })
+        .from(hotWalletDispersions)
+        .where(sql`
+          ${hotWalletDispersions.network} = ${"nile"}
+          AND ${hotWalletDispersions.status} = ${"confirmed"}
+          AND ${hotWalletDispersions.txid} IS NOT NULL
+        `)
+        .orderBy(sql`${hotWalletDispersions.createdAt} DESC`)
+        .limit(1);
+      latestConfirmed = row ?? null;
+    } catch (err) {
+      auditError = (err as Error).message;
+    }
+
+    res.json({
+      readOnly: true,
+      network,
+      node,
+      nodeError,
+      latestConfirmed,
+      auditError,
+      checkedAt: new Date().toISOString(),
+    });
+  });
+
   // ── Dispersar USDT desde la hot wallet ──────────────────────────────────
   app.post("/api/admin/hot-wallet/disperse", requireRole("ADMIN"), async (req, res) => {
     const schema = z.object({

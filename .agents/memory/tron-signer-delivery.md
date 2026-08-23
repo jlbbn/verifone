@@ -21,14 +21,22 @@ compare the private RPC's genesis block ID with the selected network before
 reporting healthy or permitting a write. Scope signer state, idempotency, and
 daily limits by network; Nile uses its own wallet and state path.
 
+A presentation or demo labeled read-only must not reuse a broad infrastructure
+health call if that call probes the isolated signer. Give it a purpose-built
+read model that reads only approved node evidence and persisted audit data.
+
 **Why:** A failure between broadcast and acknowledgment otherwise leaves an
 unknown transaction that a retry can accidentally duplicate. A stale or
 peerless RPC node, or incomplete receipt, can also produce unsafe write or
 settlement decisions. A correctly labeled Nile profile can still point at a
 mainnet RPC, and shared state can make one network interfere with the other.
+Even a GET can violate demo isolation when it reaches operational signer
+infrastructure.
 
 **How to apply:** Any future wallet write path must require fresh head age and
 minimum active peers from both the app-approved node and the signer's own node,
 with matching approved endpoint, genesis identity, network contract, and wallet
 identity. Use atomic integer units for money limits and comparisons, and
 validate node-built unsigned transactions before private-key use.
+For explanatory surfaces, keep scenario changes browser-local and expose a
+separate admin-only evidence projection with no signer dependency.
