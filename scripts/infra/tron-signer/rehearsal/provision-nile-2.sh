@@ -16,8 +16,14 @@ mkdir -p /opt/banxico-plus/scripts/infra/tron-signer /opt/banxico-plus/scripts /
 cp "$BUNDLE"/*.mjs "$BUNDLE"/install.sh "$BUNDLE"/tron-signer.service /opt/banxico-plus/scripts/infra/tron-signer/
 cp "$BUNDLE"/rehearsal/addr-hex.mjs /opt/banxico-plus/scripts/
 cd /opt/banxico-plus
-[ -f package.json ] || echo '{"name":"banxico-signer-host","private":true,"type":"module"}' > package.json
-npm install --no-audit --no-fund tronweb@6.4.0 >/dev/null
+if [ -f "$BUNDLE"/rehearsal/lockfile/package-lock.json ]; then
+  # Dependencias fijadas por lockfile (build reproducible)
+  cp "$BUNDLE"/rehearsal/lockfile/package.json "$BUNDLE"/rehearsal/lockfile/package-lock.json /opt/banxico-plus/
+  npm ci --no-audit --no-fund >/dev/null
+else
+  [ -f package.json ] || echo '{"name":"banxico-signer-host","private":true,"type":"module"}' > package.json
+  npm install --no-audit --no-fund tronweb@6.4.0 >/dev/null
+fi
 
 # --- TLS: CA propia de la ceremonia; certificados de 90 días ---
 cd /etc/tron-signer/tls 2>/dev/null || { mkdir -p /etc/tron-signer/tls; cd /etc/tron-signer/tls; }
@@ -93,6 +99,15 @@ ADDR=$(cat /root/.wallet-addr)
 cp "$BUNDLE"/rehearsal/send-rehearsal.mjs "$BUNDLE"/rehearsal/rehearse-if-funded.sh /root/rehearsal-client/
 chmod +x /root/rehearsal-client/rehearse-if-funded.sh
 cp "$BUNDLE"/rehearsal/tron-rehearsal.service "$BUNDLE"/rehearsal/tron-rehearsal.timer /etc/systemd/system/
+
+# --- Log forwarding (shipper): instalar siempre; sólo actúa si existe shipper.env ---
+if [ -f "$BUNDLE"/logship/ship-logs.sh ]; then
+  cp "$BUNDLE"/logship/ship-logs.sh /opt/banxico-plus/ship-logs.sh
+  chmod +x /opt/banxico-plus/ship-logs.sh
+  cp "$BUNDLE"/logship/ship-logs.service "$BUNDLE"/logship/ship-logs.timer /etc/systemd/system/
+  systemctl daemon-reload
+  systemctl enable --now ship-logs.timer >/dev/null
+fi
 
 # --- UFW: baseline deny + SSH admin + rangos del agente (evita el bloqueo anterior) ---
 ufw default deny incoming >/dev/null
