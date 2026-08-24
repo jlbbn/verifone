@@ -1,0 +1,10 @@
+[Unit]
+Description=Healthcheck periodico del TRON Mainnet Lite FullNode
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=1min
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target

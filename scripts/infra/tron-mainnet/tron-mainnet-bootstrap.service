@@ -1,0 +1,12 @@
+[Unit]
+Description=Download, verify, and extract TRON Mainnet Lite snapshot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/tron-mainnet/bootstrap.env
+ExecStart=/opt/tron-mainnet/bootstrap-snapshot.sh --execute
+TimeoutStartSec=28800
+StandardOutput=journal
+StandardError=journal

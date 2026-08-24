@@ -13,7 +13,9 @@ CONF=/etc/tron-signer/shipper.env
 . "$CONF"
 : "${INGEST_URL:?falta INGEST_URL}" "${INGEST_TOKEN:?falta INGEST_TOKEN}"
 HOSTTAG=${HOSTTAG:-$(hostname)}
-CUR=/var/lib/tron-signer/ship-cursor
+# Unidades de journal a reenviar; configurable por host via shipper.env
+UNITS=${UNITS:-"tron-signer tron-rehearsal ssh"}
+CUR=${CURSOR_FILE:-/var/lib/tron-signer/ship-cursor}
 
 exec 9>/run/ship-logs.lock
 flock -n 9 || exit 0
@@ -28,7 +30,9 @@ fi
 TMP=$(mktemp) BATCH=$(mktemp)
 trap 'rm -f "$TMP" "$BATCH"' EXIT
 
-journalctl -u tron-signer -u tron-rehearsal -u ssh "${FIRST_ARGS[@]}" \
+UNIT_ARGS=()
+for u in $UNITS; do UNIT_ARGS+=(-u "$u"); done
+journalctl "${UNIT_ARGS[@]}" "${FIRST_ARGS[@]}" \
   --cursor-file="$CUR" -o short-iso --no-pager -q > "$TMP"
 if [ ! -s "$TMP" ]; then rm -f "$CUR.bak"; exit 0; fi
 
