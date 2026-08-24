@@ -50,3 +50,9 @@ signer's broadcast state. Use atomic integer units for money limits and comparis
 validate node-built unsigned transactions before private-key use.
 For explanatory surfaces, keep scenario changes browser-local and expose a
 separate admin-only evidence projection with no signer dependency.
+## tronweb v6 API (lección Ago 2026)
+- v6 eliminó el estático `TronWeb.utils` (era la ruta v5). Generación de cuentas: `import { utils } from "tronweb"` → `utils.accounts.generateAccount()`.
+- Los estáticos `TronWeb.isAddress` y `TronWeb.address.*` SÍ existen en v6 — el código del firmante los usa y es compatible.
+
+## Ensayos dependientes de fondeo humano
+- No esperar en sesión: dejar un systemd timer (5 min) que detecta fondos on-chain, corre el ensayo una vez, escribe flag ENSAYO_COMPLETO y se auto-desactiva. El agente solo verifica el flag/log en la siguiente sesión.
