@@ -9,6 +9,7 @@ import { storage } from "./storage";
 import { db } from "./db";
 import { isTlsCertificateError } from "./db-ssl";
 import { sql } from "drizzle-orm";
+import { createHash, timingSafeEqual } from "crypto";
 
 /**
  * Fail loudly on database TLS/certificate errors. Production requires full
@@ -105,6 +106,40 @@ app.post("/api/mp/ipn", (_req: Request, res: Response) => {
 // ── Body parsers ──────────────────────────────────────────────────────────────
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: false, limit: "1mb" }));
+
+// ── Infra log ingest ──────────────────────────────────────────────────────────
+// Recibe líneas de journal reenviadas por droplets de infraestructura (firmante
+// TRON). Auth: bearer token dedicado (INFRA_LOG_TOKEN). Registrado antes de
+// registerRoutes para quedar fuera del middleware de sesión.
+function safeTokenEqual(a: string, b: string): boolean {
+  const ha = createHash("sha256").update(a).digest();
+  const hb = createHash("sha256").update(b).digest();
+  return timingSafeEqual(ha, hb);
+}
+app.post("/api/infra/logs", async (req: Request, res: Response) => {
+  const expected = process.env.INFRA_LOG_TOKEN;
+  if (!expected) return res.status(503).json({ message: "Log ingest disabled" });
+  const auth = req.headers.authorization ?? "";
+  const provided = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  if (!provided || !safeTokenEqual(provided, expected)) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+  const { host, source, lines } = (req.body ?? {}) as { host?: unknown; source?: unknown; lines?: unknown };
+  if (typeof host !== "string" || typeof source !== "string" || !Array.isArray(lines)) {
+    return res.status(400).json({ message: "Invalid payload" });
+  }
+  const clean = lines
+    .filter((l): l is string => typeof l === "string")
+    .slice(0, 2000)
+    .map((l) => l.slice(0, 4000));
+  try {
+    await storage.createInfraLogs(host.slice(0, 100), source.slice(0, 50), clean);
+    return res.status(204).end();
+  } catch (e: any) {
+    console.error("[INFRA-LOGS] insert failed:", e?.message);
+    return res.status(500).json({ message: "Insert failed" });
+  }
+});
 
 const SENSITIVE_PATHS = ["/api/login", "/api/pos/process-payment", "/api/payment-methods"];
 

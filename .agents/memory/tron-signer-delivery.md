@@ -56,3 +56,8 @@ separate admin-only evidence projection with no signer dependency.
 
 ## Ensayos dependientes de fondeo humano
 - No esperar en sesión: dejar un systemd timer (5 min) que detecta fondos on-chain, corre el ensayo una vez, escribe flag ENSAYO_COMPLETO y se auto-desactiva. El agente solo verifica el flag/log en la siguiente sesión.
+
+## Log forwarding del firmante (Ago 2026)
+- Los droplets reenvían journal a la app: POST /api/infra/logs con bearer INFRA_LOG_TOKEN (env shared), tabla infra_logs con retención 30 días.
+- El shipper del host manda lotes acotados (~400 KB / 1000 líneas) y NO avanza el cursor si un lote falla — duplicados posibles, pérdida no.
+- El endpoint solo existe en prod tras republicar; hasta entonces el shipper falla con 401 controlado y reintenta. No es un bug.

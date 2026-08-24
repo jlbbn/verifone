@@ -76,6 +76,7 @@ MP_PUBLIC_KEY = "TEST-9b1bf33e-307f-42f4-b071-5cae2ed28e68"
 PLATFORM_TRON_ADDRESS = "THRW3adKKoqrH5Cy31JvWdGJd3S1XNscGX"
 RESEND_FROM = "Banxico Plus <noreply@banxicoplusllc.org>"
 PRODUCTION_URL = "https://banxicoplusllc.org"
+INFRA_LOG_TOKEN = "614bf10bfc293c1e8b1d40dd20a2902c60c7739119e41fb787bb114192206692"
 
 [userenv.development]
 BITSTAMP_ENV = "sandbox"

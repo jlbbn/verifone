@@ -76,6 +76,15 @@ export const transactionLogs = pgTable("transaction_logs", {
   timestamp: timestamp("timestamp").defaultNow().notNull(),
 });
 
+// Logs de infraestructura (reenviados desde droplets, p.ej. firmante TRON)
+export const infraLogs = pgTable("infra_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  host: text("host").notNull(),
+  source: text("source").notNull(),
+  line: text("line").notNull(),
+  receivedAt: timestamp("received_at").defaultNow().notNull(),
+});
+
 // Protocolos bancarios
 export const bankingProtocols = pgTable("banking_protocols", {
   id: varchar("id").primaryKey(),

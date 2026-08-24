@@ -1,0 +1,7 @@
+[Unit]
+Description=Reenvio de logs del firmante TRON a la app (fuera del droplet)
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/banxico-plus/ship-logs.sh

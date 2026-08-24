@@ -8,6 +8,7 @@ import {
   paymentMethods,
   securityTokens,
   transactionLogs,
+  infraLogs,
   bankingProtocols,
   notifications,
   posTerminals,
@@ -75,6 +76,9 @@ export interface IStorage {
   // Transaction Logs
   createTransactionLog(log: InsertTransactionLog): Promise<TransactionLog>;
   getTransactionLogs(transactionId: string): Promise<TransactionLog[]>;
+
+  // Infra Logs (reenviados desde droplets de infraestructura)
+  createInfraLogs(host: string, source: string, lines: string[]): Promise<number>;
 
   // Banking Protocols
   getAllProtocols(): Promise<BankingProtocol[]>;
@@ -219,6 +223,21 @@ export class DatabaseStorage implements IStorage {
       CREATE UNIQUE INDEX IF NOT EXISTS idx_okx_webhook_events_dedup
         ON okx_webhook_events (event_type, okx_id)
         WHERE okx_id IS NOT NULL
+    `);
+
+    // --- Migrate: create infra_logs table (log forwarding desde droplets) ---
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS infra_logs (
+        id          VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        host        TEXT NOT NULL,
+        source      TEXT NOT NULL,
+        line        TEXT NOT NULL,
+        received_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_infra_logs_host_time
+        ON infra_logs (host, received_at)
     `);
 
     // --- Migrate: create otp_codes table ---
@@ -993,6 +1012,15 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(transactionLogs)
       .where(eq(transactionLogs.transactionId, transactionId))
       .orderBy(transactionLogs.timestamp);
+  }
+
+  // --- Infra Logs (reenviados desde droplets) ---
+  async createInfraLogs(host: string, source: string, lines: string[]): Promise<number> {
+    if (lines.length === 0) return 0;
+    await db.insert(infraLogs).values(lines.map((line) => ({ host, source, line })));
+    // Retención: acota el crecimiento eliminando entradas de más de 30 días.
+    await db.execute(sql`DELETE FROM infra_logs WHERE received_at < NOW() - INTERVAL '30 days'`);
+    return lines.length;
   }
 
   // --- Banking Protocols ---
