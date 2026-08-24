@@ -10,6 +10,10 @@
 #   adulterado no puede seguir a la red real.
 set -euo pipefail
 
+# Exclusion mutua: nunca dos bootstraps a la vez
+exec 9>/var/lock/tron-mainnet-bootstrap.lock
+flock -n 9 || { echo "Otro bootstrap en curso; abortando." >&2; exit 1; }
+
 : "${TRON_DATA_ROOT:=/var/lib/tron-mainnet}"
 : "${SNAPSHOT_URL:?SNAPSHOT_URL is required}"
 : "${SNAPSHOT_MD5:?SNAPSHOT_MD5 is required}"

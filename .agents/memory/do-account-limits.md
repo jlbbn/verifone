@@ -8,3 +8,6 @@ description: Qué significa el status "warning" de la cuenta DO, cómo se amplí
 - Alternativa rápida documentada: **prepago** en Billing (Tier 2 = $50) sube el trust tier y puede desbloquear límites al instante; el historial de facturas pagadas también los sube automáticamente con el tiempo.
 - **Why:** el usuario pidió "amplíalos tú" — imposible programáticamente; hay que darle los pasos del panel + texto listo para pegar.
 - **Acceso al token DO desde el agente:** `$DIGITALOCEAN_TOKEN` ya está en el env del workspace → usar ShellExec/curl. `requestSecrets` en el sandbox re-pregunta al usuario aunque el secret exista (lo rechazó y lo confundió). No volver a usarlo para secrets ya listados en available_secrets.
+
+## Tope de volúmenes
+Crear un volumen de 200GB falla con "invalid size" (tope de cuenta ~100GB por volumen); 100GB sí procede. Ampliarlo es acción del dueño en el panel. Para discos grandes usar el disco local del droplet.
