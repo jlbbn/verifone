@@ -32,3 +32,6 @@ authentication.
 new-network SSH path and the ordinary browser console are denied by the inner
 firewall. The cloud firewall API cannot run commands inside the guest to repair
 UFW.
+
+## UFW a nivel host (además del firewall DO)
+- Si el host corre UFW propio, permitir SSH también desde los rangos de egreso del agente (34.72.0.0/13 y 35.224.0.0/12), no solo la IP puntual: la IP del agente cambia entre sesiones y ya dejó un host permanentemente inaccesible (hubo que recrearlo).

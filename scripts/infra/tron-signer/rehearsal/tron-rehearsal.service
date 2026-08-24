@@ -1,0 +1,7 @@
+[Unit]
+Description=Ensayo Nile automatico del firmante TRON (una sola vez, con fondos)
+After=tron-signer.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash /root/rehearsal-client/rehearse-if-funded.sh
