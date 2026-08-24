@@ -1,0 +1,6 @@
+[Unit]
+Description=Healthcheck del TRON Mainnet Lite FullNode
+
+[Service]
+Type=oneshot
+ExecStart=/opt/tron-mainnet/healthcheck.sh

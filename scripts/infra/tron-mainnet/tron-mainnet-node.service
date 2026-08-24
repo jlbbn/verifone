@@ -1,0 +1,24 @@
+[Unit]
+Description=TRON Mainnet Lite FullNode (perfil economico aprobado; sin llaves)
+Documentation=https://tronprotocol.github.io/documentation-en/using_javatron/backup_restore/
+After=docker.service network-online.target time-sync.target
+Requires=docker.service
+Wants=network-online.target time-sync.target
+ConditionPathIsDirectory=/var/lib/tron-mainnet/output-directory
+StartLimitIntervalSec=600
+StartLimitBurst=3
+
+[Service]
+Type=simple
+ExecStartPre=-/usr/bin/docker rm -f tron-mainnet-node
+ExecStartPre=/usr/bin/install -d -o 65532 -g 65532 -m 0700 /var/log/tron-mainnet
+ExecStart=/usr/bin/docker run --rm --name tron-mainnet-node --network host --user 65532:65532 --workdir /var/lib/tron --entrypoint /java-tron/bin/FullNode --memory 6g --memory-swap 10g --pids-limit 4096 --ulimit nofile=65536:65536 --security-opt no-new-privileges --cap-drop ALL -e "JAVA_OPTS=-Xms2G -Xmx4G -XX:MaxDirectMemorySize=512M -XX:MaxMetaspaceSize=384M -XX:+HeapDumpOnOutOfMemoryError" -v /var/log/tron-mainnet:/var/lib/tron -v /var/lib/tron-mainnet/output-directory:/var/lib/tron/output-directory -v /etc/tron-mainnet/config.conf:/java-tron/config.conf:ro tronprotocol/java-tron@sha256:9db63abdb977830c7d2d56a3c96c3e5506a21d560d54f6c523871dcdc11abf34 -c /java-tron/config.conf
+ExecStop=/usr/bin/docker stop --time 120 tron-mainnet-node
+Restart=on-failure
+RestartSec=15
+TimeoutStartSec=0
+TimeoutStopSec=180
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
