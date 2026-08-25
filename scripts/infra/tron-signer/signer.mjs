@@ -230,7 +230,12 @@ async function processTransfer(body) {
     );
   }
 
-  const trxBalance = Number(await withTimeout(tron.trx.getBalance(WALLET_ADDRESS), 8_000)) / 1_000_000;
+  // trx.getBalance()/getAccount() route through the "solidity node" role
+  // (walletsolidity/getaccount), which a single-node deployment does not
+  // serve and answers with HTTP 405. getUnconfirmedAccount() hits the full
+  // node's wallet/getaccount instead, which this deployment does serve.
+  const balanceAccount = await withTimeout(tron.trx.getUnconfirmedAccount(WALLET_ADDRESS), 8_000);
+  const trxBalance = Number(balanceAccount?.balance || 0) / 1_000_000;
   if (trxBalance < MIN_TRX_RESERVE) {
     throw publicError(503, "INSUFFICIENT_TRX_RESERVE", "Insufficient TRX reserve");
   }
