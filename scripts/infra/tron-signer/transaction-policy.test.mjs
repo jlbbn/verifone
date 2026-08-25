@@ -28,7 +28,7 @@ test("signer network profile is explicit, defaults to mainnet and rejects unknow
   });
   assert.deepEqual(configuredSignerNetwork({ TRON_NETWORK: "nile" }), {
     network: "nile",
-    usdtContract: "TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj",
+    usdtContract: "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf",
     p2pVersion: "201910292",
     genesisBlockId: NILE_GENESIS,
   });
@@ -45,10 +45,10 @@ test("signer state cannot be reused across mainnet and Nile profiles", () => {
   });
   assert.deepEqual(validateSignerStateProfile({
     network: "nile",
-    contract: "TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj",
+    contract: "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf",
   }, { TRON_NETWORK: "nile" }), {
     network: "nile",
-    contract: "TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj",
+    contract: "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf",
   });
   assert.throws(
     () => validateSignerStateProfile({}, { TRON_NETWORK: "nile" }),
