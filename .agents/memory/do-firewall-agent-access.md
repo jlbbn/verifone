@@ -33,5 +33,8 @@ new-network SSH path and the ordinary browser console are denied by the inner
 firewall. The cloud firewall API cannot run commands inside the guest to repair
 UFW.
 
+## Regla amplia residual anula la lista blanca (auditoría ago-2026)
+- Los 4 firewalls TRON (firmante/nodo, mainnet/nile) quedaron con puerto 22 permitido desde 0.0.0.0/0 + ::/0 **además** de la lista blanca — la regla amplia anula la lista. Huella típica de un cierre de acceso interrumpido. El usuario fue informado y **no autorizó aún el cierre**: no quitar esas reglas sin su visto bueno explícito. El patrón correcto está en `production-restricted` (solo lista blanca en 22). El 18888 TCP/UDP abierto es P2P de TRON, legítimo.
+
 ## UFW a nivel host (además del firewall DO)
 - Si el host corre UFW propio, permitir SSH también desde los rangos de egreso del agente (34.72.0.0/13 y 35.224.0.0/12), no solo la IP puntual: la IP del agente cambia entre sesiones y ya dejó un host permanentemente inaccesible (hubo que recrearlo).

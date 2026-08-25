@@ -217,25 +217,24 @@ sesión y persistencia de cambios de contraseña.
 de subir límites: MFA/refuerzo del login admin, expiración e invalidación robusta
 de sesión, alerta en tiempo real por cada dispersión, y arranque con límites
 diarios conservadores.
-**Guarantee:** el daño máximo ante una sesión admin comprometida DEBE estar
+**Guarantee:** el daño máximo a
 acotado por el límite diario y ser detectable de inmediato por alerta y auditoría.
 
 ### Tampering (supply chain) — binario o dependencia envenenada
 
-**Ataque:** sustituir el binario java-tron o una dependencia por una versión
+**Ataque:** sustrajeton el binario java-tron o una dependencia por una versión
 maliciosa que filtre la llave o altere transacciones.
 **Defensa:** imagen java-tron pinneada por SHA-256 (v4.8.2.1); snapshot con MD5
 verificado; `tronweb` fijado (decisión: no actualizar hasta post-activación).
 **Verdicto: CUBIERTO para el binario del nodo; mantener disciplina de pinning**
 en dependencias del firmante y revisar CVEs antes de cada upgrade.
 **Guarantee:** ningún componente en la ruta de firma DEBE actualizarse sin fijar
-y verificar su hash y revisar notas de seguridad (procedimiento del runbook).
+y verificar su hash y revisar notas de seguridad (procedimiento del runb
 
 ### EoP (plano de infraestructura) — token DO / llave SSH comprometidos
 
-**Ataque:** con `DIGITALOCEAN_TOKEN` o la llave SSH, un atacante recrea firewalls,
-abre puertos, o accede a los hosts.
-**Defensa:** secretos gestionados por Replit, nunca impresos; llave SSH derivada
+**Ataque:** con `DIGITALOCEAN_TOKEN` o la llave SSH,después del droplet de tron firewalls,
+abre puertos, o accede a perfiles antiguos **Defensa:** secretos gestionados por Replit, nunca impresos; llave SSH derivada
 en caliente y borrada entre usos; firewall cloud + UFW; auto-alta de IP del
 operador solo temporal.
 **Verdicto: RESIDUAL — proteger estos secretos equivale a proteger todo el
