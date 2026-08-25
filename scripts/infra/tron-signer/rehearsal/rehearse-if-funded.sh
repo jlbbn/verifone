@@ -52,9 +52,15 @@ R2=$(node /root/rehearsal-client/send-rehearsal.mjs transfer "$KEY" 1000000)
 echo "R2=$R2"
 if grep -q '"duplicate":true' <<<"$R2"; then echo "IDEMPOTENCIA_OK"; else echo "ADVERTENCIA_IDEMPOTENCIA"; fi
 
+# The local Nile node runs in "lite fullnode" mode, which permanently closes
+# wallet/gettransactioninfobyid (and gettransactionbyid) regardless of retries
+# or wait time. Broadcast/signing/idempotency all go through our own signer
+# and node; this receipt check is the sole exception, using the public Nile
+# TronGrid API (read-only) purely to confirm the already-broadcast txid.
+PUBLIC_NILE_API=https://nile.trongrid.io
 RESULT=""
 for _ in $(seq 1 30); do
-  INFO=$(curl -s -m 10 -X POST "$NODE_URL/wallet/gettransactioninfobyid" -d "{\"value\":\"$TXID\"}")
+  INFO=$(curl -s -m 10 -X POST "$PUBLIC_NILE_API/wallet/gettransactioninfobyid" -d "{\"value\":\"$TXID\"}")
   RESULT=$(jq -r '.receipt.result // empty' <<<"$INFO" 2>/dev/null)
   [[ -n "$RESULT" ]] && break
   sleep 10

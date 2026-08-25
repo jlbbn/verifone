@@ -30,3 +30,4 @@
 - [DigitalOcean firewall tags](do-firewall-tags.md) — create a tag before targeting it from a Cloud Firewall; tagged droplets may apply while `droplet_ids` stays empty.
 - [DO account limits & token access](do-account-limits.md) — status "warning" = tope 3/3 droplets (no billing); límites solo se amplían desde el panel del dueño; token ya en env → shell, nunca requestSecrets.
 - [TRON mainnet node ops](tron-mainnet-node.md) — snapshot Lite mainnet exige checkpoint.version=2; exit 255 calla en stdout, el error real está en logs/tron.log montado; 8090 solo IPs explícitas.
+- [TRON lite fullnode API limits](tron-lite-node-api-limits.md) — trx.getBalance/getAccount 405 on single-node deploys (needs getUnconfirmedAccount); gettransactioninfobyid permanently closed on lite nodes, needs external confirmation.
