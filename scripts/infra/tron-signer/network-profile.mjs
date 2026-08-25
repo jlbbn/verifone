@@ -7,7 +7,7 @@ const PROFILES = Object.freeze({
   }),
   nile: Object.freeze({
     network: "nile",
-    usdtContract: "TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj",
+    usdtContract: "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf",
     p2pVersion: "201910292",
     genesisBlockId: "0000000000000000d698d4192c56cb6be724a558448e2684802de4d6cd8690dc",
   }),

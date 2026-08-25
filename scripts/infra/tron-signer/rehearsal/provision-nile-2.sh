@@ -8,7 +8,7 @@ export DEBIAN_FRONTEND=noninteractive
 SIGNER_IP=10.20.0.4
 NODE_IP=10.20.0.2
 BUNDLE=/root/bundle
-USDT_NILE=TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj
+USDT_NILE=TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf
 
 apt-get install -y -qq jq >/dev/null
 
