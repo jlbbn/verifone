@@ -14,3 +14,21 @@ Los snapshots Lite oficiales de mainnet usan checkpoint v2; la config oficial (m
 - UFW nodo: 8090 SOLO desde 10.10.0.5 (firmante) y 10.10.0.2 (app); nada más de la VPC. Healthcheck usa 127.0.0.1.
 - UFW firmante egreso: default deny; solo nodo:8090, DNS a resolvers DO (67.207.67.2/.3), 443 (envío de logs; riesgo residual aceptado por endpoint autoscale sin IP fija), NTP.
 **How to apply:** Al depurar conectividad, recordar que el resto de la VPC NO alcanza el 8090 del nodo; agregar IPs explícitas, no rangos.
+
+## Confirmado: mainnet es lite fullnode igual que Nile (25-ago-2026)
+El nodo mainnet corre un solo proceso java-tron (sin solidity-node separado) pese
+a `solidityEnable=true`/`solidityPort=8091` en config.conf — ese puerto/rol no
+sirve tráfico real de forma independiente en este despliegue de un solo nodo.
+Verificado en vivo: `walletsolidity/getaccount` → HTTP 405; `wallet/getblockbynum`
+num=0 → string `"this API is closed because this node is a lite fullnode"`
+(no un objeto de bloque). `getUnconfirmedAccount()` contra `wallet/getaccount`
+sí responde 200 con el balance real — el fix ya desplegado en signer.mjs
+funciona igual que en Nile. `TRON_NODE_LITE=true` y `TRON_SIGNER_WRITES_ENABLED=false`
+confirmados en `/etc/tron-signer/tron-signer.env` del firmante mainnet.
+**Why:** el mismo signer.mjs corre en ambas redes; sin esta confirmación quedaba
+abierto si mainnet tenía un solidity-node real (haciendo el fix innecesario ahí)
+o el mismo bug (haciendo el fix crítico). Confirmado: mismo bug, mismo fix, mismo
+comportamiento observado en ambas redes.
+**How to apply:** No asumir que `solidityEnable=true` en config.conf implica un
+rol solidity-node funcional en un despliegue de un solo droplet; probar
+`walletsolidity/*` en vivo antes de confiar en la config declarada.
