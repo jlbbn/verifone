@@ -523,6 +523,9 @@ export const hotWalletDispersions = pgTable("hot_wallet_dispersions", {
   network: text("network").notNull().default("mainnet"),
   failureCode: text("failure_code"),
   confirmedAt: timestamp("confirmed_at"),
+  // Presente cuando la dispersión fue disparada por un retiro de usuario aprobado
+  // (en vez de una dispersión administrativa directa).
+  withdrawalRequestId: integer("withdrawal_request_id"),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   createdAt:   timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
@@ -531,6 +534,53 @@ export const hotWalletDispersions = pgTable("hot_wallet_dispersions", {
     .where(sql`${table.idempotencyKey} IS NOT NULL`),
 ]);
 export type HotWalletDispersion = typeof hotWalletDispersions.$inferSelect;
+
+// ─── Solicitudes de retiro de USDT (usuario → dirección TRON externa) ───────
+// El saldo del usuario se reserva/descuenta al crear la solicitud (con su
+// renglón en crypto_balance_ledger); un admin aprueba (dispara el pipeline de
+// dispersión existente) o rechaza (reembolsa el saldo reservado).
+export const cryptoWithdrawalRequests = pgTable("crypto_withdrawal_requests", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull(),
+  asset: text("asset").notNull().default("usdt"),
+  amountUsdt: numeric("amount_usdt", { precision: 18, scale: 6 }).notNull(),
+  toAddress: text("to_address").notNull(),
+  status: text("status").notNull().default("pending"), // pending | approved | rejected | broadcast | confirmed | failed
+  reviewedBy: text("reviewed_by"),
+  reviewedAt: timestamp("reviewed_at"),
+  rejectionReason: text("rejection_reason"),
+  dispersionId: integer("dispersion_id"), // FK lógica a hot_wallet_dispersions.id una vez aprobado
+  network: text("network").notNull().default("mainnet"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export type CryptoWithdrawalRequest = typeof cryptoWithdrawalRequests.$inferSelect;
+
+// ─── Créditos de depósito TRON verificados on-chain ──────────────────────────
+// El txid es la llave de idempotencia: un admin solo puede acreditar un
+// depósito exactamente una vez, sin importar cuántas veces se confirme.
+export const tronDepositCredits = pgTable("tron_deposit_credits", {
+  txid: text("txid").primaryKey(),
+  userId: varchar("user_id").notNull(),
+  amountUsdt: numeric("amount_usdt", { precision: 18, scale: 6 }).notNull(),
+  fromAddress: text("from_address"),
+  network: text("network").notNull().default("mainnet"),
+  creditedBy: text("credited_by").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type TronDepositCredit = typeof tronDepositCredits.$inferSelect;
+
+// ─── Auto-declaración de depósito del usuario (informativa, no acredita) ────
+// Ayuda al admin a priorizar la revisión manual; nunca acredita saldo por sí sola.
+export const tronDepositDeclarations = pgTable("tron_deposit_declarations", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull(),
+  declaredTxid: text("declared_txid").notNull(),
+  note: text("note"),
+  status: text("status").notNull().default("pending"), // pending | matched | dismissed
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type TronDepositDeclaration = typeof tronDepositDeclarations.$inferSelect;
 
 // ─── OKX Webhook Events audit log ────────────────────────────────────────────
 export const okxWebhookEvents = pgTable("okx_webhook_events", {

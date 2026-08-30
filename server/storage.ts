@@ -23,6 +23,12 @@ import {
   routingDecisions,
   terminalCommands,
   systemSettingsTable,
+  cryptoWithdrawalRequests,
+  tronDepositCredits,
+  tronDepositDeclarations,
+  type CryptoWithdrawalRequest,
+  type TronDepositCredit,
+  type TronDepositDeclaration,
   type CajaMovement, type InsertCajaMovement,
   type User, type InsertUser,
   type Transaction, type InsertTransaction,
@@ -131,6 +137,24 @@ export interface IStorage {
   // Ledger inmutable de movimientos de saldo cripto
   getCryptoLedger(userId?: string, asset?: CryptoAsset): Promise<CryptoBalanceLedgerEntry[]>;
   verifyCryptoLedger(userId: string, asset: CryptoAsset): Promise<{ ok: boolean; ledgerBalance: number; storedBalance: number }>;
+
+  // --- Retiros de USDT sobre TRON ---
+  createWithdrawalRequest(userId: string, amountUsdt: number, toAddress: string, network: string, createdBy: string): Promise<CryptoWithdrawalRequest>;
+  getWithdrawalRequestsForUser(userId: string): Promise<CryptoWithdrawalRequest[]>;
+  getPendingWithdrawalRequests(): Promise<CryptoWithdrawalRequest[]>;
+  getWithdrawalRequest(id: number): Promise<CryptoWithdrawalRequest | undefined>;
+  claimWithdrawalForProcessing(id: number): Promise<CryptoWithdrawalRequest | undefined>;
+  revertWithdrawalToProcessingFailed(id: number): Promise<CryptoWithdrawalRequest | undefined>;
+  markWithdrawalApproved(id: number, reviewedBy: string, dispersionId: number, status?: string): Promise<CryptoWithdrawalRequest | undefined>;
+  markWithdrawalStatus(id: number, status: string): Promise<CryptoWithdrawalRequest | undefined>;
+  settleWithdrawalFailed(id: number): Promise<CryptoWithdrawalRequest | undefined>;
+  rejectWithdrawalRequest(id: number, reviewedBy: string, reason: string): Promise<CryptoWithdrawalRequest | undefined>;
+
+  // --- Depósitos de USDT sobre TRON (verificación + acreditación manual) ---
+  getTronDepositCredit(txid: string): Promise<TronDepositCredit | undefined>;
+  creditTronDeposit(txid: string, userId: string, amountUsdt: number, fromAddress: string | null, network: string, creditedBy: string): Promise<{ credit: TronDepositCredit; balance: UserCryptoBalance }>;
+  createDepositDeclaration(userId: string, declaredTxid: string, note: string | null): Promise<TronDepositDeclaration>;
+  getPendingDepositDeclarations(): Promise<TronDepositDeclaration[]>;
 
   // Crypto Keys
   getCryptoKeys(username: string, isAdmin: boolean): Promise<CryptoKey[]>;
@@ -315,6 +339,7 @@ export class DatabaseStorage implements IStorage {
         ADD COLUMN IF NOT EXISTS network TEXT NOT NULL DEFAULT 'mainnet',
         ADD COLUMN IF NOT EXISTS failure_code TEXT,
         ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS withdrawal_request_id INTEGER,
         ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NOT NULL DEFAULT NOW()
     `);
     await db.execute(sql`
@@ -367,6 +392,62 @@ export class DatabaseStorage implements IStorage {
     await db.execute(sql`
       CREATE INDEX IF NOT EXISTS idx_crypto_balance_ledger_user_asset
         ON crypto_balance_ledger (user_id, asset, created_at)
+    `);
+
+    // --- Ensure crypto_withdrawal_requests table exists (retiros de USDT sobre TRON) ---
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS crypto_withdrawal_requests (
+        id SERIAL PRIMARY KEY,
+        user_id VARCHAR NOT NULL,
+        asset TEXT NOT NULL DEFAULT 'usdt',
+        amount_usdt NUMERIC(18, 6) NOT NULL,
+        to_address TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        reviewed_by TEXT,
+        reviewed_at TIMESTAMP,
+        rejection_reason TEXT,
+        dispersion_id INTEGER,
+        network TEXT NOT NULL DEFAULT 'mainnet',
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_crypto_withdrawal_requests_user
+        ON crypto_withdrawal_requests (user_id, created_at)
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_crypto_withdrawal_requests_status
+        ON crypto_withdrawal_requests (status, created_at)
+    `);
+
+    // --- Ensure tron_deposit_credits table exists (idempotencia de acreditación por txid) ---
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS tron_deposit_credits (
+        txid TEXT PRIMARY KEY,
+        user_id VARCHAR NOT NULL,
+        amount_usdt NUMERIC(18, 6) NOT NULL,
+        from_address TEXT,
+        network TEXT NOT NULL DEFAULT 'mainnet',
+        credited_by TEXT NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    // --- Ensure tron_deposit_declarations table exists (auto-declaración informativa) ---
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS tron_deposit_declarations (
+        id SERIAL PRIMARY KEY,
+        user_id VARCHAR NOT NULL,
+        declared_txid TEXT NOT NULL,
+        note TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_tron_deposit_declarations_status
+        ON tron_deposit_declarations (status, created_at)
     `);
 
     // --- Ensure payment_charges table exists ---
@@ -1258,8 +1339,28 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
+  // ÚNICA puerta de entrada para serializar mutaciones de saldo por
+  // (userId, asset). CADA función que lee-y-luego-escribe un renglón de
+  // user_crypto_balances — depósitos, retiros, exchange, ajustes de admin —
+  // debe adquirir este lock antes de su primer SELECT sobre ese renglón, o
+  // dos operaciones concurrentes (del mismo tipo o de tipos distintos) pueden
+  // leer el mismo saldo previo y ambas autorizarse sobre fondos que ya no
+  // existen. Ver .agents/memory/financial-balance-locking.md.
+  private async lockUserAssetBalance(tx: any, userId: string, asset: string): Promise<void> {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId + ":" + asset}))`);
+  }
+
+  // Adquiere el lock de dos activos en orden determinístico (alfabético) para
+  // que un exchange A→B y otro B→A del mismo usuario nunca puedan interbloquearse.
+  private async lockUserAssetBalancesOrdered(tx: any, userId: string, assets: string[]): Promise<void> {
+    for (const asset of [...assets].sort()) {
+      await this.lockUserAssetBalance(tx, userId, asset);
+    }
+  }
+
   async setCryptoBalance(userId: string, asset: CryptoAsset, balance: number, meta: LedgerMeta): Promise<UserCryptoBalance> {
     return db.transaction(async (tx) => {
+      await this.lockUserAssetBalance(tx, userId, asset);
       const [existing] = await tx.select().from(userCryptoBalances)
         .where(and(eq(userCryptoBalances.userId, userId), eq(userCryptoBalances.asset, asset)));
       const delta = balance - (existing?.balance ?? 0);
@@ -1277,6 +1378,7 @@ export class DatabaseStorage implements IStorage {
 
   async creditCryptoBalance(userId: string, asset: CryptoAsset, amount: number, meta: LedgerMeta): Promise<UserCryptoBalance> {
     return db.transaction(async (tx) => {
+      await this.lockUserAssetBalance(tx, userId, asset);
       const [existing] = await tx.select().from(userCryptoBalances)
         .where(and(eq(userCryptoBalances.userId, userId), eq(userCryptoBalances.asset, asset)));
       const nextBalance = (existing?.balance ?? 0) + amount;
@@ -1299,6 +1401,8 @@ export class DatabaseStorage implements IStorage {
     meta: LedgerMeta,
   ): Promise<{ from: UserCryptoBalance; to: UserCryptoBalance }> {
     return db.transaction(async (tx) => {
+      await this.lockUserAssetBalancesOrdered(tx, userId, [fromAsset, toAsset]);
+
       const [fromRow] = await tx.select().from(userCryptoBalances)
         .where(and(eq(userCryptoBalances.userId, userId), eq(userCryptoBalances.asset, fromAsset)));
       const currentFromBalance = fromRow?.balance ?? 0;
@@ -1355,6 +1459,231 @@ export class DatabaseStorage implements IStorage {
     // Tolerancia por redondeo de punto flotante
     const ok = Math.abs(ledgerBalance - storedBalance) < 1e-9;
     return { ok, ledgerBalance, storedBalance };
+  }
+
+  // --- Retiros de USDT sobre TRON ---
+  // Reserva/descuenta el saldo del usuario atómicamente al crear la solicitud;
+  // si el saldo es insuficiente, ni la solicitud ni el ledger se escriben.
+  async createWithdrawalRequest(userId: string, amountUsdt: number, toAddress: string, network: string, createdBy: string): Promise<CryptoWithdrawalRequest> {
+    return db.transaction(async (tx) => {
+      // Serialize concurrent reserve/refund operations against this exact
+      // (userId, "usdt") balance so two simultaneous withdrawal requests
+      // can never both read the same pre-debit balance and both succeed.
+      await this.lockUserAssetBalance(tx, userId, "usdt");
+
+      const [existing] = await tx.select().from(userCryptoBalances)
+        .where(and(eq(userCryptoBalances.userId, userId), eq(userCryptoBalances.asset, "usdt")));
+      const currentBalance = existing?.balance ?? 0;
+      if (currentBalance < amountUsdt) {
+        throw new Error("INSUFFICIENT_BALANCE");
+      }
+      const newBalance = currentBalance - amountUsdt;
+      await tx.insert(userCryptoBalances)
+        .values({ userId, asset: "usdt", balance: newBalance })
+        .onConflictDoUpdate({
+          target: [userCryptoBalances.userId, userCryptoBalances.asset],
+          set: { balance: newBalance, updatedAt: new Date() },
+        });
+
+      const [request] = await tx.insert(cryptoWithdrawalRequests).values({
+        userId, asset: "usdt", amountUsdt: amountUsdt.toFixed(6),
+        toAddress, status: "pending", network,
+      }).returning();
+
+      await this.writeLedgerEntry(tx, userId, "usdt", -amountUsdt, newBalance, {
+        reason: "withdrawal_reserved",
+        referenceType: "withdrawal_request",
+        referenceId: String(request.id),
+        createdBy,
+      });
+
+      return request;
+    });
+  }
+
+  async getWithdrawalRequestsForUser(userId: string): Promise<CryptoWithdrawalRequest[]> {
+    return db.select().from(cryptoWithdrawalRequests)
+      .where(eq(cryptoWithdrawalRequests.userId, userId))
+      .orderBy(desc(cryptoWithdrawalRequests.createdAt));
+  }
+
+  async getPendingWithdrawalRequests(): Promise<CryptoWithdrawalRequest[]> {
+    return db.select().from(cryptoWithdrawalRequests)
+      .where(eq(cryptoWithdrawalRequests.status, "pending"))
+      .orderBy(desc(cryptoWithdrawalRequests.createdAt));
+  }
+
+  async getWithdrawalRequest(id: number): Promise<CryptoWithdrawalRequest | undefined> {
+    const [row] = await db.select().from(cryptoWithdrawalRequests).where(eq(cryptoWithdrawalRequests.id, id));
+    return row;
+  }
+
+  // Reclama atómicamente una solicitud "pending" hacia "processing" antes de
+  // invocar al firmador. Si la fila ya fue reclamada (aprobación concurrente)
+  // o rechazada, el UPDATE con WHERE status='pending' no afecta filas y esto
+  // devuelve undefined — así aprobar y rechazar nunca pueden pisarse.
+  async claimWithdrawalForProcessing(id: number): Promise<CryptoWithdrawalRequest | undefined> {
+    const [row] = await db.update(cryptoWithdrawalRequests)
+      .set({ status: "processing", updatedAt: new Date() })
+      .where(and(eq(cryptoWithdrawalRequests.id, id), eq(cryptoWithdrawalRequests.status, "pending")))
+      .returning();
+    return row;
+  }
+
+  // Revierte una solicitud "processing" de vuelta a "pending" — solo válido
+  // cuando la dispersión fue rechazada por validación *antes* de mover fondos
+  // (ningún txid/estado "uncertain" involucrado). El saldo nunca se toca aquí
+  // porque nunca se reembolsó al reclamar; sigue reservado tal cual.
+  async revertWithdrawalToProcessingFailed(id: number): Promise<CryptoWithdrawalRequest | undefined> {
+    const [row] = await db.update(cryptoWithdrawalRequests)
+      .set({ status: "pending", updatedAt: new Date() })
+      .where(and(eq(cryptoWithdrawalRequests.id, id), eq(cryptoWithdrawalRequests.status, "processing")))
+      .returning();
+    return row;
+  }
+
+  async markWithdrawalApproved(id: number, reviewedBy: string, dispersionId: number, status: string = "broadcast"): Promise<CryptoWithdrawalRequest | undefined> {
+    const [row] = await db.update(cryptoWithdrawalRequests)
+      .set({ status, reviewedBy, reviewedAt: new Date(), dispersionId, updatedAt: new Date() })
+      .where(eq(cryptoWithdrawalRequests.id, id))
+      .returning();
+    return row;
+  }
+
+  async markWithdrawalStatus(id: number, status: string): Promise<CryptoWithdrawalRequest | undefined> {
+    const [row] = await db.update(cryptoWithdrawalRequests)
+      .set({ status, updatedAt: new Date() })
+      .where(eq(cryptoWithdrawalRequests.id, id))
+      .returning();
+    return row;
+  }
+
+  // Asentamiento on-chain "FAILED": reclama atómicamente desde
+  // processing/broadcast hacia "failed" (el WHERE evita un doble reembolso si
+  // el poll de estado se dispara dos veces en paralelo) y reembolsa el saldo
+  // reservado con su propio renglón de ledger — a diferencia de "confirmed",
+  // que no toca el saldo porque los fondos ya salieron de verdad.
+  async settleWithdrawalFailed(id: number): Promise<CryptoWithdrawalRequest | undefined> {
+    return db.transaction(async (tx) => {
+      const [claimed] = await tx.update(cryptoWithdrawalRequests)
+        .set({ status: "failed", updatedAt: new Date() })
+        .where(and(
+          eq(cryptoWithdrawalRequests.id, id),
+          sql`${cryptoWithdrawalRequests.status} IN ('processing', 'broadcast')`,
+        ))
+        .returning();
+      if (!claimed) return undefined;
+
+      await this.lockUserAssetBalance(tx, claimed.userId, "usdt");
+      const amount = Number(claimed.amountUsdt);
+      const [existing] = await tx.select().from(userCryptoBalances)
+        .where(and(eq(userCryptoBalances.userId, claimed.userId), eq(userCryptoBalances.asset, "usdt")));
+      const newBalance = (existing?.balance ?? 0) + amount;
+      await tx.insert(userCryptoBalances)
+        .values({ userId: claimed.userId, asset: "usdt", balance: newBalance })
+        .onConflictDoUpdate({
+          target: [userCryptoBalances.userId, userCryptoBalances.asset],
+          set: { balance: newBalance, updatedAt: new Date() },
+        });
+      await this.writeLedgerEntry(tx, claimed.userId, "usdt", amount, newBalance, {
+        reason: "withdrawal_failed_refund",
+        referenceType: "withdrawal_request",
+        referenceId: String(id),
+        createdBy: "system:tron-settlement",
+      });
+
+      return claimed;
+    });
+  }
+
+  // Rechazo: reclama atómicamente desde "pending" y reembolsa el saldo
+  // reservado con su propio renglón de ledger. El UPDATE con WHERE
+  // status='pending' es la única fuente de verdad de la transición — si una
+  // aprobación concurrente ya reclamó la fila hacia "processing"/"broadcast",
+  // esta operación no afecta ninguna fila y se vuelve un no-op seguro.
+  async rejectWithdrawalRequest(id: number, reviewedBy: string, reason: string): Promise<CryptoWithdrawalRequest | undefined> {
+    return db.transaction(async (tx) => {
+      const [claimed] = await tx.update(cryptoWithdrawalRequests)
+        .set({ status: "rejected", reviewedBy, reviewedAt: new Date(), rejectionReason: reason, updatedAt: new Date() })
+        .where(and(eq(cryptoWithdrawalRequests.id, id), eq(cryptoWithdrawalRequests.status, "pending")))
+        .returning();
+      if (!claimed) return undefined;
+      const request = claimed;
+
+      // Same per-(userId, asset) lock used on reservation, so refund and any
+      // concurrent new withdrawal request against this balance serialize.
+      await this.lockUserAssetBalance(tx, request.userId, "usdt");
+
+      const amount = Number(request.amountUsdt);
+      const [existing] = await tx.select().from(userCryptoBalances)
+        .where(and(eq(userCryptoBalances.userId, request.userId), eq(userCryptoBalances.asset, "usdt")));
+      const newBalance = (existing?.balance ?? 0) + amount;
+      await tx.insert(userCryptoBalances)
+        .values({ userId: request.userId, asset: "usdt", balance: newBalance })
+        .onConflictDoUpdate({
+          target: [userCryptoBalances.userId, userCryptoBalances.asset],
+          set: { balance: newBalance, updatedAt: new Date() },
+        });
+      await this.writeLedgerEntry(tx, request.userId, "usdt", amount, newBalance, {
+        reason: "withdrawal_rejected_refund",
+        referenceType: "withdrawal_request",
+        referenceId: String(id),
+        createdBy: reviewedBy,
+      });
+
+      return claimed;
+    });
+  }
+
+  // --- Depósitos de USDT sobre TRON ---
+  async getTronDepositCredit(txid: string): Promise<TronDepositCredit | undefined> {
+    const [row] = await db.select().from(tronDepositCredits).where(eq(tronDepositCredits.txid, txid));
+    return row;
+  }
+
+  // El txid es la llave primaria de tron_deposit_credits: un intento de re-acreditar
+  // el mismo txid falla por violación de llave única antes de tocar el saldo.
+  async creditTronDeposit(txid: string, userId: string, amountUsdt: number, fromAddress: string | null, network: string, creditedBy: string): Promise<{ credit: TronDepositCredit; balance: UserCryptoBalance }> {
+    return db.transaction(async (tx) => {
+      const [credit] = await tx.insert(tronDepositCredits).values({
+        txid, userId, amountUsdt: amountUsdt.toFixed(6), fromAddress, network, creditedBy,
+      }).returning();
+
+      // Same per-(userId, "usdt") lock used by withdrawal reserve/refund/settle,
+      // so two deposits credited to the same user concurrently can never both
+      // read the same pre-credit balance and silently drop one credit.
+      await this.lockUserAssetBalance(tx, userId, "usdt");
+
+      const [existing] = await tx.select().from(userCryptoBalances)
+        .where(and(eq(userCryptoBalances.userId, userId), eq(userCryptoBalances.asset, "usdt")));
+      const newBalance = (existing?.balance ?? 0) + amountUsdt;
+      const [balance] = await tx.insert(userCryptoBalances)
+        .values({ userId, asset: "usdt", balance: newBalance })
+        .onConflictDoUpdate({
+          target: [userCryptoBalances.userId, userCryptoBalances.asset],
+          set: { balance: newBalance, updatedAt: new Date() },
+        })
+        .returning();
+      await this.writeLedgerEntry(tx, userId, "usdt", amountUsdt, newBalance, {
+        reason: "tron_deposit",
+        referenceType: "tron_tx",
+        referenceId: txid,
+        createdBy: creditedBy,
+      });
+
+      return { credit, balance };
+    });
+  }
+
+  async createDepositDeclaration(userId: string, declaredTxid: string, note: string | null): Promise<TronDepositDeclaration> {
+    const [row] = await db.insert(tronDepositDeclarations).values({ userId, declaredTxid, note }).returning();
+    return row;
+  }
+
+  async getPendingDepositDeclarations(): Promise<TronDepositDeclaration[]> {
+    return db.select().from(tronDepositDeclarations)
+      .where(eq(tronDepositDeclarations.status, "pending"))
+      .orderBy(desc(tronDepositDeclarations.createdAt));
   }
 
   // --- System Settings ---
