@@ -1369,7 +1369,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = await storage.getUser(req.params.userId);
       if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
-      const updated = await storage.setCryptoBalance(req.params.userId, assetParam as CryptoAsset, parsed.data.balance);
+      const updated = await storage.setCryptoBalance(req.params.userId, assetParam as CryptoAsset, parsed.data.balance, {
+        reason: "admin_override",
+        referenceType: "admin",
+        referenceId: null,
+        createdBy: req.currentUser!.username,
+      });
       res.json(updated);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -1835,6 +1840,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Ledger inmutable de movimientos — el propio usuario ve el suyo, el admin ve el de cualquiera
+  app.get("/api/crypto-balances/ledger", requireSession, async (req, res) => {
+    try {
+      const assetParam = req.query.asset as string | undefined;
+      if (assetParam && !CRYPTO_ASSETS.includes(assetParam as CryptoAsset)) {
+        return res.status(400).json({ error: "Activo cripto inválido" });
+      }
+      const entries = await storage.getCryptoLedger(req.currentUser!.id, assetParam as CryptoAsset | undefined);
+      res.json(entries);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/admin/user-crypto/:userId/ledger", requireRole("ADMIN"), async (req, res) => {
+    try {
+      const assetParam = req.query.asset as string | undefined;
+      if (assetParam && !CRYPTO_ASSETS.includes(assetParam as CryptoAsset)) {
+        return res.status(400).json({ error: "Activo cripto inválido" });
+      }
+      const entries = await storage.getCryptoLedger(req.params.userId, assetParam as CryptoAsset | undefined);
+      res.json(entries);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/admin/user-crypto/:userId/:asset/verify", requireRole("ADMIN"), async (req, res) => {
+    const assetParam = req.params.asset as string;
+    if (!CRYPTO_ASSETS.includes(assetParam as CryptoAsset)) {
+      return res.status(400).json({ error: "Activo cripto inválido" });
+    }
+    try {
+      const result = await storage.verifyCryptoLedger(req.params.userId, assetParam as CryptoAsset);
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   const exchangeSchema = z.object({
     fromAsset: z.enum(CRYPTO_ASSETS),
     toAsset: z.enum(CRYPTO_ASSETS),
@@ -1870,9 +1915,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // ── Actualizar saldos internos con montos reales del fill ─────────────────
-      const balances = await storage.exchangeCrypto(user.id, fromAsset, fromAmount, toAsset, actualToAmount);
-
       const transactionId = `EXC-${Date.now()}-${randomBytes(4).toString('hex').toUpperCase()}`;
+      const balances = await storage.exchangeCrypto(user.id, fromAsset, fromAmount, toAsset, actualToAmount, {
+        reason: "exchange",
+        referenceType: "transaction",
+        referenceId: transactionId,
+        createdBy: user.username,
+      });
+
       const transaction = await storage.createTransaction({
         transactionId,
         protocol: "201.3",
@@ -1918,9 +1968,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const { cryptoAsset, cryptoAmount, cryptoSymbol, fiatAmount, fiatCurrency, destWallet } = parsed.data;
     const user = req.currentUser!;
     try {
-      const balance = await storage.creditCryptoBalance(user.id, cryptoAsset, cryptoAmount);
-
       const transactionId = `DSP-${Date.now()}-${randomBytes(4).toString('hex').toUpperCase()}`;
+      const balance = await storage.creditCryptoBalance(user.id, cryptoAsset, cryptoAmount, {
+        reason: "dispersion_credit",
+        referenceType: "transaction",
+        referenceId: transactionId,
+        createdBy: user.username,
+      });
+
       const transaction = await storage.createTransaction({
         transactionId,
         protocol: "101.3",
