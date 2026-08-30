@@ -159,6 +159,22 @@ export const userCryptoBalances = pgTable("user_crypto_balances", {
   userAssetUnique: unique().on(table.userId, table.asset),
 }));
 
+// Ledger inmutable de movimientos de saldo cripto — cada cambio a user_crypto_balances
+// debe escribir exactamente un renglón aquí. balance_after permite reconstruir/verificar
+// el saldo actual sumando deltas, en vez de confiar únicamente en el campo mutable.
+export const cryptoBalanceLedger = pgTable("crypto_balance_ledger", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  asset: text("asset").notNull(),
+  delta: doublePrecision("delta").notNull(), // positivo = crédito, negativo = débito
+  balanceAfter: doublePrecision("balance_after").notNull(),
+  reason: text("reason").notNull(), // exchange_debit | exchange_credit | dispersion_credit | admin_override
+  referenceType: text("reference_type"), // "transaction" | "admin" | null
+  referenceId: text("reference_id"),
+  createdBy: text("created_by").notNull(), // username/email del actor
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Motor de pagos — cobros reales Stripe / Mercado Pago
 export const paymentCharges = pgTable("payment_charges", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -235,6 +251,7 @@ export const insertTransactionLogSchema = createInsertSchema(transactionLogs).om
 export const insertBankingProtocolSchema = createInsertSchema(bankingProtocols).omit({ id: true });
 export const insertCryptoKeySchema = createInsertSchema(cryptoKeys).omit({ id: true, createdAt: true });
 export const insertUserCryptoBalanceSchema = createInsertSchema(userCryptoBalances).omit({ id: true, updatedAt: true });
+export const insertCryptoBalanceLedgerSchema = createInsertSchema(cryptoBalanceLedger).omit({ id: true, createdAt: true });
 export const insertCajaMovementSchema = createInsertSchema(cajaMovements).omit({ id: true, createdAt: true });
 
 // Types
@@ -264,6 +281,9 @@ export type InsertCryptoKey = z.infer<typeof insertCryptoKeySchema>;
 
 export type UserCryptoBalance = typeof userCryptoBalances.$inferSelect;
 export type InsertUserCryptoBalance = z.infer<typeof insertUserCryptoBalanceSchema>;
+
+export type CryptoBalanceLedgerEntry = typeof cryptoBalanceLedger.$inferSelect;
+export type InsertCryptoBalanceLedgerEntry = z.infer<typeof insertCryptoBalanceLedgerSchema>;
 
 export type CajaMovement = typeof cajaMovements.$inferSelect;
 export type InsertCajaMovement = z.infer<typeof insertCajaMovementSchema>;

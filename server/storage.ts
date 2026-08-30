@@ -17,6 +17,7 @@ import {
   supportTickets,
   paymentCharges,
   userCryptoBalances,
+  cryptoBalanceLedger,
   cajaMovements,
   routingRules,
   routingDecisions,
@@ -36,6 +37,7 @@ import {
   type SupportTicket,
   type PaymentCharge,
   type UserCryptoBalance, type CryptoAsset,
+  type CryptoBalanceLedgerEntry,
   type SystemSettings, DEFAULT_SYSTEM_SETTINGS,
   type RoutingRule, type InsertRoutingRule,
   type RoutingDecision,
@@ -44,6 +46,15 @@ import {
 
 // In-memory cache for system settings (populated on first read, kept in sync on updates)
 let _systemSettings: SystemSettings | null = null;
+
+// Metadata obligatoria para cualquier cambio a user_crypto_balances — cada cambio
+// escribe un renglón en crypto_balance_ledger con esta información.
+export interface LedgerMeta {
+  reason: string; // exchange_debit | exchange_credit | dispersion_credit | admin_override | ...
+  referenceType?: string | null; // "transaction" | "admin" | null
+  referenceId?: string | null;
+  createdBy: string; // username/email del actor
+}
 
 export interface IStorage {
   // Users
@@ -108,13 +119,18 @@ export interface IStorage {
   // Crypto Balances (saldos internos por usuario/activo — sin blockchain real)
   getCryptoBalances(userId: string): Promise<UserCryptoBalance[]>;
   getAllCryptoBalances(): Promise<UserCryptoBalance[]>;
-  setCryptoBalance(userId: string, asset: CryptoAsset, balance: number): Promise<UserCryptoBalance>;
-  creditCryptoBalance(userId: string, asset: CryptoAsset, amount: number): Promise<UserCryptoBalance>;
+  setCryptoBalance(userId: string, asset: CryptoAsset, balance: number, meta: LedgerMeta): Promise<UserCryptoBalance>;
+  creditCryptoBalance(userId: string, asset: CryptoAsset, amount: number, meta: LedgerMeta): Promise<UserCryptoBalance>;
   exchangeCrypto(
     userId: string,
     fromAsset: CryptoAsset, fromAmount: number,
     toAsset: CryptoAsset, toAmount: number,
+    meta: LedgerMeta,
   ): Promise<{ from: UserCryptoBalance; to: UserCryptoBalance }>;
+
+  // Ledger inmutable de movimientos de saldo cripto
+  getCryptoLedger(userId?: string, asset?: CryptoAsset): Promise<CryptoBalanceLedgerEntry[]>;
+  verifyCryptoLedger(userId: string, asset: CryptoAsset): Promise<{ ok: boolean; ledgerBalance: number; storedBalance: number }>;
 
   // Crypto Keys
   getCryptoKeys(username: string, isAdmin: boolean): Promise<CryptoKey[]>;
@@ -331,6 +347,26 @@ export class DatabaseStorage implements IStorage {
         updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
         CONSTRAINT user_crypto_balances_user_id_asset_unique UNIQUE (user_id, asset)
       )
+    `);
+
+    // --- Ensure crypto_balance_ledger table exists (renglón inmutable por cada cambio de saldo) ---
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS crypto_balance_ledger (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id VARCHAR NOT NULL,
+        asset TEXT NOT NULL,
+        delta DOUBLE PRECISION NOT NULL,
+        balance_after DOUBLE PRECISION NOT NULL,
+        reason TEXT NOT NULL,
+        reference_type TEXT,
+        reference_id TEXT,
+        created_by TEXT NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_crypto_balance_ledger_user_asset
+        ON crypto_balance_ledger (user_id, asset, created_at)
     `);
 
     // --- Ensure payment_charges table exists ---
@@ -1208,18 +1244,38 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(userCryptoBalances);
   }
 
-  async setCryptoBalance(userId: string, asset: CryptoAsset, balance: number): Promise<UserCryptoBalance> {
-    const [row] = await db.insert(userCryptoBalances)
-      .values({ userId, asset, balance })
-      .onConflictDoUpdate({
-        target: [userCryptoBalances.userId, userCryptoBalances.asset],
-        set: { balance, updatedAt: new Date() },
-      })
-      .returning();
-    return row;
+  // Escribe un renglón inmutable del ledger dentro de la misma transacción que mueve el saldo.
+  private async writeLedgerEntry(
+    tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+    userId: string, asset: CryptoAsset, delta: number, balanceAfter: number, meta: LedgerMeta,
+  ): Promise<void> {
+    await tx.insert(cryptoBalanceLedger).values({
+      userId, asset, delta, balanceAfter,
+      reason: meta.reason,
+      referenceType: meta.referenceType ?? null,
+      referenceId: meta.referenceId ?? null,
+      createdBy: meta.createdBy,
+    });
   }
 
-  async creditCryptoBalance(userId: string, asset: CryptoAsset, amount: number): Promise<UserCryptoBalance> {
+  async setCryptoBalance(userId: string, asset: CryptoAsset, balance: number, meta: LedgerMeta): Promise<UserCryptoBalance> {
+    return db.transaction(async (tx) => {
+      const [existing] = await tx.select().from(userCryptoBalances)
+        .where(and(eq(userCryptoBalances.userId, userId), eq(userCryptoBalances.asset, asset)));
+      const delta = balance - (existing?.balance ?? 0);
+      const [row] = await tx.insert(userCryptoBalances)
+        .values({ userId, asset, balance })
+        .onConflictDoUpdate({
+          target: [userCryptoBalances.userId, userCryptoBalances.asset],
+          set: { balance, updatedAt: new Date() },
+        })
+        .returning();
+      await this.writeLedgerEntry(tx, userId, asset, delta, balance, meta);
+      return row;
+    });
+  }
+
+  async creditCryptoBalance(userId: string, asset: CryptoAsset, amount: number, meta: LedgerMeta): Promise<UserCryptoBalance> {
     return db.transaction(async (tx) => {
       const [existing] = await tx.select().from(userCryptoBalances)
         .where(and(eq(userCryptoBalances.userId, userId), eq(userCryptoBalances.asset, asset)));
@@ -1231,6 +1287,7 @@ export class DatabaseStorage implements IStorage {
           set: { balance: nextBalance, updatedAt: new Date() },
         })
         .returning();
+      await this.writeLedgerEntry(tx, userId, asset, amount, nextBalance, meta);
       return row;
     });
   }
@@ -1239,6 +1296,7 @@ export class DatabaseStorage implements IStorage {
     userId: string,
     fromAsset: CryptoAsset, fromAmount: number,
     toAsset: CryptoAsset, toAmount: number,
+    meta: LedgerMeta,
   ): Promise<{ from: UserCryptoBalance; to: UserCryptoBalance }> {
     return db.transaction(async (tx) => {
       const [fromRow] = await tx.select().from(userCryptoBalances)
@@ -1247,27 +1305,56 @@ export class DatabaseStorage implements IStorage {
       if (currentFromBalance < fromAmount) {
         throw new Error("INSUFFICIENT_BALANCE");
       }
+      const newFromBalance = currentFromBalance - fromAmount;
       const [updatedFrom] = await tx.insert(userCryptoBalances)
-        .values({ userId, asset: fromAsset, balance: currentFromBalance - fromAmount })
+        .values({ userId, asset: fromAsset, balance: newFromBalance })
         .onConflictDoUpdate({
           target: [userCryptoBalances.userId, userCryptoBalances.asset],
-          set: { balance: currentFromBalance - fromAmount, updatedAt: new Date() },
+          set: { balance: newFromBalance, updatedAt: new Date() },
         })
         .returning();
+      await this.writeLedgerEntry(tx, userId, fromAsset, -fromAmount, newFromBalance, {
+        ...meta, reason: `${meta.reason}_debit`,
+      });
 
       const [toRow] = await tx.select().from(userCryptoBalances)
         .where(and(eq(userCryptoBalances.userId, userId), eq(userCryptoBalances.asset, toAsset)));
       const currentToBalance = toRow?.balance ?? 0;
+      const newToBalance = currentToBalance + toAmount;
       const [updatedTo] = await tx.insert(userCryptoBalances)
-        .values({ userId, asset: toAsset, balance: currentToBalance + toAmount })
+        .values({ userId, asset: toAsset, balance: newToBalance })
         .onConflictDoUpdate({
           target: [userCryptoBalances.userId, userCryptoBalances.asset],
-          set: { balance: currentToBalance + toAmount, updatedAt: new Date() },
+          set: { balance: newToBalance, updatedAt: new Date() },
         })
         .returning();
+      await this.writeLedgerEntry(tx, userId, toAsset, toAmount, newToBalance, {
+        ...meta, reason: `${meta.reason}_credit`,
+      });
 
       return { from: updatedFrom, to: updatedTo };
     });
+  }
+
+  async getCryptoLedger(userId?: string, asset?: CryptoAsset): Promise<CryptoBalanceLedgerEntry[]> {
+    const conditions = [
+      userId ? eq(cryptoBalanceLedger.userId, userId) : undefined,
+      asset ? eq(cryptoBalanceLedger.asset, asset) : undefined,
+    ].filter((c): c is NonNullable<typeof c> => c !== undefined);
+    const query = db.select().from(cryptoBalanceLedger).orderBy(desc(cryptoBalanceLedger.createdAt));
+    return conditions.length ? query.where(and(...conditions)) : query;
+  }
+
+  async verifyCryptoLedger(userId: string, asset: CryptoAsset): Promise<{ ok: boolean; ledgerBalance: number; storedBalance: number }> {
+    const [storedRow] = await db.select().from(userCryptoBalances)
+      .where(and(eq(userCryptoBalances.userId, userId), eq(userCryptoBalances.asset, asset)));
+    const storedBalance = storedRow?.balance ?? 0;
+    const entries = await db.select().from(cryptoBalanceLedger)
+      .where(and(eq(cryptoBalanceLedger.userId, userId), eq(cryptoBalanceLedger.asset, asset)));
+    const ledgerBalance = entries.reduce((sum, e) => sum + e.delta, 0);
+    // Tolerancia por redondeo de punto flotante
+    const ok = Math.abs(ledgerBalance - storedBalance) < 1e-9;
+    return { ok, ledgerBalance, storedBalance };
   }
 
   // --- System Settings ---
