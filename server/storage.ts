@@ -155,6 +155,8 @@ export interface IStorage {
   creditTronDeposit(txid: string, userId: string, amountUsdt: number, fromAddress: string | null, network: string, creditedBy: string): Promise<{ credit: TronDepositCredit; balance: UserCryptoBalance }>;
   createDepositDeclaration(userId: string, declaredTxid: string, note: string | null): Promise<TronDepositDeclaration>;
   getPendingDepositDeclarations(): Promise<TronDepositDeclaration[]>;
+  getDepositDeclarationsForUser(userId: string): Promise<TronDepositDeclaration[]>;
+  getTronDepositCreditsForUser(userId: string): Promise<TronDepositCredit[]>;
 
   // Crypto Keys
   getCryptoKeys(username: string, isAdmin: boolean): Promise<CryptoKey[]>;
@@ -1684,6 +1686,20 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(tronDepositDeclarations)
       .where(eq(tronDepositDeclarations.status, "pending"))
       .orderBy(desc(tronDepositDeclarations.createdAt));
+  }
+
+  async getDepositDeclarationsForUser(userId: string): Promise<TronDepositDeclaration[]> {
+    return db.select().from(tronDepositDeclarations)
+      .where(eq(tronDepositDeclarations.userId, userId))
+      .orderBy(desc(tronDepositDeclarations.createdAt))
+      .limit(50);
+  }
+
+  async getTronDepositCreditsForUser(userId: string): Promise<TronDepositCredit[]> {
+    return db.select().from(tronDepositCredits)
+      .where(eq(tronDepositCredits.userId, userId))
+      .orderBy(desc(tronDepositCredits.createdAt))
+      .limit(50);
   }
 
   // --- System Settings ---

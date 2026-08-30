@@ -1158,6 +1158,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ── Usuario consulta sus propias declaraciones y depósitos acreditados ──
+  app.get("/api/crypto/tron-deposit/declarations", requireSession, async (req, res) => {
+    try {
+      res.json(await storage.getDepositDeclarationsForUser(req.currentUser!.id));
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/crypto/tron-deposit/credits", requireSession, async (req, res) => {
+    try {
+      res.json(await storage.getTronDepositCreditsForUser(req.currentUser!.id));
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.get("/api/admin/tron/deposit/declarations", requireRole("ADMIN"), async (_req, res) => {
     try {
       res.json(await storage.getPendingDepositDeclarations());

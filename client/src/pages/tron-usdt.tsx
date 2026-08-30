@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Copy, Check, ArrowDownToLine, ArrowUpFromLine, ShieldCheck, Loader2,
   Clock, CheckCircle2, XCircle, AlertTriangle, Send, Wallet, History, Sparkles,
+  Network, FileCode2, ExternalLink, Radio, Landmark,
 } from "lucide-react";
 import { SiTether } from "react-icons/si";
 
@@ -33,6 +34,22 @@ interface WithdrawalRequest {
   rejectionReason: string | null;
 }
 
+interface DepositDeclaration {
+  id: number;
+  declaredTxid: string;
+  note: string | null;
+  status: string;
+  createdAt: string;
+}
+
+interface DepositCredit {
+  txid: string;
+  amountUsdt: string;
+  fromAddress: string | null;
+  network: string;
+  createdAt: string;
+}
+
 function statusMeta(status: string) {
   switch (status) {
     case "pending":
@@ -47,9 +64,18 @@ function statusMeta(status: string) {
       return { label: "Rechazado", color: "bg-red-500/10 text-red-400 border-red-500/30", icon: XCircle };
     case "failed":
       return { label: "Falló", color: "bg-red-500/10 text-red-400 border-red-500/30", icon: XCircle };
+    case "matched":
+      return { label: "Verificado", color: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30", icon: CheckCircle2 };
+    case "dismissed":
+      return { label: "Descartado", color: "bg-muted text-muted-foreground border-border", icon: XCircle };
     default:
       return { label: status, color: "bg-muted text-muted-foreground border-border", icon: AlertTriangle };
   }
+}
+
+function truncateMiddle(value: string, head = 8, tail = 8) {
+  if (value.length <= head + tail + 3) return value;
+  return `${value.slice(0, head)}…${value.slice(-tail)}`;
 }
 
 export default function TronUsdtPage() {
@@ -67,8 +93,30 @@ export default function TronUsdtPage() {
     queryKey: ["/api/crypto/tron-withdrawal"],
     refetchInterval: 15_000,
   });
+  const { data: declarations = [] } = useQuery<DepositDeclaration[]>({
+    queryKey: ["/api/crypto/tron-deposit/declarations"],
+    refetchInterval: 15_000,
+  });
+  const { data: credits = [] } = useQuery<DepositCredit[]>({
+    queryKey: ["/api/crypto/tron-deposit/credits"],
+    refetchInterval: 15_000,
+  });
 
   const usdtBalance = balances?.usdt ?? 0;
+  const explorerBase = depositInfo?.network?.toLowerCase().includes("nile")
+    ? "https://nile.tronscan.org"
+    : "https://tronscan.org";
+
+  type ActivityItem =
+    | { kind: "credit"; id: string; createdAt: string; amount: string; ref: string; extra: string | null }
+    | { kind: "declaration"; id: string; createdAt: string; status: string; ref: string; extra: string | null }
+    | { kind: "withdrawal"; id: string; createdAt: string; status: string; amount: string; ref: string };
+
+  const activity: ActivityItem[] = [
+    ...credits.map((c) => ({ kind: "credit" as const, id: `credit-${c.txid}`, createdAt: c.createdAt, amount: c.amountUsdt, ref: c.txid, extra: c.fromAddress })),
+    ...declarations.map((d) => ({ kind: "declaration" as const, id: `decl-${d.id}`, createdAt: d.createdAt, status: d.status, ref: d.declaredTxid, extra: d.note })),
+    ...withdrawals.map((w) => ({ kind: "withdrawal" as const, id: `wd-${w.id}`, createdAt: w.createdAt, status: w.status, amount: w.amountUsdt, ref: w.toAddress })),
+  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   const declareMutation = useMutation({
     mutationFn: async () => {
@@ -79,6 +127,7 @@ export default function TronUsdtPage() {
       toast({ title: "Depósito declarado", description: "Un administrador revisará tu transferencia y acreditará tu saldo tras verificarla en la blockchain." });
       setDeclareTxid("");
       setDeclareNote("");
+      queryClient.invalidateQueries({ queryKey: ["/api/crypto/tron-deposit/declarations"] });
     },
     onError: (err: Error) => toast({ title: "No se pudo declarar el depósito", description: err.message, variant: "destructive" }),
   });
@@ -144,6 +193,31 @@ export default function TronUsdtPage() {
                 <span className="text-sm font-normal text-emerald-300/70">USDT</span>
               </p>
             </div>
+          </div>
+
+          {/* ── Wallet details strip ── */}
+          <div className="relative mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="rounded-xl border border-emerald-500/10 bg-black/20 px-3 py-2.5">
+              <p className="text-[10px] uppercase tracking-wider text-emerald-100/40 flex items-center gap-1"><Network className="w-3 h-3" /> Red</p>
+              <p className="text-sm font-medium text-white mt-0.5 truncate">{depositInfo?.network ?? "—"}</p>
+            </div>
+            <div className="rounded-xl border border-emerald-500/10 bg-black/20 px-3 py-2.5">
+              <p className="text-[10px] uppercase tracking-wider text-emerald-100/40 flex items-center gap-1"><Landmark className="w-3 h-3" /> Token</p>
+              <p className="text-sm font-medium text-white mt-0.5">{depositInfo?.token ?? "USDT"} · TRC-20</p>
+            </div>
+            <div className="rounded-xl border border-emerald-500/10 bg-black/20 px-3 py-2.5 col-span-2 sm:col-span-1">
+              <p className="text-[10px] uppercase tracking-wider text-emerald-100/40 flex items-center gap-1"><FileCode2 className="w-3 h-3" /> Contrato</p>
+              <p className="text-sm font-medium text-white mt-0.5 truncate font-mono" title={depositInfo?.contract}>{depositInfo?.contract ? truncateMiddle(depositInfo.contract, 6, 6) : "—"}</p>
+            </div>
+            <a
+              href={depositInfo?.address ? `${explorerBase}/#/address/${depositInfo.address}` : "#"}
+              target="_blank"
+              rel="noreferrer"
+              className={`rounded-xl border px-3 py-2.5 flex flex-col justify-between transition-colors ${depositInfo?.address ? "border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/10 cursor-pointer" : "border-emerald-500/10 bg-black/20 pointer-events-none opacity-60"}`}
+            >
+              <p className="text-[10px] uppercase tracking-wider text-emerald-100/40 flex items-center gap-1"><Radio className="w-3 h-3" /> Ver en Tronscan</p>
+              <p className="text-sm font-medium text-emerald-300 mt-0.5 flex items-center gap-1">Explorar <ExternalLink className="w-3 h-3" /></p>
+            </a>
           </div>
         </div>
 
@@ -299,35 +373,73 @@ export default function TronUsdtPage() {
           </Card>
         </div>
 
-        {/* ── Historial de retiros ── */}
+        {/* ── Actividad: depósitos declarados/acreditados y retiros ── */}
         <div className="space-y-3">
           <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-            <History className="w-3.5 h-3.5" /> Mis solicitudes de retiro
+            <History className="w-3.5 h-3.5" /> Mi actividad USDT (TRON)
           </h3>
-          {withdrawals.length === 0 ? (
+          {activity.length === 0 ? (
             <Card className="border-dashed">
               <CardContent className="p-8 text-center space-y-2">
                 <div className="mx-auto w-10 h-10 rounded-full bg-muted flex items-center justify-center">
                   <History className="w-5 h-5 text-muted-foreground/60" />
                 </div>
-                <p className="text-sm text-muted-foreground">Aún no has solicitado ningún retiro.</p>
+                <p className="text-sm text-muted-foreground">Aún no tienes depósitos ni retiros en esta red.</p>
               </CardContent>
             </Card>
           ) : (
             <div className="space-y-2">
-              {withdrawals.map((w) => {
-                const meta = statusMeta(w.status);
+              {activity.map((item) => {
+                if (item.kind === "credit") {
+                  return (
+                    <Card key={item.id} data-testid={`card-credit-${item.ref}`} className="transition-colors hover:border-emerald-500/25 border-emerald-500/15">
+                      <CardContent className="p-4 flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
+                          <ArrowDownToLine className="w-4 h-4 text-emerald-400" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium tabular-nums text-emerald-300">+{Number(item.amount).toLocaleString("en-US", { maximumFractionDigits: 6 })} USDT</p>
+                          <p className="text-xs text-muted-foreground font-mono truncate max-w-xs">{truncateMiddle(item.ref)}</p>
+                        </div>
+                        <Badge variant="outline" className="text-[11px] gap-1.5 shrink-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                          <CheckCircle2 className="w-3 h-3" /> Acreditado
+                        </Badge>
+                      </CardContent>
+                    </Card>
+                  );
+                }
+                if (item.kind === "declaration") {
+                  const meta = statusMeta(item.status);
+                  const Icon = meta.icon;
+                  return (
+                    <Card key={item.id} data-testid={`card-declaration-${item.ref}`} className="transition-colors hover:border-emerald-500/25">
+                      <CardContent className="p-4 flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-muted/60 flex items-center justify-center shrink-0">
+                          <Sparkles className="w-4 h-4 text-muted-foreground" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-sm">Depósito declarado</p>
+                          <p className="text-xs text-muted-foreground font-mono truncate max-w-xs">{truncateMiddle(item.ref)}</p>
+                          {item.extra && <p className="text-xs text-muted-foreground/70 truncate max-w-xs mt-0.5">"{item.extra}"</p>}
+                        </div>
+                        <Badge variant="outline" className={`text-[11px] gap-1.5 shrink-0 ${meta.color}`}>
+                          <Icon className="w-3 h-3" /> {meta.label}
+                        </Badge>
+                      </CardContent>
+                    </Card>
+                  );
+                }
+                const meta = statusMeta(item.status);
                 const Icon = meta.icon;
                 return (
-                  <Card key={w.id} data-testid={`card-withdrawal-${w.id}`} className="transition-colors hover:border-emerald-500/25">
+                  <Card key={item.id} data-testid={`card-withdrawal-${item.id}`} className="transition-colors hover:border-emerald-500/25">
                     <CardContent className="p-4 flex items-center gap-3">
                       <div className="w-9 h-9 rounded-lg bg-muted/60 flex items-center justify-center shrink-0">
                         <ArrowUpFromLine className="w-4 h-4 text-muted-foreground" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="font-medium tabular-nums">{Number(w.amountUsdt).toLocaleString("en-US", { maximumFractionDigits: 6 })} USDT</p>
-                        <p className="text-xs text-muted-foreground font-mono truncate max-w-xs">{w.toAddress}</p>
-                        {w.rejectionReason && <p className="text-xs text-red-400 mt-1">{w.rejectionReason}</p>}
+                        <p className="font-medium tabular-nums">-{Number(item.amount).toLocaleString("en-US", { maximumFractionDigits: 6 })} USDT</p>
+                        <p className="text-xs text-muted-foreground font-mono truncate max-w-xs">{truncateMiddle(item.ref)}</p>
                       </div>
                       <Badge variant="outline" className={`text-[11px] gap-1.5 shrink-0 ${meta.color}`}>
                         <Icon className="w-3 h-3" /> {meta.label}
