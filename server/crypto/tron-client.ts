@@ -17,6 +17,10 @@
  *                                closes wallet/gettransactioninfobyid — see
  *                                .agents/memory/tron-lite-node-api-limits.md).
  *                                Never used for signing or balance checks.
+ *   TRONSCAN_API_KEY           — Tronscan API key, used ONLY as a read-only
+ *                                backup confirmation source when TronGrid
+ *                                fails or is unreachable. Same restriction:
+ *                                never used for signing or balance checks.
  */
 
 import { TronWeb } from "tronweb";
@@ -33,6 +37,7 @@ const PLATFORM_ADDRESS = process.env.PLATFORM_TRON_ADDRESS     ?? "";
 const NODE_TIMEOUT_MS   = Number(process.env.TRON_NODE_TIMEOUT_MS ?? 8_000);
 const NETWORK_PROFILE   = configuredTronNetwork();
 const TRONGRID_API_KEY  = process.env.TRONGRID_API_KEY?.trim() ?? "";
+const TRONSCAN_API_KEY  = process.env.TRONSCAN_API_KEY?.trim() ?? "";
 
 export const TRON_NETWORK = NETWORK_PROFILE.network;
 export const USDT_CONTRACT = NETWORK_PROFILE.usdtContract;
@@ -73,6 +78,42 @@ function trongridHost(): string {
 
 export function trongridConfigured(): boolean {
   return Boolean(TRONGRID_API_KEY);
+}
+
+export function tronscanConfigured(): boolean {
+  return Boolean(TRONSCAN_API_KEY);
+}
+
+function tronscanHost(): string {
+  return TRON_NETWORK === "nile"
+    ? "https://nileapi.tronscan.org"
+    : "https://apilist.tronscanapi.com";
+}
+
+/**
+ * Fetches raw transaction info from Tronscan's public REST API. Used strictly
+ * as a backup read-only confirmation source when TronGrid is unavailable —
+ * never for signing or balance checks. Shape differs from TronWeb's
+ * trx.getTransactionInfo()/getTransaction(), so callers must normalize it
+ * (see getTransaction()'s tronscan branch) rather than treat it as a TronWeb
+ * result.
+ */
+async function fetchTronscanTransactionInfo(txid: string): Promise<any> {
+  if (!TRONSCAN_API_KEY) {
+    throw new Error("TRONSCAN_API_KEY is not configured");
+  }
+  const res = await fetch(
+    `${tronscanHost()}/api/transaction-info?hash=${encodeURIComponent(txid)}`,
+    { headers: { "TRON-PRO-API-KEY": TRONSCAN_API_KEY } },
+  );
+  if (!res.ok) {
+    throw new Error(`Tronscan API responded ${res.status}`);
+  }
+  const data = await res.json();
+  if (!data || Object.keys(data).length === 0) {
+    throw new Error("Tronscan returned no data for transaction");
+  }
+  return data;
 }
 
 let _trongridClient: TronWeb | null = null;
@@ -295,17 +336,86 @@ export function transactionExecutionStatus(txInfo: any): TronTransactionInfo["st
   return "PENDING";
 }
 
+/** Normalizes Tronscan's transaction-info payload into our common shape. */
+function normalizeTronscanTransaction(txid: string, data: any): TronTransactionInfo {
+  const blockNumber: number | null = data?.block ?? null;
+  const timestamp: number | null = data?.timestamp ?? null;
+
+  let status: TronTransactionInfo["status"] = "PENDING";
+  if (data?.confirmed === true && data?.contractRet === "SUCCESS") {
+    status = "SUCCESS";
+  } else if (data?.confirmed === true && typeof data?.contractRet === "string") {
+    status = "FAILED";
+  }
+
+  let fromAddress: string | null = null;
+  let toAddress: string | null = null;
+  let usdtAmount: number | null = null;
+  let usdtAtomicAmount: string | null = null;
+  let contractAddress: string | null = null;
+
+  const transfer = Array.isArray(data?.trc20TransferInfo) ? data.trc20TransferInfo[0] : null;
+  if (transfer) {
+    fromAddress = transfer.from_address ?? transfer.from ?? null;
+    toAddress = transfer.to_address ?? transfer.to ?? null;
+    contractAddress = transfer.contract_address ?? null;
+    usdtAtomicAmount = transfer.amount_str ?? transfer.amount ?? null;
+    if (usdtAtomicAmount) {
+      usdtAmount = rawToUsdt(usdtAtomicAmount);
+    }
+  } else {
+    fromAddress = data?.ownerAddress ?? null;
+    toAddress = data?.toAddress ?? null;
+  }
+
+  return {
+    txid,
+    blockNumber,
+    timestamp,
+    status,
+    fromAddress,
+    toAddress,
+    usdtAmount,
+    usdtAtomicAmount,
+    contractAddress,
+  };
+}
+
 /**
  * Fetches on-chain transaction info for a given txid.
  * Use this to confirm a transfer() result has settled.
+ *
+ * Confirmation source order: TronGrid (primary) → Tronscan (backup, only if
+ * TronGrid is unreachable or fails) → private node (last resort, matching
+ * prior behavior for local/dev where neither external key is configured).
+ * All three are strictly read-only lookups; none is ever used for signing.
  */
 export async function getTransaction(txid: string): Promise<TronTransactionInfo> {
-  // Prefer TronGrid for this lookup: our self-hosted lite fullnode
-  // unconditionally closes these two APIs, so the private node can never
-  // serve them. Fall back to the private node client only if TronGrid isn't
-  // configured (e.g. local/dev), matching prior behavior there.
-  const tw = trongridConfigured() ? getTrongridClient() : getClient();
+  if (trongridConfigured()) {
+    try {
+      return await getTransactionFromTronWeb(txid, getTrongridClient());
+    } catch (err) {
+      if (tronscanConfigured()) {
+        try {
+          const data = await fetchTronscanTransactionInfo(txid);
+          return normalizeTronscanTransaction(txid, data);
+        } catch {
+          // Both external sources failed — surface the original TronGrid error.
+          throw err;
+        }
+      }
+      throw err;
+    }
+  }
 
+  if (tronscanConfigured()) {
+    return normalizeTronscanTransaction(txid, await fetchTronscanTransactionInfo(txid));
+  }
+
+  return getTransactionFromTronWeb(txid, getClient());
+}
+
+async function getTransactionFromTronWeb(txid: string, tw: TronWeb): Promise<TronTransactionInfo> {
   const [txInfo, txDetail] = await Promise.all([
     tw.trx.getTransactionInfo(txid),
     tw.trx.getTransaction(txid),
@@ -367,5 +477,6 @@ export function platformWalletInfo() {
     signing:    "remote-only",
     nodeEndpoint: node.endpoint,
     txConfirmationSource: trongridConfigured() ? "trongrid" : "private-node",
+    txConfirmationBackup: tronscanConfigured() ? "tronscan" : "(not configured)",
   };
 }
