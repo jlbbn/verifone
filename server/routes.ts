@@ -4,7 +4,7 @@ import rateLimit from "express-rate-limit";
 import { storage } from "./storage";
 import { db } from "./db";
 import { eq, inArray, sql, or } from "drizzle-orm";
-import { transactions as txTable, users as usersTable, hotWalletDispersions } from "@shared/schema";
+import { transactions as txTable, users as usersTable, hotWalletDispersions, cryptoWithdrawalRequests } from "@shared/schema";
 import { randomBytes } from "crypto";
 import { discoverTestFiles, runTestsExclusive, isTestRunInFlight, getLastTestRun } from "./test-runner";
 import { z } from "zod";
@@ -25,6 +25,7 @@ import {
   parseUsdtAmount,
   tronWalletWritesEnabled,
 } from "./crypto/tron-policy.js";
+import { executeHotWalletDispersion } from "./crypto/dispersion-service.js";
 import * as Bitstamp from "./crypto/bitstamp-client.js";
 import { ensureBitstampFeed, bitstampFeedSnapshot } from "./crypto/bitstamp-ws-feed.js";
 
@@ -1029,259 +1030,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
 
-    let amount;
-    try { amount = parseUsdtAmount(parsed.data.amountUsdt); }
-    catch (err) {
-      return res.status(400).json({ error: (err as Error).message, code: "INVALID_USDT_AMOUNT" });
-    }
     const idempotencyKey = req.get("Idempotency-Key")?.trim() ?? "";
-    if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{15,127}$/.test(idempotencyKey)) {
-      return res.status(400).json({
-        error: "Falta una clave de idempotencia válida",
-        code: "INVALID_IDEMPOTENCY_KEY",
-      });
-    }
-
     const admin = req.currentUser!;
     // Verify admin password before signing
     if (!verifyPassword(parsed.data.password, admin.password)) {
       return res.status(401).json({ error: "Contraseña incorrecta" });
     }
 
-    // Fix #2: Validate TRON base58 address BEFORE touching the DB or blockchain.
-    // An invalid address would burn TRX fees with no recovery path.
-    if (!TronClient.isValidAddress(parsed.data.toAddress)) {
-      return res.status(400).json({
-        error: "Dirección TRON inválida — debe ser una dirección base58 válida (empieza con 'T')",
-        code: "INVALID_TRON_ADDRESS",
-      });
-    }
-
-    // Validate against configurable max dispersal limit
-    const settings = await storage.getSettings();
-    const maxUsdt = settings.maxDispersalUsdt ?? 5000;
-    let maxPerTransactionAtomic: bigint;
-    try {
-      maxPerTransactionAtomic = BigInt(parseUsdtAmount(String(maxUsdt)).atomic);
-    } catch {
-      return res.status(503).json({
-        error: "Límite por operación TRON inválido; dispersiones bloqueadas",
-        code: "INVALID_TRON_PER_TX_LIMIT",
-      });
-    }
-    if (BigInt(amount.atomic) > maxPerTransactionAtomic) {
-      return res.status(400).json({
-        error: `El monto excede el límite máximo configurado de $${maxUsdt.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT por operación.`,
-        code: "EXCEEDS_MAX_DISPERSAL",
-        maxUsdt,
-      });
-    }
-
-    // Fix #6: Check wallet config BEFORE inserting the DB record.
-    // Previously this check happened after the insert, leaving orphan "pending"
-    // rows when the wallet was unconfigured.
-    const info = TronClient.platformWalletInfo();
-    if (!info.configured) {
-      return res.status(503).json({ error: "Hot wallet no configurada" });
-    }
-    if (!info.nodeApproved || !info.nodeEndpoint) {
-      return res.status(503).json({
-        error: "Nodo TRON corporativo privado no configurado o no aprobado",
-        code: "TRON_PRIVATE_NODE_NOT_APPROVED",
-      });
-    }
-
-    let nodeHealth;
-    let signerHealth;
-    try {
-      [nodeHealth, signerHealth] = await Promise.all([
-        TronClient.getNodeHealth(),
-        TronSigner.getSignerHealth(),
-      ]);
-    } catch {
-      return res.status(503).json({
-        error: "Infraestructura TRON no disponible; firma bloqueada",
-        code: "TRON_INFRASTRUCTURE_UNHEALTHY",
-      });
-    }
-    if (!nodeHealth.healthy || !signerHealth.healthy || !signerHealth.writesEnabled) {
-      return res.status(503).json({
-        error: "Nodo o firmador TRON no está listo para escrituras",
-        code: "TRON_INFRASTRUCTURE_UNHEALTHY",
-      });
-    }
-    if (!TronSigner.signerProfileMatches(signerHealth)) {
-      return res.status(503).json({
-        error: "El perfil de red o contrato del firmador no coincide con la aplicación",
-        code: "TRON_SIGNER_PROFILE_MISMATCH",
-      });
-    }
-    if (signerHealth.address !== info.address) {
-      return res.status(503).json({
-        error: "La identidad del firmador no coincide con la hot wallet configurada",
-        code: "TRON_SIGNER_WALLET_MISMATCH",
-      });
-    }
-    if (signerHealth.nodeEndpoint !== info.nodeEndpoint) {
-      return res.status(503).json({
-        error: "El firmador no está conectado al nodo TRON aprobado",
-        code: "TRON_SIGNER_NODE_MISMATCH",
-      });
-    }
-
-    const balance = await TronClient.getBalance();
-    const minTrxReserve = Number(settings.minTrxReserve ?? 40);
-    if (balance.trxBalance < minTrxReserve) {
-      return res.status(503).json({
-        error: `Saldo TRX insuficiente: se requieren al menos ${minTrxReserve} TRX`,
-        code: "INSUFFICIENT_TRX_RESERVE",
-      });
-    }
-
-    let envDailyAmount;
-    let settingsDailyAmount;
-    try {
-      envDailyAmount = configuredDailyLimitAmount();
-      const settingsDaily = Number(settings.maxDailyDispersalUsdt ?? 0);
-      settingsDailyAmount = settingsDaily > 0
-        ? parseUsdtAmount(String(settings.maxDailyDispersalUsdt))
-        : null;
-    } catch {
-      return res.status(503).json({
-        error: "Límite diario TRON inválido; dispersiones bloqueadas",
-        code: "INVALID_TRON_DAILY_LIMIT",
-      });
-    }
-    const dailyAtomicCandidates = [envDailyAmount, settingsDailyAmount]
-      .filter((value): value is NonNullable<typeof value> => Boolean(value))
-      .map((value) => BigInt(value.atomic));
-    if (dailyAtomicCandidates.length === 0) {
-      return res.status(503).json({
-        error: "Límite diario TRON no configurado; dispersiones bloqueadas",
-        code: "TRON_DAILY_LIMIT_DISABLED",
-      });
-    }
-    const maxDailyAtomic = dailyAtomicCandidates.reduce(
-      (lowest, current) => current < lowest ? current : lowest,
-    );
-    const maxDailyUsdt = Number(maxDailyAtomic) / 1_000_000;
-
-    // Reserve the daily allowance transactionally. pg_advisory_xact_lock makes
-    // concurrent requests serialize before reading the aggregate.
-    const reservation = await db.transaction(async (tx) => {
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('banxico-plus-tron-daily-limit'))`);
-      const existingResult = await tx.execute(sql`
-        SELECT * FROM hot_wallet_dispersions
-        WHERE idempotency_key = ${idempotencyKey}
-          AND network = ${TronClient.TRON_NETWORK}
-        LIMIT 1
-      `);
-      const existing = (existingResult.rows?.[0] ?? null) as any;
-      if (existing) return { duplicate: true as const, row: existing };
-
-      const sumResult = await tx.execute(sql`
-        SELECT COALESCE(SUM(amount_usdt * 1000000), 0)::text AS total_atomic
-        FROM hot_wallet_dispersions
-        WHERE network = ${TronClient.TRON_NETWORK}
-          AND status IN ('pending', 'uncertain', 'broadcast', 'confirmed')
-          AND created_at >= date_trunc('day', NOW() AT TIME ZONE 'UTC')
-      `);
-      const usedTodayAtomic = BigInt((sumResult.rows?.[0] as any)?.total_atomic ?? "0");
-      if (usedTodayAtomic + BigInt(amount.atomic) > maxDailyAtomic) {
-        return { limitExceeded: true as const, usedTodayAtomic };
-      }
-
-      const [row] = await tx.insert(hotWalletDispersions).values({
-        adminId: admin.id,
-        toAddress: parsed.data.toAddress,
-        amountUsdt: amount.normalized,
-        status: "pending",
-        note: parsed.data.note ?? null,
-        idempotencyKey,
-        expectedAtomicAmount: amount.atomic,
-        expectedContract: TronClient.USDT_CONTRACT,
-        network: TronClient.TRON_NETWORK,
-        updatedAt: new Date(),
-      }).returning();
-      return { duplicate: false as const, row };
+    const outcome = await executeHotWalletDispersion({
+      adminId: admin.id,
+      toAddress: parsed.data.toAddress,
+      amountUsdt: parsed.data.amountUsdt,
+      note: parsed.data.note,
+      idempotencyKey,
     });
-
-    if ("limitExceeded" in reservation) {
-      return res.status(400).json({
-        error: "La operación excede el límite diario de la hot wallet",
-        code: "EXCEEDS_DAILY_DISPERSAL",
-        maxDailyUsdt,
-        usedToday: Number(reservation.usedTodayAtomic) / 1_000_000,
-      });
-    }
-    if (reservation.duplicate) {
-      if (!reservation.row.txid && ["pending", "uncertain"].includes(reservation.row.status)) {
-        try {
-          const remote = await TronSigner.getTransferStatus(idempotencyKey);
-          if (remote.status === "broadcast" && remote.txid) {
-            await db.update(hotWalletDispersions)
-              .set({
-                txid: remote.txid,
-                signerRequestId: remote.requestId,
-                status: "broadcast",
-                failureCode: null,
-                updatedAt: new Date(),
-              })
-              .where(eq(hotWalletDispersions.id, reservation.row.id));
-            return res.status(200).json({
-              success: true,
-              duplicate: true,
-              reconciled: true,
-              id: reservation.row.id,
-              txid: remote.txid,
-              status: "broadcast",
-            });
-          }
-        } catch {
-          // Fail closed. A missing/ambiguous remote result must be investigated;
-          // it must never trigger a second signature with a new key.
-        }
-      }
-      return res.status(200).json({
-        success: reservation.row.status === "broadcast" || reservation.row.status === "confirmed",
-        duplicate: true,
-        id: reservation.row.id,
-        txid: reservation.row.txid,
-        status: reservation.row.status,
-      });
-    }
-    const row = reservation.row;
-
-    try {
-      const result = await TronSigner.requestTransfer({
-        idempotencyKey,
-        toAddress: parsed.data.toAddress,
-        amountAtomic: amount.atomic,
-      });
-
-      // Fix #1: Status is "broadcast" — the TX was accepted by the TRON network
-      // but on-chain confirmation is asynchronous. Poll getTransaction(txid) to
-      // verify final "SUCCESS" | "FAILED" settlement before treating as confirmed.
-      await db.update(hotWalletDispersions)
-        .set({
-          txid: result.txid,
-          signerRequestId: result.requestId,
-          status: "broadcast",
-          updatedAt: new Date(),
-        })
-        .where(eq(hotWalletDispersions.id, row.id));
-
-      return res.json({ success: true, txid: result.txid, id: row.id, status: "broadcast" });
-    } catch (err: any) {
-      await db.update(hotWalletDispersions)
-        .set({
-          status: "uncertain",
-          failureCode: "SIGNER_RESULT_UNKNOWN",
-          updatedAt: new Date(),
-        })
-        .where(eq(hotWalletDispersions.id, row.id));
-      return res.status(500).json({ error: err.message });
-    }
+    return res.status(outcome.status).json(outcome.body);
   });
 
   // ── Historial de dispersiones ────────────────────────────────────────────
@@ -1353,6 +1116,317 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Still pending on-chain
       return res.json({ id: row.id, status: "broadcast", txid: row.txid, onChain });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ════════════════════════════════════════════════════════════════════════
+  // DEPÓSITOS Y RETIROS REALES DE USDT SOBRE TRON
+  // Atribución de depósitos: manual por admin (dirección de hot wallet única
+  // compartida). Retiros: reserva inmediata del saldo + aprobación admin que
+  // reutiliza el pipeline de dispersión ya endurecido.
+  // ════════════════════════════════════════════════════════════════════════
+
+  // ── Info pública de depósito (dirección de la hot wallet + red) ─────────
+  app.get("/api/crypto/tron-deposit-info", requireSession, async (_req, res) => {
+    const info = TronClient.platformWalletInfo();
+    res.json({
+      address: info.address,
+      configured: info.configured,
+      network: info.network,
+      token: "USDT",
+      contract: TronClient.USDT_CONTRACT,
+    });
+  });
+
+  // ── Usuario declara (informativamente) el txid de su depósito ───────────
+  const declareDepositSchema = z.object({
+    txid: z.string().trim().min(10).max(100),
+    note: z.string().trim().max(280).optional(),
+  });
+  app.post("/api/crypto/tron-deposit/declare", requireSession, async (req, res) => {
+    const parsed = declareDepositSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Datos inválidos", detail: parsed.error.issues });
+    try {
+      const declaration = await storage.createDepositDeclaration(
+        req.currentUser!.id, parsed.data.txid, parsed.data.note ?? null,
+      );
+      res.json(declaration);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/admin/tron/deposit/declarations", requireRole("ADMIN"), async (_req, res) => {
+    try {
+      res.json(await storage.getPendingDepositDeclarations());
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Admin: verifica un txid on-chain antes de decidir a quién acreditar ──
+  const verifyDepositSchema = z.object({ txid: z.string().trim().min(10).max(100) });
+  app.post("/api/admin/tron/deposit/verify", requireRole("ADMIN"), async (req, res) => {
+    const parsed = verifyDepositSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Datos inválidos", detail: parsed.error.issues });
+    try {
+      const existing = await storage.getTronDepositCredit(parsed.data.txid);
+      const onChain = await TronClient.getTransaction(parsed.data.txid);
+      const info = TronClient.platformWalletInfo();
+      const isDepositToHotWallet = onChain.toAddress === info.address
+        && onChain.contractAddress === TronClient.USDT_CONTRACT
+        && onChain.usdtAmount !== null;
+      res.json({
+        onChain,
+        alreadyCredited: Boolean(existing),
+        creditedTo: existing?.userId ?? null,
+        eligible: isDepositToHotWallet && onChain.status === "SUCCESS" && !existing,
+        reasonIfIneligible: existing
+          ? "Este txid ya fue acreditado anteriormente"
+          : onChain.status !== "SUCCESS"
+            ? "La transacción no está confirmada como exitosa on-chain"
+            : !isDepositToHotWallet
+              ? "La transacción no es un depósito USDT válido hacia la hot wallet de la plataforma"
+              : null,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Admin: acredita el depósito verificado a un usuario específico ───────
+  const creditDepositSchema = z.object({
+    txid: z.string().trim().min(10).max(100),
+    userId: z.string().trim().min(1),
+  });
+  app.post("/api/admin/tron/deposit/credit", requireRole("ADMIN"), async (req, res) => {
+    const parsed = creditDepositSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Datos inválidos", detail: parsed.error.issues });
+    const admin = req.currentUser!;
+    try {
+      const targetUser = await storage.getUser(parsed.data.userId);
+      if (!targetUser) return res.status(404).json({ error: "Usuario no encontrado" });
+
+      const existing = await storage.getTronDepositCredit(parsed.data.txid);
+      if (existing) {
+        return res.status(409).json({ error: "Este txid ya fue acreditado anteriormente", code: "ALREADY_CREDITED" });
+      }
+
+      const onChain = await TronClient.getTransaction(parsed.data.txid);
+      const info = TronClient.platformWalletInfo();
+      if (onChain.status !== "SUCCESS") {
+        return res.status(400).json({ error: "La transacción no está confirmada como exitosa on-chain", code: "TX_NOT_SUCCESSFUL" });
+      }
+      if (onChain.toAddress !== info.address || onChain.contractAddress !== TronClient.USDT_CONTRACT || !onChain.usdtAmount) {
+        return res.status(400).json({ error: "La transacción no es un depósito USDT válido hacia la hot wallet", code: "NOT_A_VALID_DEPOSIT" });
+      }
+
+      const { credit, balance } = await storage.creditTronDeposit(
+        parsed.data.txid, targetUser.id, onChain.usdtAmount, onChain.fromAddress,
+        TronClient.TRON_NETWORK, admin.username,
+      );
+      res.json({ credit, balance });
+    } catch (err: any) {
+      // Llave única violada = intento de doble acreditación concurrente.
+      // Drizzle envuelve el error del driver pg en `cause`, no en `message`.
+      const causeMsg = String(err?.cause?.message ?? "");
+      if (err?.cause?.code === "23505" || causeMsg.includes("duplicate key") || String(err.message).includes("duplicate key")) {
+        return res.status(409).json({ error: "Este txid ya fue acreditado anteriormente", code: "ALREADY_CREDITED" });
+      }
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Usuario solicita un retiro de USDT a una dirección TRON externa ──────
+  const withdrawalRequestSchema = z.object({
+    toAddress: z.string().min(34).max(34),
+    amountUsdt: z.union([z.string(), z.number()]),
+  });
+  app.post("/api/crypto/tron-withdrawal", requireSession, async (req, res) => {
+    const parsed = withdrawalRequestSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Datos inválidos", detail: parsed.error.issues });
+    if (!TronClient.isValidAddress(parsed.data.toAddress)) {
+      return res.status(400).json({ error: "Dirección TRON inválida — debe ser una dirección base58 válida (empieza con 'T')", code: "INVALID_TRON_ADDRESS" });
+    }
+    let amount;
+    try { amount = parseUsdtAmount(parsed.data.amountUsdt); }
+    catch (err) { return res.status(400).json({ error: (err as Error).message, code: "INVALID_USDT_AMOUNT" }); }
+
+    const user = req.currentUser!;
+    try {
+      const request = await storage.createWithdrawalRequest(
+        user.id, amount.numeric, parsed.data.toAddress, TronClient.TRON_NETWORK, user.username,
+      );
+      res.json(request);
+    } catch (err: any) {
+      if (err.message === "INSUFFICIENT_BALANCE") {
+        return res.status(400).json({ error: "Saldo USDT insuficiente" });
+      }
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/crypto/tron-withdrawal", requireSession, async (req, res) => {
+    try {
+      res.json(await storage.getWithdrawalRequestsForUser(req.currentUser!.id));
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/admin/tron/withdrawals", requireRole("ADMIN"), async (req, res) => {
+    try {
+      const pendingOnly = req.query.status === "pending";
+      const rows = pendingOnly
+        ? await storage.getPendingWithdrawalRequests()
+        : await db.select().from(cryptoWithdrawalRequests).orderBy(sql`${cryptoWithdrawalRequests.createdAt} DESC`).limit(100);
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Admin aprueba un retiro pendiente: dispara el pipeline de dispersión ─
+  const approveWithdrawalSchema = z.object({ password: z.string().min(1) });
+  app.post("/api/admin/tron/withdrawals/:id/approve", requireRole("ADMIN"), async (req, res) => {
+    const parsed = approveWithdrawalSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Datos inválidos", detail: parsed.error.issues });
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ error: "ID inválido" });
+
+    const admin = req.currentUser!;
+    if (!verifyPassword(parsed.data.password, admin.password)) {
+      return res.status(401).json({ error: "Contraseña incorrecta" });
+    }
+
+    // Reclamo atómico pending -> processing. Esto es lo único que decide
+    // quién puede actuar sobre la solicitud: si un rechazo concurrente ya
+    // ganó la carrera, este UPDATE afecta 0 filas y devolvemos 409 en vez
+    // de intentar transmitir un retiro que ya fue reembolsado.
+    let request;
+    try {
+      const existing = await storage.getWithdrawalRequest(id);
+      if (!existing) return res.status(404).json({ error: "Solicitud no encontrada" });
+      request = await storage.claimWithdrawalForProcessing(id);
+      if (!request) {
+        return res.status(409).json({ error: `La solicitud ya no está pendiente (estado actual: ${existing.status})`, code: "NOT_PENDING" });
+      }
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+
+    // A partir de aquí la solicitud está en "processing" y reclamada en
+    // exclusiva. Un fallo inesperado de aquí en adelante NUNCA debe revertirla
+    // a "pending" (eso la haría rechazable/reembolsable) salvo que podamos
+    // probar que executeHotWalletDispersion no llegó a crear ningún registro
+    // de dispersión — es decir, que ningún fondo pudo haberse movido.
+    let outcome;
+    try {
+      const idempotencyKey = `withdrawal-${request.id}`;
+      outcome = await executeHotWalletDispersion({
+        adminId: admin.id,
+        toAddress: request.toAddress,
+        amountUsdt: request.amountUsdt,
+        note: `Retiro de usuario #${request.id}`,
+        idempotencyKey,
+        withdrawalRequestId: request.id,
+      });
+    } catch (err: any) {
+      // executeHotWalletDispersion lanzó de forma inesperada (no es su modo de
+      // fallo documentado) — el estado de la firma es desconocido. Se deja en
+      // "processing" para revisión manual en vez de asumir que no se envió nada.
+      return res.status(500).json({
+        error: `Estado del retiro requiere revisión manual: ${err.message}`,
+        code: "NEEDS_MANUAL_REVIEW",
+      });
+    }
+
+    try {
+      const outcomeStatus = (outcome.body as any)?.status;
+      const dispersionId = (outcome.body as any)?.id != null ? Number((outcome.body as any).id) : null;
+
+      if (dispersionId != null) {
+        // Se creó (o ya existía) un registro de dispersión — success, duplicado
+        // reconciliado, o firma "uncertain": en todos los casos pudo haberse
+        // movido dinero, así que se enlaza y NUNCA se revierte a "pending".
+        await storage.markWithdrawalApproved(request.id, admin.username, dispersionId, outcomeStatus === "confirmed" ? "confirmed" : "broadcast");
+      } else {
+        // Ningún fondo se movió (falló validación antes de reservar/firmar):
+        // es seguro devolver la solicitud a "pending" para reintentar o rechazar.
+        await storage.revertWithdrawalToProcessingFailed(request.id);
+      }
+      return res.status(outcome.status).json(outcome.body);
+    } catch (err: any) {
+      // El resultado de la dispersión ya se conoce (arriba); lo único que
+      // falló fue persistir el enlace en cryptoWithdrawalRequests. Si el
+      // resultado indicaba fondos movidos, esto NO debe revertirse a pending.
+      const dispersionId = (outcome.body as any)?.id;
+      if (dispersionId != null) {
+        return res.status(500).json({
+          error: `Los fondos pudieron haberse transmitido (dispersión #${dispersionId}) pero no se pudo actualizar el retiro. Requiere revisión manual: ${err.message}`,
+          code: "NEEDS_MANUAL_REVIEW",
+          dispersionId,
+        });
+      }
+      try { await storage.revertWithdrawalToProcessingFailed(id); } catch { /* best-effort */ }
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Admin rechaza un retiro pendiente: reembolsa el saldo reservado ──────
+  const rejectWithdrawalSchema = z.object({ reason: z.string().trim().min(1).max(280) });
+  app.post("/api/admin/tron/withdrawals/:id/reject", requireRole("ADMIN"), async (req, res) => {
+    const parsed = rejectWithdrawalSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Datos inválidos", detail: parsed.error.issues });
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ error: "ID inválido" });
+
+    const admin = req.currentUser!;
+    try {
+      const updated = await storage.rejectWithdrawalRequest(id, admin.username, parsed.data.reason);
+      if (!updated) return res.status(409).json({ error: "La solicitud no existe o ya no está pendiente" });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Poll de asentamiento on-chain de un retiro ya aprobado ───────────────
+  app.get("/api/admin/tron/withdrawals/:id/status", requireRole("ADMIN"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "ID inválido" });
+      const request = await storage.getWithdrawalRequest(id);
+      if (!request) return res.status(404).json({ error: "Solicitud no encontrada" });
+      if (!request.dispersionId) return res.json({ request, dispersion: null });
+
+      const [dispersion] = await db.select().from(hotWalletDispersions).where(eq(hotWalletDispersions.id, request.dispersionId));
+      if (dispersion && dispersion.txid && !["confirmed", "failed"].includes(dispersion.status)) {
+        const onChain = await TronClient.getTransaction(dispersion.txid);
+        if (onChain.status === "SUCCESS" || onChain.status === "FAILED") {
+          const intentMatches = onChain.contractAddress === (dispersion.expectedContract ?? TronClient.USDT_CONTRACT)
+            && onChain.fromAddress === TronClient.platformWalletInfo().address
+            && onChain.toAddress === dispersion.toAddress
+            && onChain.usdtAtomicAmount === dispersion.expectedAtomicAmount;
+          const newStatus = onChain.status === "SUCCESS" && intentMatches ? "confirmed" : "failed";
+          await db.update(hotWalletDispersions)
+            .set({ status: newStatus, confirmedAt: newStatus === "confirmed" ? new Date() : null, updatedAt: new Date() })
+            .where(eq(hotWalletDispersions.id, dispersion.id));
+          // "failed" means the TRON transfer never actually completed, so the
+          // reserved balance must be refunded (settleWithdrawalFailed does
+          // this atomically and is safe to call more than once — the status
+          // guard on the UPDATE ensures only the first call ever refunds).
+          if (newStatus === "failed") {
+            await storage.settleWithdrawalFailed(request.id);
+          } else {
+            await storage.markWithdrawalStatus(request.id, newStatus);
+          }
+          return res.json({ request: await storage.getWithdrawalRequest(id), dispersion: { ...dispersion, status: newStatus } });
+        }
+      }
+      res.json({ request, dispersion });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

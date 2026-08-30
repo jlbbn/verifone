@@ -68,6 +68,7 @@ const menuItems = [
   { title: "Decision Intelligence", url: "/pos-intelligence", icon: Zap },
   { title: "Transactions",          url: "/registros",        icon: FileText },
   { title: "Exchange Crypto",       url: "/exchange",         icon: Bitcoin },
+  { title: "USDT TRON",             url: "/crypto/tron-usdt", icon: Coins },
   { title: "Claves Encriptadas",    url: "/claves",           icon: Lock },
   { title: "Cumplimiento Bancario", url: "/cumplimiento",     icon: ShieldCheck },
   { title: "Documentos",            url: "/documentos",       icon: FolderOpen },
@@ -77,6 +78,7 @@ const menuItems = [
 const adminItems = [
   { title: "Gestión de Usuarios", url: "/admin/usuarios",     icon: Users  },
   { title: "Caja USDT",           url: "/admin/caja-usdt",    icon: Coins  },
+  { title: "Depósitos/Retiros USDT", url: "/admin/tron-usdt", icon: TrendingUp },
   { title: "Centro de Pruebas",   url: "/admin/laboratorio",  icon: FlaskConical },
   { title: "Configuración",       url: "/admin/settings",     icon: Sliders },
 ];

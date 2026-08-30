@@ -31,3 +31,6 @@
 - [DO account limits & token access](do-account-limits.md) — status "warning" = tope 3/3 droplets (no billing); límites solo se amplían desde el panel del dueño; token ya en env → shell, nunca requestSecrets.
 - [TRON mainnet node ops](tron-mainnet-node.md) — snapshot Lite mainnet exige checkpoint.version=2; exit 255 calla en stdout, el error real está en logs/tron.log montado; 8090 solo IPs explícitas.
 - [TRON lite fullnode API limits](tron-lite-node-api-limits.md) — trx.getBalance/getAccount 405 on single-node deploys (needs getUnconfirmedAccount); gettransactioninfobyid permanently closed on lite nodes, needs external confirmation.
+- [Shared hot-wallet dispersion service](dispersion-service-extraction.md) — real fund-sends must call executeHotWalletDispersion, never reimplement; once a dispersion record exists, the wrapping state can't be silently reverted.
+- [Financial balance mutation locking](financial-balance-locking.md) — every code path that reads-then-writes a per-user balance (deposit, withdrawal reserve, refund, failed-settlement) must share one advisory lock key, or concurrent ones corrupt it.
+- [Drizzle/pg error wrapping](drizzle-pg-error-wrapping.md) — a pg unique-violation's real message/code live on `err.cause`, not `err.message`; check both when branching on DB errors.

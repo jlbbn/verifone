@@ -24,6 +24,8 @@ import AdminUsuariosPage from "@/pages/admin-users";
 import AdminSettingsPage from "@/pages/admin-settings";
 import AdminCajaUSDTPage from "@/pages/admin-caja-usdt";
 import AdminLabPage from "@/pages/admin-lab";
+import TronUsdtPage from "@/pages/tron-usdt";
+import AdminTronUsdtPage from "@/pages/admin-tron-usdt";
 import DocumentsPage from "@/pages/documents";
 import SupportPage from "@/pages/support";
 import POSIntelligencePage from "@/pages/pos-intelligence";
@@ -210,7 +212,19 @@ function Router() {
           <AdminGuard><AdminLabPage /></AdminGuard>
         </AppLayout>
       </Route>
-      
+
+      <Route path="/crypto/tron-usdt">
+        <AppLayout>
+          <TronUsdtPage />
+        </AppLayout>
+      </Route>
+
+      <Route path="/admin/tron-usdt">
+        <AppLayout>
+          <AdminGuard><AdminTronUsdtPage /></AdminGuard>
+        </AppLayout>
+      </Route>
+
       <Route component={NotFound} />
     </Switch>
   );
