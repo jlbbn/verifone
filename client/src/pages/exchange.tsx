@@ -243,8 +243,8 @@ function CryptoPicker({
       >
         <div className="flex items-center gap-2 min-w-[96px]">
           <div
-            className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
-            style={{ backgroundColor: coin.lightBg }}
+            className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ring-1 ring-white/5"
+            style={{ backgroundColor: coin.color + "1f" }}
           >
             <CryptoIcon symbol={coin.symbol} size={18} color={coin.color} />
           </div>
@@ -263,7 +263,7 @@ function CryptoPicker({
         {CRYPTOS.filter(c => c.id !== exclude).map(c => (
           <SelectItem key={c.id} value={c.id}>
             <div className="flex items-center gap-2 py-0.5">
-              <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: c.lightBg }}>
+              <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: c.color + "1f" }}>
                 <CryptoIcon symbol={c.symbol} size={13} color={c.color} />
               </div>
               <span className="font-semibold text-sm">{c.symbol}</span>
@@ -673,7 +673,7 @@ export default function ExchangePage() {
       icon: positive ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />,
       label: "24h % Change",
       value: `${price24hChange >= 0 ? "+" : ""}${Math.abs(price24hChange).toFixed(4)}%`,
-      valueColor: positive ? "text-green-600" : "text-red-500",
+      valueColor: positive ? "text-green-400" : "text-red-400",
     },
     {
       icon: <BarChart2 className="w-3.5 h-3.5" />,
@@ -709,8 +709,8 @@ export default function ExchangePage() {
       <Card className="border shadow-sm">
         <CardContent className="p-0">
           <div className="flex items-center gap-3 px-5 py-3 border-b">
-            <div className="w-8 h-8 rounded-md bg-blue-50 flex items-center justify-center flex-shrink-0">
-              <ShieldCheck className="w-4 h-4 text-[#1a56db]" />
+            <div className="w-8 h-8 rounded-md bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+              <ShieldCheck className="w-4 h-4 text-blue-400" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-sm">Brokers · Compliance & Estado</p>
@@ -724,9 +724,9 @@ export default function ExchangePage() {
               const isOnline     = b.pingStatus === "online";
               const isRestricted = b.pingStatus === "restricted";
               const compColor =
-                b.complianceStatus === "compliant" ? "text-green-700 bg-green-50" :
-                b.complianceStatus === "partial"    ? "text-amber-700 bg-amber-50" :
-                                                      "text-red-600 bg-red-50";
+                b.complianceStatus === "compliant" ? "text-green-400 bg-green-500/10" :
+                b.complianceStatus === "partial"    ? "text-amber-400 bg-amber-500/10" :
+                                                      "text-red-400 bg-red-500/10";
               return (
                 <div key={b.id} className="px-5 py-4 space-y-3">
                   {/* Row 1: name + status badges */}
@@ -743,7 +743,7 @@ export default function ExchangePage() {
                         <span className="text-[10px] font-mono text-muted-foreground">{b.latencyMs}ms</span>
                       )}
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-sm ${
-                        isOnline ? "bg-green-100 text-green-700" : isRestricted ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-600"
+                        isOnline ? "bg-green-500/15 text-green-400" : isRestricted ? "bg-amber-500/15 text-amber-400" : "bg-red-500/15 text-red-400"
                       }`}>
                         {isOnline ? "ONLINE" : isRestricted ? "RESTRINGIDO" : "OFFLINE"}
                       </span>
@@ -776,7 +776,7 @@ export default function ExchangePage() {
                       { label: "Travel Rule", ok: b.capabilities?.travelRuleSupport },
                     ].map(({ label, ok }) => (
                       <span key={label} className={`inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-sm ${
-                        ok ? "bg-green-100 text-green-700" : "bg-muted text-muted-foreground"
+                        ok ? "bg-green-500/15 text-green-400" : "bg-muted text-muted-foreground"
                       }`}>
                         {ok ? "✓" : "—"} {label}
                       </span>
@@ -805,7 +805,7 @@ export default function ExchangePage() {
                     <div className="flex flex-wrap gap-1">
                       {b.networks.map(n => (
                         <span key={n.id} className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-semibold ${
-                          n.withdrawEnabled ? "bg-blue-50 text-[#1a56db]" : "bg-muted text-muted-foreground"
+                          n.withdrawEnabled ? "bg-blue-500/10 text-blue-400" : "bg-muted text-muted-foreground"
                         }`}>
                           {n.name} {n.withdrawEnabled ? "↑" : "·"}
                         </span>
@@ -833,25 +833,25 @@ export default function ExchangePage() {
 
       {/* ── Aviso de suscripción suspendida (solo cuando posLocked) ── */}
       {subLocked && (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-4 space-y-2.5">
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-4 space-y-2.5">
           <div className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-md bg-amber-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-              <AlertTriangle className="w-4 h-4 text-amber-700" />
+            <div className="w-8 h-8 rounded-md bg-amber-500/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <AlertTriangle className="w-4 h-4 text-amber-400" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-bold text-amber-900 text-sm">Membresía con saldo pendiente</p>
-              <p className="text-xs text-amber-800 mt-0.5 leading-relaxed">
+              <p className="font-bold text-amber-200 text-sm">Membresía con saldo pendiente</p>
+              <p className="text-xs text-amber-300 mt-0.5 leading-relaxed">
                 Tu acceso a Exchange está activo para consulta de precios. Las operaciones de dispersión permanecen <strong>suspendidas</strong> hasta regularizar el contrato de suscripción.
               </p>
               {coldWallet && (
-                <div className="mt-2 bg-amber-100 border border-amber-200 rounded px-2.5 py-2 space-y-0.5">
-                  <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wider">Wallet registrada para dispersión</p>
-                  <p className="text-[11px] font-mono text-amber-900 break-all">{coldWallet}</p>
-                  <p className="text-[10px] text-amber-700">{coldNetwork} · {coldToken}</p>
+                <div className="mt-2 bg-amber-500/15 border border-amber-500/20 rounded px-2.5 py-2 space-y-0.5">
+                  <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider">Wallet registrada para dispersión</p>
+                  <p className="text-[11px] font-mono text-amber-200 break-all">{coldWallet}</p>
+                  <p className="text-[10px] text-amber-400">{coldNetwork} · {coldToken}</p>
                 </div>
               )}
               {subPayWarning && (
-                <p className="text-[10px] text-amber-900 font-mono mt-2 bg-amber-100 border border-amber-200 rounded px-2 py-1.5 leading-relaxed">
+                <p className="text-[10px] text-amber-200 font-mono mt-2 bg-amber-500/15 border border-amber-500/20 rounded px-2 py-1.5 leading-relaxed">
                   {subPayWarning}
                 </p>
               )}
@@ -859,7 +859,7 @@ export default function ExchangePage() {
           </div>
           <div className="flex justify-end">
             <Button size="sm" variant="outline"
-              className="text-xs border-amber-400 text-amber-800 flex-shrink-0"
+              className="text-xs border-amber-500/40 text-amber-300 flex-shrink-0"
               onClick={() => window.location.href = "/subscription"}>
               Ver membresía
             </Button>
@@ -883,11 +883,11 @@ export default function ExchangePage() {
               <div className="flex items-center gap-2">
                 {orderBook && (
                   <>
-                    <span className="text-[10px] text-green-600 font-mono font-bold">
+                    <span className="text-[10px] text-green-400 font-mono font-bold">
                       Bid ${parseFloat(orderBook.bids?.[0]?.[0] ?? "0").toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                     <span className="text-[9px] text-muted-foreground">·</span>
-                    <span className="text-[10px] text-red-500 font-mono font-bold">
+                    <span className="text-[10px] text-red-400 font-mono font-bold">
                       Ask ${parseFloat(orderBook.asks?.[0]?.[0] ?? "0").toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                     {orderBook.asks?.[0] && orderBook.bids?.[0] && (() => {
@@ -913,16 +913,16 @@ export default function ExchangePage() {
               <div className="grid grid-cols-2 divide-x">
                 {/* Bids */}
                 <div>
-                  <div className="flex justify-between px-3 py-1 text-[9px] font-semibold text-green-700 uppercase tracking-wider border-b bg-green-50/50">
+                  <div className="flex justify-between px-3 py-1 text-[9px] font-semibold text-green-400 uppercase tracking-wider border-b bg-green-500/10">
                     <span>Bid</span><span>Vol</span>
                   </div>
                   {(orderBook.bids ?? []).slice(0, 6).map(([price, vol], i) => (
                     <div key={i} className="relative flex justify-between px-3 py-1">
                       <div
-                        className="absolute inset-y-0 left-0 bg-green-100/60"
+                        className="absolute inset-y-0 left-0 bg-green-500/15"
                         style={{ width: `${Math.min((parseFloat(vol) / parseFloat(orderBook.bids[0][1])) * 100, 100)}%` }}
                       />
-                      <span className="relative text-[10px] font-mono text-green-700 font-semibold z-10">
+                      <span className="relative text-[10px] font-mono text-green-400 font-semibold z-10">
                         ${parseFloat(price).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                       <span className="relative text-[10px] font-mono text-muted-foreground z-10">
@@ -934,16 +934,16 @@ export default function ExchangePage() {
 
                 {/* Asks */}
                 <div>
-                  <div className="flex justify-between px-3 py-1 text-[9px] font-semibold text-red-600 uppercase tracking-wider border-b bg-red-50/50">
+                  <div className="flex justify-between px-3 py-1 text-[9px] font-semibold text-red-400 uppercase tracking-wider border-b bg-red-500/10">
                     <span>Ask</span><span>Vol</span>
                   </div>
                   {(orderBook.asks ?? []).slice(0, 6).map(([price, vol], i) => (
                     <div key={i} className="relative flex justify-between px-3 py-1">
                       <div
-                        className="absolute inset-y-0 left-0 bg-red-100/60"
+                        className="absolute inset-y-0 left-0 bg-red-500/15"
                         style={{ width: `${Math.min((parseFloat(vol) / parseFloat(orderBook.asks[0][1])) * 100, 100)}%` }}
                       />
-                      <span className="relative text-[10px] font-mono text-red-600 font-semibold z-10">
+                      <span className="relative text-[10px] font-mono text-red-400 font-semibold z-10">
                         ${parseFloat(price).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                       <span className="relative text-[10px] font-mono text-muted-foreground z-10">
@@ -972,7 +972,7 @@ export default function ExchangePage() {
               <button
                 onClick={() => setFromAmount(fromBalance > 0 ? fromBalance.toFixed(8) : "")}
                 disabled={fromBalance <= 0}
-                className="text-[10px] font-bold text-[#1a56db] disabled:opacity-40 disabled:cursor-not-allowed"
+                className="text-[10px] font-bold text-blue-400 disabled:opacity-40 disabled:cursor-not-allowed"
                 data-testid="button-max-exchange"
               >
                 Disponible: {fromBalance.toFixed(8)} {fromCoin.symbol} · MAX
@@ -1047,11 +1047,11 @@ export default function ExchangePage() {
               </div>
               <div className="flex items-center justify-between text-[10px] text-muted-foreground font-mono">
                 <span>Slippage ({SLIPPAGE_PCT}%)</span>
-                <span className="text-amber-600">−{(parseFloat(toAmount) * SLIPPAGE_PCT / 100).toFixed(8)} {toCoin.symbol}</span>
+                <span className="text-amber-400">−{(parseFloat(toAmount) * SLIPPAGE_PCT / 100).toFixed(8)} {toCoin.symbol}</span>
               </div>
               <div className="flex items-center justify-between text-[10px] font-semibold font-mono">
                 <span>Mínimo recibido</span>
-                <span className="text-green-700">{toAmountAfterSlippage} {toCoin.symbol}</span>
+                <span className="text-green-400">{toAmountAfterSlippage} {toCoin.symbol}</span>
               </div>
             </div>
           )}
@@ -1062,8 +1062,7 @@ export default function ExchangePage() {
               <Button
                 onClick={handleExchange}
                 disabled={exchangeMutation.isPending || !fromAmount || parseFloat(fromAmount) <= 0}
-                className="w-full h-11 font-semibold text-base"
-                style={{ backgroundColor: "#1a56db" }}
+                className="w-full h-11 font-semibold text-base bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white border-0 shadow-lg shadow-blue-950/40"
                 data-testid="button-exchange"
               >
                 {exchangeMutation.isPending
@@ -1073,12 +1072,12 @@ export default function ExchangePage() {
               </Button>
             ) : (
               <div className="space-y-3">
-                <div className="rounded-md border border-[#1a56db]/30 bg-blue-50 px-4 py-3 space-y-1.5">
-                  <p className="text-xs font-bold text-[#1a56db]">Confirmar intercambio</p>
+                <div className="rounded-md border border-blue-500/30 bg-blue-500/10 px-4 py-3 space-y-1.5">
+                  <p className="text-xs font-bold text-blue-400">Confirmar intercambio</p>
                   <div className="flex items-center gap-2 text-sm font-mono">
                     <span className="font-semibold">{parseFloat(fromAmount).toFixed(8)} {fromCoin.symbol}</span>
                     <ArrowRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                    <span className="font-semibold text-green-700">≥ {toAmountAfterSlippage} {toCoin.symbol}</span>
+                    <span className="font-semibold text-green-400">≥ {toAmountAfterSlippage} {toCoin.symbol}</span>
                   </div>
                   <p className="text-[10px] text-muted-foreground">
                     Valor estimado: ${fromUsdValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD · Slippage máx. {SLIPPAGE_PCT}%
@@ -1095,8 +1094,7 @@ export default function ExchangePage() {
                   <Button
                     onClick={handleConfirmExchange}
                     disabled={exchangeMutation.isPending}
-                    className="flex-1 h-9 font-semibold text-sm"
-                    style={{ backgroundColor: "#1a56db" }}
+                    className="flex-1 h-9 font-semibold text-sm bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white border-0"
                     data-testid="button-exchange-confirm"
                   >
                     {exchangeMutation.isPending
@@ -1134,8 +1132,8 @@ export default function ExchangePage() {
           {/* Coin header */}
           <div className="flex items-center gap-3 px-5 py-4 border-b">
             <div
-              className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0"
-              style={{ backgroundColor: fromCoin.lightBg }}
+              className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 ring-1 ring-white/5"
+              style={{ backgroundColor: fromCoin.color + "1f" }}
             >
               <CryptoIcon symbol={fromCoin.symbol} size={24} color={fromCoin.color} />
             </div>
@@ -1180,7 +1178,7 @@ export default function ExchangePage() {
               ${fmtNum(fromPrice, 2)}
             </span>{" "}
             in USD, {fromCoin.name} ({fromCoin.symbol}) is currently trading approximately{" "}
-            <span className="font-semibold text-red-500">
+            <span className="font-semibold text-red-400">
               {(fromCoin.athPrice > 0 ? ((fromCoin.athPrice - fromPrice) / fromCoin.athPrice) * 100 : 0).toFixed(2)}% below
             </span>{" "}
             its record peak.
@@ -1215,7 +1213,7 @@ export default function ExchangePage() {
       {isMarginUser && marginPool && (() => {
         const MONTHLY_GOAL = 40_000_000;
         const GOAL_MARGIN  = MONTHLY_GOAL * 0.50;
-        const PALETTE      = ["bg-blue-500", "bg-green-500", "bg-purple-500", "bg-[#c8322b]", "bg-orange-400", "bg-teal-500"];
+        const PALETTE      = ["bg-blue-500", "bg-emerald-500", "bg-purple-500", "bg-primary", "bg-orange-400", "bg-teal-500"];
 
         // Usa directamente los participantes del servidor (ya incluye Socemro, Emiliano, Agustín)
         const participants = marginPool.participants;
@@ -1226,23 +1224,23 @@ export default function ExchangePage() {
 
               {/* Header */}
               <div className="flex items-center gap-3 px-5 py-4 border-b">
-                <div className="w-9 h-9 rounded-md bg-[#c8322b]/10 flex items-center justify-center flex-shrink-0">
-                  <BarChart2 className="w-5 h-5 text-[#c8322b]" />
+                <div className="w-9 h-9 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <BarChart2 className="w-5 h-5 text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm">Distribución del Margen Operacional</p>
                   <p className="text-xs text-muted-foreground">Art. 6.5 del contrato — 50% del total operacional</p>
                 </div>
-                <Badge className="bg-amber-100 text-amber-700 border-amber-200 no-default-active-elevate text-[10px]">
+                <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/20 no-default-active-elevate text-[10px]">
                   <TrendingUp className="w-3 h-3 mr-1" />
                   Proyección
                 </Badge>
               </div>
 
               {/* Aviso estimación */}
-              <div className="mx-5 mt-4 mb-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-2.5 flex items-start gap-2.5">
-                <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                <div className="text-[11px] text-amber-800 leading-relaxed">
+              <div className="mx-5 mt-4 mb-2 rounded-md border border-amber-500/20 bg-amber-500/10 px-4 py-2.5 flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                <div className="text-[11px] text-amber-300 leading-relaxed">
                   <span className="font-semibold">Estimación proyectada — no refleja fondos reales.</span>{" "}
                   Los montos mostrados corresponden a una meta operacional mensual de referencia de{" "}
                   <span className="font-semibold font-mono">$40,000,000 USD</span>.
@@ -1258,7 +1256,7 @@ export default function ExchangePage() {
                 </div>
                 <div className="px-4 py-3 border-r">
                   <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">Margen (50%)</p>
-                  <p className="text-sm font-bold font-mono mt-0.5 text-[#c8322b]">$20,000,000</p>
+                  <p className="text-sm font-bold font-mono mt-0.5 text-primary">$20,000,000</p>
                   <p className="text-[9px] text-muted-foreground">USD / mes</p>
                 </div>
                 <div className="px-4 py-3">
@@ -1284,7 +1282,7 @@ export default function ExchangePage() {
                     (p.name === "JM Open Door"    && user?.username === "jmdoorsopen@gmail.com") ||
                     (p.name === "Socemro"          && user?.email   === "socemro2@gmail.com");
                   return (
-                    <div key={i} className={`rounded-md border px-4 py-3 space-y-2 ${isMe ? "border-[#c8322b]/40 bg-[#c8322b]/5" : "border-border bg-muted/20"}`}>
+                    <div key={i} className={`rounded-md border px-4 py-3 space-y-2 ${isMe ? "border-primary/40 bg-primary/5" : "border-border bg-muted/20"}`}>
 
                       {/* Name + % */}
                       <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -1292,7 +1290,7 @@ export default function ExchangePage() {
                           <div className={`w-2 h-2 rounded-full ${colorClass}`} />
                           <span className="font-semibold text-sm">{p.name}</span>
                           {isMe && user?.role !== "ADMIN" && (
-                            <Badge className="bg-[#c8322b]/10 text-[#c8322b] border-[#c8322b]/30 no-default-active-elevate text-[9px]">
+                            <Badge className="bg-primary/10 text-primary border-primary/30 no-default-active-elevate text-[9px]">
                               Tu cuenta
                             </Badge>
                           )}
@@ -1319,7 +1317,7 @@ export default function ExchangePage() {
                         </div>
                       )}
                       {!p.wallet && !isBanxico && (
-                        <div className="flex items-center gap-1.5 text-[10px] text-amber-600">
+                        <div className="flex items-center gap-1.5 text-[10px] text-amber-400">
                           <AlertTriangle className="w-3 h-3 flex-shrink-0" />
                           <span>Wallet pendiente de registro</span>
                         </div>
@@ -1340,7 +1338,7 @@ export default function ExchangePage() {
                               ${p.dispersedUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
                             </span>
                           </span>
-                          <span className={`font-semibold ${p.availableUSD > 0 ? "text-green-700" : "text-foreground"}`}>
+                          <span className={`font-semibold ${p.availableUSD > 0 ? "text-green-400" : "text-foreground"}`}>
                             Disponible: ${p.availableUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
                           </span>
                         </div>
@@ -1365,8 +1363,8 @@ export default function ExchangePage() {
 
           {/* Header */}
           <div className="flex items-center gap-3 px-5 py-4 border-b">
-            <div className="w-9 h-9 rounded-md bg-[#c8322b]/10 flex items-center justify-center flex-shrink-0">
-              <Wallet className="w-5 h-5 text-[#c8322b]" />
+            <div className="w-9 h-9 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <Wallet className="w-5 h-5 text-primary" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-sm">Dispersión</p>
@@ -1376,12 +1374,12 @@ export default function ExchangePage() {
                 {(() => {
                   const kraken = brokerStatuses?.find(b => b.id === "kraken");
                   return kraken?.pingStatus === "online" ? (
-                    <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-green-100 text-green-700">
+                    <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-green-500/15 text-green-400">
                       <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
                       Via Kraken · TRC-20
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
+                    <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">
                       <WifiOff className="w-2.5 h-2.5" />
                       Broker verificando…
                     </span>
@@ -1390,12 +1388,12 @@ export default function ExchangePage() {
               </div>
             </div>
             {coldWallet ? (
-              <Badge className="bg-green-100 text-green-700 border-green-200 no-default-active-elevate text-[10px]">
+              <Badge className="bg-green-500/15 text-green-400 border-green-500/20 no-default-active-elevate text-[10px]">
                 <ShieldCheck className="w-3 h-3 mr-1" />
                 Wallet verificada
               </Badge>
             ) : (
-              <Badge className="bg-amber-100 text-amber-700 border-amber-200 no-default-active-elevate text-[10px]">
+              <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/20 no-default-active-elevate text-[10px]">
                 <AlertTriangle className="w-3 h-3 mr-1" />
                 Sin wallet
               </Badge>
@@ -1413,7 +1411,7 @@ export default function ExchangePage() {
                     onClick={() => { setDispFiat(c); setDispAmount(""); }}
                     data-testid={`button-fiat-${c.toLowerCase()}`}
                     className={`px-3 py-1 text-[11px] font-bold transition-colors ${
-                      dispFiat === c ? "bg-[#c8322b] text-white" : "bg-background text-muted-foreground hover:bg-muted"
+                      dispFiat === c ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"
                     }`}
                   >
                     {c}
@@ -1422,7 +1420,7 @@ export default function ExchangePage() {
               </div>
             </div>
             <p
-              className={`text-2xl font-bold font-mono ${currentFiatAvailable > 0.001 ? "text-green-700" : "text-red-600"}`}
+              className={`text-2xl font-bold font-mono ${currentFiatAvailable > 0.001 ? "text-green-400" : "text-red-400"}`}
               data-testid="text-available-balance"
             >
               {currentFiatAvailable.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{" "}
@@ -1451,7 +1449,7 @@ export default function ExchangePage() {
                 <button
                   onClick={() => setDispAmount(currentFiatAvailable > 0 ? currentFiatAvailable.toFixed(2) : "")}
                   disabled={currentFiatAvailable <= 0.001}
-                  className="text-[10px] font-bold text-[#c8322b] disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="text-[10px] font-bold text-primary disabled:opacity-40 disabled:cursor-not-allowed"
                   data-testid="button-max-dispersion"
                 >
                   MAX
@@ -1506,7 +1504,7 @@ export default function ExchangePage() {
               {(() => {
                 const over = parseFloat(dispAmount) > currentFiatAvailable;
                 return (
-                  <div className={`flex items-center gap-2 text-xs font-mono rounded-md px-3 py-2 ${over ? "bg-red-50 text-red-600 border border-red-200" : "bg-muted/40 text-muted-foreground"}`}>
+                  <div className={`flex items-center gap-2 text-xs font-mono rounded-md px-3 py-2 ${over ? "bg-red-500/10 text-red-400 border border-red-500/20" : "bg-muted/40 text-muted-foreground"}`}>
                     <DollarSign className="w-3.5 h-3.5 flex-shrink-0" />
                     <span>
                       1 {dispCoin.symbol} ≈ ${fmtNum(dispCryptoPrice, 2)} USD
@@ -1534,7 +1532,7 @@ export default function ExchangePage() {
                   data-testid="button-copy-wallet"
                 >
                   {copied
-                    ? <CheckCircle2 className="w-3 h-3 text-green-600" />
+                    ? <CheckCircle2 className="w-3 h-3 text-green-400" />
                     : <Copy className="w-3 h-3 text-muted-foreground" />
                   }
                 </button>
@@ -1552,8 +1550,7 @@ export default function ExchangePage() {
             <Button
               onClick={handleDispersar}
               disabled={dispersionMutation.isPending || !dispAmount || parseFloat(dispAmount) <= 0 || !destWallet}
-              className="w-full"
-              style={{ backgroundColor: "#c8322b" }}
+              className="w-full bg-gradient-to-r from-primary to-red-500 hover:from-red-500 hover:to-primary text-primary-foreground border-0 shadow-lg shadow-red-950/40"
               data-testid="button-dispersar"
             >
               {dispersionMutation.isPending
@@ -1589,11 +1586,11 @@ export default function ExchangePage() {
                 return (
                   <div key={tx.transactionId} className="flex items-start gap-3 px-5 py-3">
                     <div className={`w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                      isExchange ? "bg-blue-50" : isDispersion ? "bg-[#c8322b]/10" : "bg-muted"
+                      isExchange ? "bg-blue-500/10" : isDispersion ? "bg-primary/10" : "bg-muted"
                     }`}>
                       {isExchange
-                        ? <ArrowRightLeft className="w-3.5 h-3.5 text-[#1a56db]" />
-                        : <Send className="w-3.5 h-3.5 text-[#c8322b]" />
+                        ? <ArrowRightLeft className="w-3.5 h-3.5 text-blue-400" />
+                        : <Send className="w-3.5 h-3.5 text-primary" />
                       }
                     </div>
                     <div className="flex-1 min-w-0">
@@ -1603,15 +1600,15 @@ export default function ExchangePage() {
                         </p>
                         <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-sm ${
                           tx.status === "completed"
-                            ? "bg-green-100 text-green-700"
+                            ? "bg-green-500/15 text-green-400"
                             : isDispersion && tx.status === "processing"
-                              ? "bg-orange-100 text-orange-700"
-                              : "bg-amber-100 text-amber-700"
+                              ? "bg-orange-500/15 text-orange-400"
+                              : "bg-amber-500/15 text-amber-400"
                         }`}>
                           {tx.status === "completed"
                             ? "✓ completado"
                             : isDispersion && tx.status === "processing"
-                              ? "Domain Host/not set/you need to adquire a new domain"
+                              ? "procesando…"
                               : `… ${tx.status}`}
                         </span>
                       </div>
