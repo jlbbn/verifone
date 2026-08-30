@@ -11,6 +11,12 @@
  *   PLATFORM_TRON_ADDRESS      — base58 public address    (used as default owner)
  *   TRON_FULL_HOST             — explicit private corporate-node URL
  *   TRON_APPROVED_NODE_ORIGIN  — independently approved exact origin
+ *   TRONGRID_API_KEY           — TronGrid API key, used ONLY as a read-only
+ *                                external confirmation source for tx lookups
+ *                                (our self-hosted lite fullnode permanently
+ *                                closes wallet/gettransactioninfobyid — see
+ *                                .agents/memory/tron-lite-node-api-limits.md).
+ *                                Never used for signing or balance checks.
  */
 
 import { TronWeb } from "tronweb";
@@ -26,6 +32,7 @@ const FULL_HOST        = process.env.TRON_FULL_HOST?.trim()    ?? "";
 const PLATFORM_ADDRESS = process.env.PLATFORM_TRON_ADDRESS     ?? "";
 const NODE_TIMEOUT_MS   = Number(process.env.TRON_NODE_TIMEOUT_MS ?? 8_000);
 const NETWORK_PROFILE   = configuredTronNetwork();
+const TRONGRID_API_KEY  = process.env.TRONGRID_API_KEY?.trim() ?? "";
 
 export const TRON_NETWORK = NETWORK_PROFILE.network;
 export const USDT_CONTRACT = NETWORK_PROFILE.usdtContract;
@@ -50,6 +57,37 @@ function getClient(): TronWeb {
     _client = new TronWeb({ fullHost: FULL_HOST });
   }
   return _client;
+}
+
+// ─── TronGrid external confirmation client ─────────────────────────────────
+// Our self-hosted lite fullnode permanently closes wallet/gettransactioninfobyid
+// and wallet/gettransactionbyid ("this API is closed because this node is a
+// lite fullnode") — not a timing issue, retrying never helps. TronGrid is used
+// here strictly as a public, read-only confirmation source for transaction
+// lookups (data that is independently verifiable on-chain). It is never used
+// for signing, balance checks, or anything requiring the private node policy.
+
+function trongridHost(): string {
+  return TRON_NETWORK === "nile" ? "https://nile.trongrid.io" : "https://api.trongrid.io";
+}
+
+export function trongridConfigured(): boolean {
+  return Boolean(TRONGRID_API_KEY);
+}
+
+let _trongridClient: TronWeb | null = null;
+
+function getTrongridClient(): TronWeb {
+  if (!TRONGRID_API_KEY) {
+    throw new Error("TRONGRID_API_KEY is not configured");
+  }
+  if (!_trongridClient) {
+    _trongridClient = new TronWeb({
+      fullHost: trongridHost(),
+      headers: { "TRON-PRO-API-KEY": TRONGRID_API_KEY },
+    });
+  }
+  return _trongridClient;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -262,7 +300,11 @@ export function transactionExecutionStatus(txInfo: any): TronTransactionInfo["st
  * Use this to confirm a transfer() result has settled.
  */
 export async function getTransaction(txid: string): Promise<TronTransactionInfo> {
-  const tw = getClient();
+  // Prefer TronGrid for this lookup: our self-hosted lite fullnode
+  // unconditionally closes these two APIs, so the private node can never
+  // serve them. Fall back to the private node client only if TronGrid isn't
+  // configured (e.g. local/dev), matching prior behavior there.
+  const tw = trongridConfigured() ? getTrongridClient() : getClient();
 
   const [txInfo, txDetail] = await Promise.all([
     tw.trx.getTransactionInfo(txid),
@@ -324,5 +366,6 @@ export function platformWalletInfo() {
     nodeApproved: node.configured,
     signing:    "remote-only",
     nodeEndpoint: node.endpoint,
+    txConfirmationSource: trongridConfigured() ? "trongrid" : "private-node",
   };
 }
