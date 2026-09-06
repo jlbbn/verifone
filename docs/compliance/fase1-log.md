@@ -184,3 +184,34 @@ verificado (ver hoja "Riesgos" del plan original).
   configurados — nada que migrar en ese frente; (c) configuración del dominio en Caddy preparada
   sin activar (/etc/caddy/Caddyfile.cutover). La migración queda lista a la espera de la ventana
   que defina el usuario.
+
+## 2026-09-06 — INCIDENTE Y RECONSTRUCCIÓN REAL: cuenta DO terminada por saldo y reconstruida
+
+- Toda la cuenta de DigitalOcean (droplets `banxico-plus-app`, nodos/signers de TRON, y el único
+  snapshot) fue eliminada por DigitalOcean debido a saldo impago — confirmado por correo oficial
+  de "Account Termination Notice". No fue una intrusión: sin logins sospechosos en el log de la
+  cuenta, atribución "Unknown User" = proceso automatizado de terminación, no un token robado.
+- Sin impacto en usuarios reales: el DNS de banxicoplusllc.org nunca se cortó hacia DO (seguía
+  apuntando a Replit), por lo que la app y los datos reales de producción permanecieron intactos
+  en Replit durante todo el incidente.
+- Usuario pagó el saldo; cuenta reactivada (estado "active", límites normales).
+- Reconstrucción real ejecutada: VPC `banxico-plus-vpc` (sobrevivió, ya existía) reutilizada;
+  nueva BD gestionada `banxico-plus-db` (PostgreSQL 18) y nuevo droplet `banxico-plus-app`
+  (id 598286569, IP pública 104.131.190.116, IP privada 10.10.0.2, misma VPC) creados desde cero.
+- Firewall `banxico-plus-app-fw`: SSH restringido a la IP del agente en el momento del setup
+  (cambia entre sesiones — requiere actualizarse cada vez que se necesite SSH), 80/443 abiertos.
+- Hallazgo real durante el despliegue: `package-lock.json` apuntaba al proxy interno de paquetes
+  de Replit (`package-firewall.replit.local`), inalcanzable fuera de Replit — hubo que reescribir
+  las URLs `resolved` a `registry.npmjs.org` antes de poder instalar dependencias en el droplet.
+- Hallazgo real de TLS: la BD gestionada de DO usa una CA autofirmada por clúster; la app fallaba
+  todas las queries con `SELF_SIGNED_CERT_IN_CHAIN` (oculto tras un log genérico "Failed query")
+  hasta configurar `NODE_EXTRA_CA_CERTS` con la CA del clúster (`/v2/databases/{id}/ca`).
+- Esquema completo (29 tablas) aplicado vía SQL generado por drizzle-kit (introspección en vivo
+  de drizzle-kit push se colgaba indefinidamente contra esta BD; se usó `generate` + `psql` en su
+  lugar). Seed de los 12 usuarios reales ejecutado correctamente al reiniciar el servicio.
+- App corriendo en producción (systemd `banxico-plus.service`, Caddy en :80) — verificado HTTP 200
+  interno y externo. Aún SIN dominio (pre-cutover, igual que antes del incidente) y SIN datos
+  reales de transacciones (solo el seed base, igual que el ensayo original).
+- Pendiente: llave de Stripe sigue inválida (mismo hallazgo pre-existente, no nuevo); llave OKX
+  sigue sin restricción de IP (hallazgo del 2026-08-12, aún sin corregir); ventana de cutover DNS
+  aún no definida por el usuario.
