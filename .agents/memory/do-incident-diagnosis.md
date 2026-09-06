@@ -1,14 +1,17 @@
 ---
-name: DigitalOcean incident diagnosis signals
-description: How to tell a token-based unauthorized wipe from a UI/filter confusion when DO resources appear to vanish.
+name: DigitalOcean destroyed-resources incident diagnosis
+description: How to tell a compromised API token/account from a routine billing termination when droplets/snapshots vanish and the API token dies.
 ---
 
-# Diagnosing "my droplets disappeared" on DigitalOcean
+When all droplets, snapshots, and the API token die at once with DigitalOcean, do not assume a breach — check billing/email first.
 
-- The account Activity log (cloud.digitalocean.com/projects/<id>/activity, or a project's Activity tab) attributes each event to an actor. Actions taken via a logged-in dashboard session show the user's email; **destructive actions performed via an API token show as "Unknown User"** — this is the strongest signal to distinguish a compromised/misused API token from a UI mistake or wrong-project filter.
-- An empty-looking Droplets page does not by itself confirm project/team confusion. **VPC Networks persist even after every droplet inside them is destroyed** — seeing the expected VPC names still listed is not evidence the droplets are just "hidden by a filter"; check the Activity log instead of assuming a UI/filter issue.
-- If the API token that was working earlier in a session suddenly returns 401 on every endpoint (including `/v2/account`), treat it as revoked/rotated/compromised, not transient — retries did not help in the observed case.
+**Signals gathered before concluding anything:**
+- Resource-level Activity log attributing destructive actions to "Unknown User" — this appears both for API-token-driven actions by an external actor AND for DigitalOcean's own automated account-termination process. It does NOT by itself prove compromise.
+- Account-level Activity (`/account/activity`) showing only clean `user.login` events from recognized IPs does NOT rule out token misuse (a stolen token never needs a dashboard login) — but combined with a termination notice, it simply confirms no one logged in because no one needed to.
+- VPCs can persist as empty shells after their droplets are destroyed either way (breach or termination) — not a distinguishing signal.
 
-**Why:** without knowing this, a sudden empty resource list plus a dead token looks ambiguous (filter issue? account switch? real incident?) and wastes time before triggering an actual security response.
+**Ground truth found by checking email:** DigitalOcean sends an explicit "Account Termination Notice" email when an unpaid balance triggers termination, stating resources were "permanently deleted." This is the fastest way to disambiguate — check billing/inbox for this before spending time on incident-response theories.
 
-**How to apply:** when a user reports DO resources "missing" or a previously-working `DIGITALOCEAN_TOKEN` starts failing, ask them to check the Activity log's actor column before anything else — "Unknown User" on `destroy`/`remove` events is the incident signal.
+**Why:** Spent a long session investigating this project's wiped DO account (all droplets + snapshot + dead token) as a suspected credential-compromise incident before the user found the termination email. The account-activity screenshots were red herrings/ambiguous; the email was decisive.
+
+**How to apply:** When droplets/resources vanish unexpectedly and an API token stops working, ask the user to check their email for a DigitalOcean termination/suspension notice and the Billing page for an outstanding balance before proposing security-incident containment tasks.
