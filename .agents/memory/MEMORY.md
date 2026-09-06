@@ -35,3 +35,4 @@
 - [Financial balance mutation locking](financial-balance-locking.md) — every code path that reads-then-writes a per-user balance (deposit, withdrawal reserve, refund, failed-settlement) must share one advisory lock key, or concurrent ones corrupt it.
 - [Drizzle/pg error wrapping](drizzle-pg-error-wrapping.md) — a pg unique-violation's real message/code live on `err.cause`, not `err.message`; check both when branching on DB errors.
 - [DO destroyed-resources diagnosis](do-incident-diagnosis.md) — "Unknown User" + dead token + wiped droplets can be a billing termination, not a breach; check email/billing before treating as a security incident.
+- [DO managed Postgres needs its own CA](do-managed-db-ca.md) — self-signed per-cluster CA causes opaque SELF_SIGNED_CERT_IN_CHAIN failures; fetch via API and set NODE_EXTRA_CA_CERTS, not a code fix.
