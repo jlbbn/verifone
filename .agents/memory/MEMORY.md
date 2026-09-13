@@ -36,3 +36,5 @@
 - [Drizzle/pg error wrapping](drizzle-pg-error-wrapping.md) — a pg unique-violation's real message/code live on `err.cause`, not `err.message`; check both when branching on DB errors.
 - [DO destroyed-resources diagnosis](do-incident-diagnosis.md) — "Unknown User" + dead token + wiped droplets can be a billing termination, not a breach; check email/billing before treating as a security incident.
 - [DO managed Postgres needs its own CA](do-managed-db-ca.md) — self-signed per-cluster CA causes opaque SELF_SIGNED_CERT_IN_CHAIN failures; fetch via API and set NODE_EXTRA_CA_CERTS, not a code fix.
+- [pg_dump version must match managed Postgres](pg-dump-version-match.md) — Ubuntu 24.04's default repo ships client 16; add PGDG repo for newer major versions before scripting backups.
+- [Dev vs prod settings-table writes](dev-vs-prod-settings-writes.md) — a persisted single-row settings table is independent per environment; fix production via the app's own admin UI, not a direct query.
