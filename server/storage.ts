@@ -77,6 +77,7 @@ export interface IStorage {
   createTransaction(transaction: InsertTransaction): Promise<Transaction>;
   getTransaction(id: string): Promise<Transaction | undefined>;
   getAllTransactions(): Promise<Transaction[]>;
+  resetAllTransactions(): Promise<{ transactions: number; paymentMethods: number; securityTokens: number }>;
   getTransactionsByUser(username: string): Promise<Transaction[]>;
   updateTransactionStatus(id: string, status: string, authCode?: string): Promise<Transaction | undefined>;
   addTransactionNote(id: string, note: string): Promise<Transaction | undefined>;
@@ -1052,6 +1053,21 @@ export class DatabaseStorage implements IStorage {
 
   async getAllTransactions(): Promise<Transaction[]> {
     return db.select().from(txTable).orderBy(desc(txTable.createdAt));
+  }
+
+  // Borra todo el historial de transacciones de demostración y sus registros
+  // dependientes (métodos de pago, tokens de seguridad). Irreversible.
+  async resetAllTransactions(): Promise<{ transactions: number; paymentMethods: number; securityTokens: number }> {
+    const [deletedTx, deletedPm, deletedTok] = await Promise.all([
+      db.delete(txTable).returning({ id: txTable.id }),
+      db.delete(paymentMethods).returning({ id: paymentMethods.id }),
+      db.delete(securityTokens).returning({ id: securityTokens.id }),
+    ]);
+    return {
+      transactions: deletedTx.length,
+      paymentMethods: deletedPm.length,
+      securityTokens: deletedTok.length,
+    };
   }
 
   async getTransactionsByUser(username: string): Promise<Transaction[]> {
