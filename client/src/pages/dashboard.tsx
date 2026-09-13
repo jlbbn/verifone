@@ -8,6 +8,18 @@ import { useAuth } from "@/hooks/use-auth";
 import { useSystemSettings } from "@/hooks/use-system-settings";
 import type { Transaction } from "@shared/schema";
 import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
   DollarSign, Users, Activity,
   ArrowRightLeft, ShieldCheck, Zap, Bell,
   Clock, CheckCircle, XCircle, AlertTriangle, BarChart2,
@@ -136,11 +148,11 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="p-4 md:p-6 space-y-5">
+    <div className="p-4 md:p-6 space-y-5 bg-[radial-gradient(circle_at_85%_0%,rgba(200,50,43,0.07),transparent_27rem)]" style={{ fontFamily: "'DM Sans', sans-serif" }}>
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2" data-testid="text-greeting">
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight flex items-center gap-2" style={{ fontFamily: "'Space Grotesk', sans-serif" }} data-testid="text-greeting">
             <BarChart2 className="w-7 h-7 text-[#c8322b]" />
             Hola, {firstName}
             {isAdmin && <Badge className="bg-[#c8322b] text-white no-default-active-elevate ml-1">ADMIN</Badge>}
@@ -154,7 +166,7 @@ export default function Dashboard() {
         <div className="flex items-center gap-3">
           <div className="text-right">
             <p className="text-xs text-muted-foreground">Saldo Disponible</p>
-            <p className="text-2xl font-bold text-green-600" data-testid="balance">
+            <p className="text-2xl font-bold text-green-400 tabular-nums tracking-tight" style={{ fontFamily: "'Space Grotesk', sans-serif" }} data-testid="balance">
               {isAdmin
                 ? fmtMoney(settings?.saldoSistemaUSD ?? 0)
                 : fmtMoney((user as any)?.cajaSaldoUSD ?? 0)
@@ -216,18 +228,21 @@ export default function Dashboard() {
       {/* KPI Row */}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {kpis.map((kpi, i) => (
-          <Card key={i} className="hover-elevate">
+          <Card key={i} className="hover-elevate group overflow-hidden border-white/[0.07] bg-card/80 transition-all duration-300 hover:-translate-y-0.5 hover:border-[#c8322b]/40" style={{ animationDelay: `${i * 70}ms` }}>
             <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{kpi.title}</CardTitle>
-              <div className={`w-8 h-8 rounded-md ${kpi.iconBg} flex items-center justify-center ${kpi.iconColor}`}>
+              <CardTitle className="text-[11px] uppercase tracking-[0.13em] text-muted-foreground font-semibold">{kpi.title}</CardTitle>
+              <div className={`w-8 h-8 rounded-md ${kpi.iconBg} flex items-center justify-center ${kpi.iconColor} transition-transform duration-300 group-hover:scale-110`}>
                 {kpi.icon}
               </div>
             </CardHeader>
             <CardContent>
-              <div className={`text-2xl font-bold ${kpi.valueColor}`} data-testid={`kpi-${i}`}>
+              <div className={`text-3xl font-bold tracking-tight tabular-nums ${kpi.valueColor}`} style={{ fontFamily: "'Space Grotesk', sans-serif" }} data-testid={`kpi-${i}`}>
                 {kpi.value}
               </div>
-              <p className="text-xs mt-0.5 text-muted-foreground">{kpi.sub}</p>
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className={`w-1.5 h-1.5 rounded-full ${i === 3 && stats.pending > 0 ? "bg-yellow-400" : "bg-emerald-400"}`} />
+                <p className="text-[11px] text-muted-foreground">{kpi.sub}</p>
+              </div>
             </CardContent>
           </Card>
         ))}
@@ -236,7 +251,7 @@ export default function Dashboard() {
       {/* Middle section */}
       <div className="grid gap-4 lg:grid-cols-3">
         {/* Hourly chart */}
-        <Card className="hover-elevate lg:col-span-2">
+          <Card className="hover-elevate lg:col-span-2 border-white/[0.07] bg-card/80 overflow-hidden">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between gap-2">
               <div>
@@ -245,61 +260,62 @@ export default function Dashboard() {
                 </CardTitle>
                 <CardDescription>Transacciones reales · últimas 12 horas</CardDescription>
               </div>
-              <Badge className="bg-green-100 text-green-700 no-default-active-elevate">En vivo</Badge>
+              <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 no-default-active-elevate"><span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />En vivo</Badge>
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="flex items-end gap-1.5 h-28">
-              {hourlyData.map((val, i) => {
-                const max = Math.max(...hourlyData, 1);
-                const h = Math.round((val / max) * 100);
-                const isLast = i === hourlyData.length - 1;
-                return (
-                  <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                    <div
-                      className={`w-full rounded-t-sm transition-all ${isLast ? "bg-[#c8322b]" : "bg-blue-400/70"}`}
-                      style={{ height: `${Math.max(h, 3)}%` }}
-                      title={`${val} tx`}
-                    />
-                  </div>
-                );
-              })}
+          <CardContent className="pt-0">
+            <div className="h-44 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={hourLabels.map((hour, i) => ({ hour, transacciones: hourlyData[i] }))} margin={{ top: 10, right: 6, left: -18, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="activityFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#c8322b" stopOpacity={0.4} />
+                      <stop offset="100%" stopColor="#c8322b" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeOpacity={0.55} />
+                  <XAxis dataKey="hour" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                  <YAxis allowDecimals={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} tickLine={false} axisLine={false} width={28} />
+                  <Tooltip cursor={{ stroke: "#c8322b", strokeOpacity: 0.35 }} contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} formatter={(value) => [`${value} tx`, "Actividad"]} />
+                  <Area type="monotone" dataKey="transacciones" stroke="#c8322b" strokeWidth={2.5} fill="url(#activityFill)" dot={{ r: 2.5, fill: "#c8322b", strokeWidth: 0 }} activeDot={{ r: 5, fill: "#c8322b", stroke: "hsl(var(--card))", strokeWidth: 2 }} />
+                </AreaChart>
+              </ResponsiveContainer>
             </div>
             <div className="flex items-center justify-between mt-2 text-[10px] text-muted-foreground">
-              {hourLabels.map(h => (
-                <span key={h}>{h}</span>
-              ))}
-            </div>
-            <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-blue-400/70 inline-block" />Anteriores</span>
-              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#c8322b] inline-block" />Actual</span>
+              <span>{hourLabels[0]}</span><span>Últimas 12 horas</span><span>{hourLabels[hourLabels.length - 1]}</span>
             </div>
           </CardContent>
         </Card>
 
         {/* Protocol breakdown (real data) */}
-        <Card className="hover-elevate">
+        <Card className="hover-elevate border-white/[0.07] bg-card/80">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-sm">
               <Cpu className="w-4 h-4 text-[#c8322b]" /> Distribución Protocolos
             </CardTitle>
             <CardDescription>{isAdmin ? "Sistema completo" : "Tus operaciones"}</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="pt-0">
             {stats.total === 0 ? (
-              <p className="text-xs text-muted-foreground py-4 text-center">Sin datos todavía</p>
-            ) : protocolStats.map((p, i) => (
-              <div key={i}>
-                <div className="flex items-center justify-between text-xs mb-1">
-                  <span className="font-semibold">{p.prefix}.x — {p.label}</span>
-                  <span className="text-muted-foreground">{p.count}</span>
-                </div>
-                <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                  <div className={`h-full rounded-full ${p.color}`} style={{ width: `${p.pct}%` }} />
-                </div>
-                <p className="text-[10px] text-muted-foreground mt-0.5">{p.pct}% del total</p>
+              <div className="h-44 flex items-center justify-center text-xs text-muted-foreground">Sin datos todavía</div>
+            ) : (
+              <div className="h-44 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={protocolStats} layout="vertical" margin={{ top: 4, right: 12, left: 12, bottom: 4 }}>
+                    <CartesianGrid horizontal={false} stroke="hsl(var(--border))" strokeOpacity={0.45} />
+                    <XAxis type="number" hide allowDecimals={false} />
+                    <YAxis type="category" dataKey="label" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} tickLine={false} axisLine={false} width={72} />
+                    <Tooltip cursor={{ fill: "hsl(var(--muted))", opacity: 0.25 }} contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} formatter={(value, _name, item) => [`${value} (${item.payload.pct}%)`, "Transacciones"]} />
+                    <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={16}>
+                      {protocolStats.map((p, i) => <Cell key={p.prefix} fill={["#5b8def", "#c8322b", "#35b982", "#e5ab4e"][i]} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
-            ))}
+            )}
+            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-[10px] text-muted-foreground">
+              {protocolStats.map((p, i) => <span key={p.prefix} className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: ["#5b8def", "#c8322b", "#35b982", "#e5ab4e"][i] }} />{p.prefix}.x</span>)}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -307,7 +323,7 @@ export default function Dashboard() {
       {/* Bottom grid */}
       <div className="grid gap-4 lg:grid-cols-3">
         {/* Recent Activity (real data) */}
-        <Card className="hover-elevate lg:col-span-2">
+        <Card className="hover-elevate lg:col-span-2 border-white/[0.07] bg-card/80">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between gap-2">
               <div>
@@ -337,7 +353,7 @@ export default function Dashboard() {
                   const isOk = tx.status === "completed";
                   const isFail = tx.status === "failed";
                   return (
-                    <div key={tx.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors" data-testid={`row-activity-${tx.transactionId}`}>
+                    <div key={tx.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors duration-200" style={{ animationDelay: `${recentActivity.indexOf(tx) * 45}ms` }} data-testid={`row-activity-${tx.transactionId}`}>
                       <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isOk ? "bg-green-500" : isFail ? "bg-red-500" : "bg-yellow-500"}`} />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold truncate">{tx.transactionId}</p>
