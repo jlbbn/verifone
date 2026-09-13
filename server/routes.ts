@@ -4153,6 +4153,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Borra todo el historial de transacciones de demostración (y sus registros
+  // dependientes) para que el dashboard arranque en cero real. Acción
+  // destructiva e irreversible — solo ADMIN, requiere confirmación explícita
+  // en el cuerpo de la petición.
+  app.post("/api/admin/reset-transactions", requireSession, requireRole("ADMIN"), async (req, res) => {
+    const schema = z.object({ confirm: z.literal(true) });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: "Debes confirmar la acción (confirm: true)" });
+    }
+
+    try {
+      const result = await storage.resetAllTransactions();
+      console.log(`[AdminReset] ${req.session.username} borró el historial de transacciones:`, result);
+      res.json({ success: true, ...result });
+    } catch (err: any) {
+      console.error("[AdminReset] Error al borrar transacciones:", err?.message ?? err);
+      res.status(500).json({ error: err?.message ?? "Error al borrar transacciones" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

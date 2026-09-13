@@ -21,6 +21,11 @@ import {
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import type { SystemSettings } from "@shared/schema";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 function fmtUSD(n: number) {
   return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -75,6 +80,68 @@ function AnnouncementEmailSender() {
         Enviar correo
       </Button>
     </div>
+  );
+}
+
+// ── Zona de riesgo: borrar historial de transacciones de demostración ──────
+function ResetTransactionsButton() {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const { mutate: resetTx, isPending } = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/admin/reset-transactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: true }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? "Error al borrar transacciones");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setOpen(false);
+      toast({
+        title: "Historial borrado",
+        description: `${data.transactions} transacciones, ${data.paymentMethods} métodos de pago y ${data.securityTokens} tokens eliminados. El dashboard mostrará cero.`,
+      });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Error al borrar", description: e.message, variant: "destructive" });
+    },
+  });
+
+  return (
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogTrigger asChild>
+        <Button variant="destructive" size="sm" className="gap-1.5">
+          <Trash2 className="w-3.5 h-3.5" />
+          Borrar historial de transacciones
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>¿Borrar todo el historial de transacciones?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Esto elimina permanentemente todas las transacciones, métodos de pago y tokens de
+            seguridad registrados. El dashboard (transacciones, volumen, completadas, pendientes)
+            arrancará en cero. Esta acción no se puede deshacer.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isPending}>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => { e.preventDefault(); resetTx(); }}
+            disabled={isPending}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : null}
+            Sí, borrar todo
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
@@ -491,6 +558,18 @@ export default function AdminSettingsPage() {
                 <p className="text-muted-foreground">Límite diario: <span className="font-mono text-foreground">${fmtUSD(draft.maxDailyDispersalUsdt ?? 0)} USDT</span></p>
                 <p className="text-muted-foreground">Reserva TRX: <span className="font-mono text-foreground">{draft.minTrxReserve ?? 40} TRX</span></p>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-5 border-destructive/40">
+            <CardHeader>
+              <CardTitle className="text-destructive">Zona de riesgo</CardTitle>
+              <CardDescription>
+                Borra el historial de transacciones de demostración para que el dashboard refleje datos reales (cero) en vez de datos de prueba.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResetTransactionsButton />
             </CardContent>
           </Card>
         </TabsContent>
