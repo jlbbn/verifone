@@ -363,7 +363,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   fxRateGBP: 1.27,
   maintenanceMode: false,
   saldoAperturaUSD: 0,
-  saldoSistemaUSD: 1250000,
+  saldoSistemaUSD: 0,
   feedMerchant1: "GRUPO ASGE VENADO 69",
   feedMerchant2: "BANXICO PLUS CANCUN",
   feedPosRegularUSD: 2000000,
