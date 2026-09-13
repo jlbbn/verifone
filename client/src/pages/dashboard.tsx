@@ -156,8 +156,8 @@ export default function Dashboard() {
             <p className="text-xs text-muted-foreground">Saldo Disponible</p>
             <p className="text-2xl font-bold text-green-600" data-testid="balance">
               {isAdmin
-                ? fmtMoney(settings?.saldoSistemaUSD ?? 1250000)
-                : fmtMoney((user as any)?.cajaSaldoUSD ?? 1250000)
+                ? fmtMoney(settings?.saldoSistemaUSD ?? 0)
+                : fmtMoney((user as any)?.cajaSaldoUSD ?? 0)
               } <span className="text-sm font-semibold text-muted-foreground">USD</span>
             </p>
           </div>
