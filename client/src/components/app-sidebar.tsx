@@ -25,6 +25,7 @@ import {
   HardDrive,
   TrendingUp,
   FlaskConical,
+  Landmark,
 } from "lucide-react";
 import { SiDropbox, SiReplit, SiGithub } from "react-icons/si";
 import {
@@ -69,6 +70,7 @@ const menuItems = [
   { title: "Transactions",          url: "/registros",        icon: FileText },
   { title: "Exchange Crypto",       url: "/exchange",         icon: Bitcoin },
   { title: "USDT TRON",             url: "/crypto/tron-usdt", icon: Coins },
+  { title: "Mis Depósitos",         url: "/mis-depositos",    icon: Landmark },
   { title: "Claves Encriptadas",    url: "/claves",           icon: Lock },
   { title: "Cumplimiento Bancario", url: "/cumplimiento",     icon: ShieldCheck },
   { title: "Documentos",            url: "/documentos",       icon: FolderOpen },
@@ -79,6 +81,7 @@ const adminItems = [
   { title: "Gestión de Usuarios", url: "/admin/usuarios",     icon: Users  },
   { title: "Caja USDT",           url: "/admin/caja-usdt",    icon: Coins  },
   { title: "Depósitos/Retiros USDT", url: "/admin/tron-usdt", icon: TrendingUp },
+  { title: "Depósitos Bancarios", url: "/admin/bank-deposits", icon: Landmark },
   { title: "Centro de Pruebas",   url: "/admin/laboratorio",  icon: FlaskConical },
   { title: "Configuración",       url: "/admin/settings",     icon: Sliders },
 ];
@@ -88,7 +91,7 @@ const PLAN_STATUS = "Activa";
 const PLAN_RENEW  = "03 Jun 2027";
 const PLAN_SINCE  = "03 Jun 2025";
 
-const ALLOWED_RESTRICTED = ["/dashboard", "/documentos", "/subscription"];
+const ALLOWED_RESTRICTED = ["/dashboard", "/documentos", "/subscription", "/mis-depositos"];
 
 export function AppSidebar() {
   const [location] = useLocation();

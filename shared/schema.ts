@@ -582,6 +582,26 @@ export const tronDepositDeclarations = pgTable("tron_deposit_declarations", {
 });
 export type TronDepositDeclaration = typeof tronDepositDeclarations.$inferSelect;
 
+// ─── Auto-declaración de depósito bancario (SPEI/transferencia) ─────────────
+// Igual que tron_deposit_declarations: informativa, nunca acredita saldo por
+// sí sola. No hay integración real con STP/banco — un admin debe cotejar el
+// estado de cuenta real y verificar/rechazar manualmente antes de acreditar.
+export const bankDepositDeclarations = pgTable("bank_deposit_declarations", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull(),
+  clabeDestino: text("clabe_destino").notNull(),
+  montoDeclarado: numeric("monto_declarado", { precision: 12, scale: 2 }).notNull(),
+  moneda: text("moneda").notNull().default("MXN"),
+  referencia: text("referencia"),
+  note: text("note"),
+  status: text("status").notNull().default("pending"), // pending | verified | rejected
+  verifiedBy: text("verified_by"),
+  verifiedAt: timestamp("verified_at"),
+  creditedTransactionId: varchar("credited_transaction_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type BankDepositDeclaration = typeof bankDepositDeclarations.$inferSelect;
+
 // ─── OKX Webhook Events audit log ────────────────────────────────────────────
 export const okxWebhookEvents = pgTable("okx_webhook_events", {
   id:         varchar("id").primaryKey().default(sql`gen_random_uuid()`),
