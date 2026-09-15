@@ -5,8 +5,15 @@
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
-NODE_IP=10.10.0.4          # nodo TRON mainnet lite (privado)
-APP_IP=10.10.0.2           # banxico-plus-app (único cliente permitido)
+# IPs privadas verificadas en vivo el 2026-09-15 (la cuenta DO fue reconstruida el
+# 2026-09-06 tras el incidente de terminación; las IPs de la topología anterior
+# ya no existen). tron-mainnet-lite y tron-signer-mainnet viven en la VPC
+# tron-mainnet-vpc (10.30.0.0/20), separada de banxico-plus-vpc (10.10.0.0/20)
+# donde vive la app — sin peering entre ambas (cuota de VPC peerings=0 en la
+# cuenta), así que APP_IP solo fija la regla de firewall para cuando exista una
+# ruta privada real (tarea de conectividad aparte); no implica alcance hoy.
+NODE_IP=10.30.0.2          # nodo TRON mainnet lite (privado, VPC tron-mainnet-vpc)
+APP_IP=10.10.0.2           # banxico-plus-app (privado, VPC banxico-plus-vpc; sin ruta aún)
 BUNDLE=/root/bundle
 KEY_ID=banxico-mainnet-v1
 
