@@ -26,6 +26,8 @@ import AdminCajaUSDTPage from "@/pages/admin-caja-usdt";
 import AdminLabPage from "@/pages/admin-lab";
 import TronUsdtPage from "@/pages/tron-usdt";
 import AdminTronUsdtPage from "@/pages/admin-tron-usdt";
+import MisDepositosPage from "@/pages/mis-depositos";
+import AdminBankDepositsPage from "@/pages/admin-bank-deposits";
 import DocumentsPage from "@/pages/documents";
 import SupportPage from "@/pages/support";
 import POSIntelligencePage from "@/pages/pos-intelligence";
@@ -222,6 +224,16 @@ function Router() {
       <Route path="/admin/tron-usdt">
         <AppLayout>
           <AdminGuard><AdminTronUsdtPage /></AdminGuard>
+        </AppLayout>
+      </Route>
+
+      <Route path="/mis-depositos">
+        <AppLayout><MisDepositosPage /></AppLayout>
+      </Route>
+
+      <Route path="/admin/bank-deposits">
+        <AppLayout>
+          <AdminGuard><AdminBankDepositsPage /></AdminGuard>
         </AppLayout>
       </Route>
 

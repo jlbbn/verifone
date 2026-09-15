@@ -1256,6 +1256,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ════════════════════════════════════════════════════════════════════════
+  // DEPÓSITOS BANCARIOS (SPEI/transferencia) — declaración + verificación manual
+  // No hay integración real con el banco/STP: el usuario declara el depósito
+  // que hizo, y un admin lo coteja contra el estado de cuenta real antes de
+  // acreditarlo. Igual patrón que los depósitos de USDT sobre TRON.
+  // ════════════════════════════════════════════════════════════════════════
+
+  const declareBankDepositSchema = z.object({
+    clabeDestino: z.string().trim().min(10).max(30),
+    montoDeclarado: z.number().finite().positive(),
+    moneda: z.enum(["MXN", "USD"]).default("MXN"),
+    referencia: z.string().trim().max(60).optional(),
+    note: z.string().trim().max(280).optional(),
+  });
+  app.post("/api/bank-deposit/declare", requireSession, async (req, res) => {
+    const parsed = declareBankDepositSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Datos inválidos", detail: parsed.error.issues });
+    try {
+      const declaration = await storage.createBankDepositDeclaration(
+        req.currentUser!.id,
+        parsed.data.clabeDestino,
+        parsed.data.montoDeclarado,
+        parsed.data.moneda,
+        parsed.data.referencia ?? null,
+        parsed.data.note ?? null,
+      );
+      res.json(declaration);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/bank-deposit/declarations", requireSession, async (req, res) => {
+    try {
+      res.json(await storage.getBankDepositDeclarationsForUser(req.currentUser!.id));
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/admin/bank-deposit/queue", requireRole("ADMIN"), async (_req, res) => {
+    try {
+      res.json(await storage.getPendingBankDepositDeclarations());
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Admin: coteja contra el estado de cuenta real y acredita ────────────
+  app.post("/api/admin/bank-deposit/:id/verify", requireRole("ADMIN"), async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: "ID inválido" });
+    const admin = req.currentUser!;
+    try {
+      const settings = await storage.getSettings();
+      const { declaration, transaction } = await storage.verifyAndCreditBankDeposit(id, admin.username, settings.tipoCambio);
+      res.json({ declaration, transaction });
+    } catch (err: any) {
+      if (err.message === "Declaración no encontrada") return res.status(404).json({ error: err.message });
+      if (err.message === "Esta declaración ya fue procesada") return res.status(409).json({ error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  const rejectBankDepositSchema = z.object({ reason: z.string().trim().max(280).optional() });
+  app.post("/api/admin/bank-deposit/:id/reject", requireRole("ADMIN"), async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: "ID inválido" });
+    const parsed = rejectBankDepositSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Datos inválidos" });
+    try {
+      const updated = await storage.rejectBankDepositDeclaration(id, req.currentUser!.username, parsed.data.reason ?? null);
+      if (!updated) return res.status(409).json({ error: "Esta declaración ya fue procesada o no existe" });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── Usuario solicita un retiro de USDT a una dirección TRON externa ──────
   const withdrawalRequestSchema = z.object({
     toAddress: z.string().min(34).max(34),

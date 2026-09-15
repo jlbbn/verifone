@@ -26,12 +26,15 @@ import {
   cryptoWithdrawalRequests,
   tronDepositCredits,
   tronDepositDeclarations,
+  bankDepositDeclarations,
   type CryptoWithdrawalRequest,
   type TronDepositCredit,
   type TronDepositDeclaration,
+  type BankDepositDeclaration,
   type CajaMovement, type InsertCajaMovement,
   type User, type InsertUser,
   type Transaction, type InsertTransaction,
+  convertToUSD,
   type PaymentMethod, type InsertPaymentMethod,
   type SecurityToken, type InsertSecurityToken,
   type TransactionLog, type InsertTransactionLog,
@@ -158,6 +161,14 @@ export interface IStorage {
   getPendingDepositDeclarations(): Promise<TronDepositDeclaration[]>;
   getDepositDeclarationsForUser(userId: string): Promise<TronDepositDeclaration[]>;
   getTronDepositCreditsForUser(userId: string): Promise<TronDepositCredit[]>;
+
+  // --- Depósitos bancarios (SPEI/transferencia) — declaración + verificación manual ---
+  createBankDepositDeclaration(userId: string, clabeDestino: string, montoDeclarado: number, moneda: string, referencia: string | null, note: string | null): Promise<BankDepositDeclaration>;
+  getBankDepositDeclarationsForUser(userId: string): Promise<BankDepositDeclaration[]>;
+  getPendingBankDepositDeclarations(): Promise<BankDepositDeclaration[]>;
+  getBankDepositDeclaration(id: number): Promise<BankDepositDeclaration | undefined>;
+  verifyBankDepositDeclaration(id: number, verifiedBy: string, creditedTransactionId: string): Promise<BankDepositDeclaration | undefined>;
+  rejectBankDepositDeclaration(id: number, verifiedBy: string, reason: string | null): Promise<BankDepositDeclaration | undefined>;
 
   // Crypto Keys
   getCryptoKeys(username: string, isAdmin: boolean): Promise<CryptoKey[]>;
@@ -1712,6 +1723,93 @@ export class DatabaseStorage implements IStorage {
       .where(eq(tronDepositDeclarations.userId, userId))
       .orderBy(desc(tronDepositDeclarations.createdAt))
       .limit(50);
+  }
+
+  // --- Depósitos bancarios (SPEI/transferencia) ---
+  async createBankDepositDeclaration(userId: string, clabeDestino: string, montoDeclarado: number, moneda: string, referencia: string | null, note: string | null): Promise<BankDepositDeclaration> {
+    const [row] = await db.insert(bankDepositDeclarations).values({
+      userId, clabeDestino, montoDeclarado: montoDeclarado.toFixed(2), moneda, referencia, note,
+    }).returning();
+    return row;
+  }
+
+  async getBankDepositDeclarationsForUser(userId: string): Promise<BankDepositDeclaration[]> {
+    return db.select().from(bankDepositDeclarations)
+      .where(eq(bankDepositDeclarations.userId, userId))
+      .orderBy(desc(bankDepositDeclarations.createdAt))
+      .limit(50);
+  }
+
+  async getPendingBankDepositDeclarations(): Promise<BankDepositDeclaration[]> {
+    return db.select().from(bankDepositDeclarations)
+      .where(eq(bankDepositDeclarations.status, "pending"))
+      .orderBy(desc(bankDepositDeclarations.createdAt));
+  }
+
+  async getBankDepositDeclaration(id: number): Promise<BankDepositDeclaration | undefined> {
+    const [row] = await db.select().from(bankDepositDeclarations).where(eq(bankDepositDeclarations.id, id));
+    return row;
+  }
+
+  async verifyBankDepositDeclaration(id: number, verifiedBy: string, creditedTransactionId: string): Promise<BankDepositDeclaration | undefined> {
+    const [row] = await db.update(bankDepositDeclarations)
+      .set({ status: "verified", verifiedBy, verifiedAt: new Date(), creditedTransactionId })
+      .where(and(eq(bankDepositDeclarations.id, id), eq(bankDepositDeclarations.status, "pending")))
+      .returning();
+    return row;
+  }
+
+  async rejectBankDepositDeclaration(id: number, verifiedBy: string, reason: string | null): Promise<BankDepositDeclaration | undefined> {
+    const [row] = await db.update(bankDepositDeclarations)
+      .set({ status: "rejected", verifiedBy, verifiedAt: new Date(), note: reason ?? undefined })
+      .where(and(eq(bankDepositDeclarations.id, id), eq(bankDepositDeclarations.status, "pending")))
+      .returning();
+    return row;
+  }
+
+  // Admin cotejó la declaración contra el estado de cuenta real y confirma que
+  // el dinero llegó: crea la transacción visible en el historial del usuario y
+  // acredita su caja de forma atómica (incremento en SQL, no lectura-luego-escritura
+  // en JS, para no perder créditos concurrentes). tipoCambio se recibe ya resuelto
+  // por el caller (storage.getSettings()) porque las settings viven en un cache
+  // en memoria fuera de esta transacción de DB.
+  async verifyAndCreditBankDeposit(id: number, verifiedBy: string, tipoCambio: number): Promise<{ declaration: BankDepositDeclaration; transaction: Transaction }> {
+    return db.transaction(async (tx) => {
+      const [decl] = await tx.select().from(bankDepositDeclarations).where(eq(bankDepositDeclarations.id, id));
+      if (!decl) throw new Error("Declaración no encontrada");
+      if (decl.status !== "pending") throw new Error("Esta declaración ya fue procesada");
+
+      const targetUser = await tx.select().from(users).where(eq(users.id, decl.userId)).then(r => r[0]);
+      if (!targetUser) throw new Error("Usuario no encontrado");
+
+      const montoDeclarado = Number(decl.montoDeclarado);
+      const amountUSD = convertToUSD(montoDeclarado, decl.moneda, {
+        tipoCambio, fxRateEUR: 1, fxRateGBP: 1,
+      });
+
+      const [transaction] = await tx.insert(txTable).values({
+        transactionId: `SPEI-${decl.id}-${Date.now()}`,
+        protocol: "SPEI",
+        type: "deposit",
+        amount: montoDeclarado.toFixed(2),
+        currency: decl.moneda,
+        status: "completed",
+        toAccount: decl.clabeDestino,
+        description: `Depósito bancario declarado por el usuario${decl.referencia ? ` — ref. ${decl.referencia}` : ""}, verificado por ${verifiedBy}`,
+        createdBy: targetUser.username,
+      }).returning();
+
+      await tx.update(users)
+        .set({ cajaSaldoUSD: sql`${users.cajaSaldoUSD} + ${amountUSD}` })
+        .where(eq(users.id, decl.userId));
+
+      const [declaration] = await tx.update(bankDepositDeclarations)
+        .set({ status: "verified", verifiedBy, verifiedAt: new Date(), creditedTransactionId: transaction.id })
+        .where(eq(bankDepositDeclarations.id, id))
+        .returning();
+
+      return { declaration, transaction };
+    });
   }
 
   async getTronDepositCreditsForUser(userId: string): Promise<TronDepositCredit[]> {
