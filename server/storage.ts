@@ -1290,9 +1290,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   // --- Crypto Keys ---
+  // El status guardado ("Activa") queda estático desde que la clave se crea o rota;
+  // si expiresAt ya pasó, se recalcula a "Expirada" al leer en vez de depender de un
+  // job que actualice la fila (evita que una clave vencida se siga mostrando "Activa").
+  private withComputedKeyStatus(key: CryptoKey): CryptoKey {
+    if (key.status === "Activa" && key.expiresAt.getTime() <= Date.now()) {
+      return { ...key, status: "Expirada" };
+    }
+    return key;
+  }
+
   async getCryptoKeys(username: string, isAdmin: boolean): Promise<CryptoKey[]> {
-    if (isAdmin) return db.select().from(cryptoKeys).orderBy(desc(cryptoKeys.createdAt));
-    return db.select().from(cryptoKeys).where(eq(cryptoKeys.createdBy, username)).orderBy(desc(cryptoKeys.createdAt));
+    const rows = isAdmin
+      ? await db.select().from(cryptoKeys).orderBy(desc(cryptoKeys.createdAt))
+      : await db.select().from(cryptoKeys).where(eq(cryptoKeys.createdBy, username)).orderBy(desc(cryptoKeys.createdAt));
+    return rows.map(k => this.withComputedKeyStatus(k));
   }
 
   async createCryptoKey(data: Omit<CryptoKey, "id" | "createdAt">): Promise<CryptoKey> {
