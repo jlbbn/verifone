@@ -107,7 +107,7 @@ El FullNode puede permanecer activo durante una pausa: no puede firmar por sí s
 - Wallet: usar el material de custodia offline; nunca el backup del FullNode.
 - Aplicación: restaurar PostgreSQL y conciliar cada txid con contrato/destino/monto.
 
-## Hallazgo real (2026-09-14): direcciones placeholder sin actividad en cadena
+## Hallazgo real (2026-09-15): direcciones placeholder sin actividad en cadena
 
 - `PLATFORM_TRON_ADDRESS` (configurada, ahora retirada de `.replit`):
   `THRW3adKKoqrH5Cy31JvWdGJd3S1XNscGX`.
@@ -124,6 +124,11 @@ El FullNode puede permanecer activo durante una pausa: no puede firmar por sí s
   `tron_deposit_declarations` y `crypto_withdrawal_requests` solo contienen
   datos de prueba (txids `faketxid_...`/`dupe_...`, direcciones
   `TFakeFromAddress...`/`TXXXX...` placeholder).
+- `server/crypto/tron-client.ts` usa `PLATFORM_TRON_ADDRESS` como owner por
+  defecto en las líneas 185, 470 y 475. Con la variable ahora vacía (retirada
+  de `.replit`), esas rutas fallarán o devolverán "(not configured)" hasta que
+  se fije la dirección real tras la ceremonia mainnet — es el comportamiento
+  esperado durante esta ventana, no un bug a corregir por separado.
 - Conclusión: no hay nada que reconciliar retroactivamente — ambas
   direcciones son restos de configuración/prueba sin fondos ni historial.
   `PLATFORM_TRON_PRIVATE_KEY` se eliminará de Secrets por completo cuando
