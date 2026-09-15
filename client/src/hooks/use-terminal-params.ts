@@ -16,7 +16,7 @@ export const DEFAULT_TERMINAL_PARAMS: TerminalParam[] = [
   { label: "APLICACION",     value: "RETAIL",          type: "text",   group: "Identificación" },
   { label: "VERSION",        value: "PROVEEOPENAT400",  type: "text",   group: "Identificación" },
   { label: "AFILIACION",     value: "7705397",          type: "text",   group: "Identificación" },
-  { label: "VERSION FECHA",  value: "JUN 13 2026",      type: "text",   group: "Identificación" },
+  { label: "VERSION FECHA",  value: "JUN 25 2026",      type: "text",   group: "Identificación" },
   { label: "PCI REBOOT",     value: "03",               type: "text",   group: "Identificación" },
   { label: "ARRSVEC",        value: "1.10.213",         type: "text",   group: "Identificación" },
   { label: "REGISTRO VHO",   value: "V660p-A",          type: "text",   group: "Identificación" },
