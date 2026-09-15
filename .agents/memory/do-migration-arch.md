@@ -62,15 +62,28 @@ description: Production app + DB are migrating from Replit hosting to DigitalOce
    al reiniciar (storage.initialize() es idempotente sobre datos ya presentes: verificar que
    respeta filas existentes tras import real).
 3. Activar dominio: `cp /etc/caddy/Caddyfile.cutover /etc/caddy/Caddyfile && systemctl reload caddy`.
-4. Usuario en Cloudflare: registro A banxicoplusllc.org → 165.227.125.34 (gris primero; crear
+4. Usuario en Cloudflare: registro A banxicoplusllc.org → 104.131.190.116 (gris primero; crear
    www también). TTL idealmente ya bajado a 5 min ANTES.
+   (IP actualizada 2026-09-14: la anterior, 165.227.125.34, fue borrada en el incidente de
+   cuenta terminada del 2026-09-06 y reconstruida con esta IP nueva.)
 5. Smoke: https + login + saldos. Luego delta re-sync: comparar prod Replit (executeSql, filas
    nuevas desde export por created_at/id) y re-aplicar en DO.
 6. Post-estabilidad: trusted sources de la BD a solo el droplet (Tarea 4), apagar Replit prod,
-   nube naranja CF + WAF (Etapa 2), restringir llave OKX a IP 165.227.125.34 y revisar permiso
+   nube naranja CF + WAF (Etapa 2), restringir llave OKX a IP 104.131.190.116 (actualizada
+   2026-09-14; la anterior 165.227.125.34 ya no existe) y revisar permiso
    withdraw (hallazgo: llave sin restricción de IP con permisos read_only,withdraw,trade).
 - Env file /etc/banxico-plus.env es formato systemd, NO sourceable por bash (RESEND_FROM lleva
   espacios): extraer valores con grep|cut.
+
+## Pendiente añadido a la ventana de mantenimiento (anotado 2026-09-14, NO ejecutado)
+- El firewall real de producción (`banxico-plus-app-fw`, 043fb6ff-c009-42a9-8a22-e637cc27a0ec,
+  creado en la reconstrucción del 6-sep) permite SSH 22 desde 0.0.0.0/0 sin restricción — el
+  droplet no tiene knockd ni UFW activo (ver advertencia en scripts/add-agent-to-ufw.sh).
+- El droplet ya está en el tailnet (Tailscale). Tarea pendiente para la ventana: restringir el
+  puerto 22 del firewall DO a solo el rango/IP de Tailscale (o cerrarlo del todo y depender
+  exclusivamente de Tailscale SSH), verificando ANTES que el acceso por consola web de
+  DigitalOcean funciona como vía de recuperación — para no perder acceso administrativo si algo
+  sale mal con la regla nueva.
 
 ## Límites duros de la cuenta DO (verificados 2026-08-23)
 - droplet_limit=3 (llenos), cuota de VPC peerings=0 (las VPCs NO se rutean entre sí → lo que

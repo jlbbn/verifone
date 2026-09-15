@@ -141,9 +141,22 @@ require_command ssh
 
 case "$TARGET" in
   production)
-    FIREWALL_ID="a6c24a6d-9e11-4cf6-b980-a71e6b3690c0"
-    FIREWALL_NAME="production-restricted"
-    DROPLET_HOST="165.227.125.34"
+    # ID y nombre actualizados 2026-09-14: el firewall "production-restricted"
+    # (a6c24a6d-9e11-4cf6-b980-a71e6b3690c0) ya NO EXISTE (404 verificado contra la
+    # API) — era el de la cuenta DO borrada en el incidente del 2026-09-06. El
+    # firewall real de la cuenta reconstruida es "banxico-plus-app-fw".
+    # ADVERTENCIA: ese firewall real permite SSH 22 desde 0.0.0.0/0 (no restringido
+    # a la IP fija del usuario) y el droplet NO tiene knockd instalado ni UFW activo
+    # (verificado en vivo) — el endurecimiento de scripts/harden-droplet.sh nunca se
+    # reaplicó tras la reconstrucción. Este script fallará limpiamente con el error
+    # "falta la IP fija protegida del usuario en SSH" hasta que se reaplique
+    # harden-droplet.sh contra el droplet actual (104.131.190.116).
+    FIREWALL_ID="043fb6ff-c009-42a9-8a22-e637cc27a0ec"
+    FIREWALL_NAME="banxico-plus-app-fw"
+    # IP actualizada tras la reconstrucción de la cuenta DO del 2026-09-06 (la cuenta
+    # fue borrada y recreada; ver docs/compliance/fase1-log.md, entrada 2026-09-06).
+    # IP anterior (ya no existe): 165.227.125.34
+    DROPLET_HOST="104.131.190.116"
     ;;
   sandbox)
     FIREWALL_ID="2907a33f-40bb-411e-aa43-7031e12d39f0"

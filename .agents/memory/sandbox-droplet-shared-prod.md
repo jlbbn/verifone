@@ -6,7 +6,9 @@ description: banxico-plus-app-sandbox droplet used to share prod DB/keys, then w
 The DigitalOcean droplet `banxico-plus-app-sandbox` (138.197.79.6) originally shared
 the **same** managed production Postgres and the **same real** broker/payment secrets
 (OKX, Stripe, `PLATFORM_TRON_PRIVATE_KEY`) as the production droplet
-(`banxico-plus-app`, 165.227.125.34). The user explicitly confirmed (16-ago-2026) that
+(`banxico-plus-app`, 165.227.125.34 at the time — that droplet/IP no longer exists after
+the 2026-09-06 DO account-termination rebuild; current app droplet is 104.131.190.116).
+The user explicitly confirmed (16-ago-2026) that
 this was intentional at the time.
 
 **Reversed 16-ago-2026:** after a security scare (production managed DB found with an
