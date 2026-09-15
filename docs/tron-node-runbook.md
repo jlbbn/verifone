@@ -107,6 +107,32 @@ El FullNode puede permanecer activo durante una pausa: no puede firmar por sí s
 - Wallet: usar el material de custodia offline; nunca el backup del FullNode.
 - Aplicación: restaurar PostgreSQL y conciliar cada txid con contrato/destino/monto.
 
+## Hallazgo real (2026-09-14): direcciones placeholder sin actividad en cadena
+
+- `PLATFORM_TRON_ADDRESS` (configurada, ahora retirada de `.replit`):
+  `THRW3adKKoqrH5Cy31JvWdGJd3S1XNscGX`.
+- Dirección derivada matemáticamente de `PLATFORM_TRON_PRIVATE_KEY` (secret
+  actual): `TD99cNkHynEmTZzD6EJqmTDGxu64kvHH1b`.
+- Las dos direcciones son distintas entre sí — el código de la app nunca
+  verifica esta correspondencia, solo confía en la variable de entorno
+  (`server/crypto/tron-client.ts`, línea 36).
+- Verificación en cadena contra el nodo mainnet (`/wallet/getaccount`):
+  **ambas direcciones devuelven `{}`** — ninguna existe en la cadena, ninguna
+  se ha activado nunca. No hay ninguna transacción real asociada a ellas.
+- Confirmado también en PostgreSQL: `hot_wallet_dispersions` tiene 0 filas
+  (ninguna dispersión real ejecutada jamás); `tron_deposit_credits`,
+  `tron_deposit_declarations` y `crypto_withdrawal_requests` solo contienen
+  datos de prueba (txids `faketxid_...`/`dupe_...`, direcciones
+  `TFakeFromAddress...`/`TXXXX...` placeholder).
+- Conclusión: no hay nada que reconciliar retroactivamente — ambas
+  direcciones son restos de configuración/prueba sin fondos ni historial.
+  `PLATFORM_TRON_PRIVATE_KEY` se eliminará de Secrets por completo cuando
+  la ceremonia mainnet del firmante (ver README de
+  `scripts/infra/tron-signer/`) genere la dirección de plataforma
+  definitiva; la app no debe volver a tener una llave privada TRON propia.
+  `PLATFORM_TRON_ADDRESS` se fijará entonces a esa dirección real. Ref. interna:
+  task #135 (bloqueada hasta esa ceremonia).
+
 ## Checklist de activación mainnet del firmante
 
 Condiciones obligatorias antes de poner `TRON_SIGNER_WRITES_ENABLED=true` en mainnet
