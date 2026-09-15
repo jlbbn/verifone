@@ -41,6 +41,12 @@ intención validada de transferencia.
    IPs privadas, rutas TLS y límites con escrituras todavía apagadas.
 6. Activar primero un baseline UFW `deny incoming`; reflejar el mismo allowlist
    en DigitalOcean Cloud Firewall.
+6.1. Administración por Tailscale, no por IP pública: instalar Tailscale en el
+     host (`curl -fsSL https://tailscale.com/install.sh | sh` y `tailscale up`)
+     y dejar `ADMIN_SSH_TAILSCALE=true` (default). `install.sh` limita el 22 a
+     la interfaz `tailscale0`, así que no depende de ninguna IP pública que se
+     vuelva obsoleta. `ADMIN_SSH_CIDR` queda como fallback legado opcional —
+     déjalo vacío salvo que necesites SSH por IP pública además de Tailscale.
 7. Ejecutar `bash scripts/infra/tron-signer/install.sh` (dry-run) y después
    `sudo bash scripts/infra/tron-signer/install.sh --execute`.
 8. Verificar que la llave TLS queda `root:tron-signer` modo 0640 y que el

@@ -19,7 +19,16 @@ source "$ENV_FILE"
 : "${TRON_NETWORK:=mainnet}"
 : "${TRON_SIGNER_STATE_PATH:=/var/lib/tron-signer/state.json}"
 : "${APP_ALLOWED_CIDR:?APP_ALLOWED_CIDR required}"
-: "${ADMIN_SSH_CIDR:?ADMIN_SSH_CIDR required}"
+# ADMIN_SSH_CIDR is now optional: a public-IP allowlist is a legacy fallback,
+# not the primary path. Primary admin access is via Tailscale (ADMIN_SSH_TAILSCALE=true,
+# default), which scopes port 22 to the tailscale0 interface instead of a public IP —
+# no stale-IP maintenance needed since Tailscale's own auth replaces IP allowlisting.
+: "${ADMIN_SSH_CIDR:=}"
+: "${ADMIN_SSH_TAILSCALE:=true}"
+if [[ -z "$ADMIN_SSH_CIDR" && "$ADMIN_SSH_TAILSCALE" != "true" ]]; then
+  echo "Set ADMIN_SSH_CIDR (legacy public-IP allowlist) or leave ADMIN_SSH_TAILSCALE=true (default, Tailscale-only admin access). Both empty/false would lock out SSH entirely." >&2
+  exit 1
+fi
 [[ "$TRON_NETWORK" == "mainnet" || "$TRON_NETWORK" == "nile" ]] || {
   echo "TRON_NETWORK must be exactly mainnet or nile." >&2; exit 1;
 }
@@ -33,24 +42,29 @@ python3 - "$TRON_SIGNER_HOST" "$APP_ALLOWED_CIDR" "$ADMIN_SSH_CIDR" <<'PY'
 import ipaddress, sys
 host = ipaddress.ip_address(sys.argv[1])
 app = ipaddress.ip_network(sys.argv[2], strict=False)
-admin = ipaddress.ip_network(sys.argv[3], strict=False)
+admin_raw = sys.argv[3]
 if not host.is_private or host.is_loopback or host.version != 4:
     raise SystemExit("TRON_SIGNER_HOST must be the host's private IPv4 address")
 if not app.is_private or app.version != 4 or app.prefixlen < 24:
     raise SystemExit("APP_ALLOWED_CIDR must be a narrowly scoped private IPv4 range (/24 or narrower)")
-if admin.prefixlen != admin.max_prefixlen:
-    raise SystemExit("ADMIN_SSH_CIDR must identify exactly one IP")
+if admin_raw:
+    admin = ipaddress.ip_network(admin_raw, strict=False)
+    if admin.prefixlen != admin.max_prefixlen:
+        raise SystemExit("ADMIN_SSH_CIDR must identify exactly one IP")
 PY
 [[ -r "${TRON_SIGNER_TLS_KEY_PATH:-}" && -r "${TRON_SIGNER_TLS_CERT_PATH:-}" && -r "${TRON_SIGNER_CLIENT_CA_PATH:-}" ]] || {
   echo "Signer TLS key, certificate, and client CA must exist before installation." >&2; exit 1;
 }
 
+admin_ssh_desc="none"
+[[ "$ADMIN_SSH_TAILSCALE" == "true" ]] && admin_ssh_desc="tailscale0 interface only"
+[[ -n "$ADMIN_SSH_CIDR" ]] && admin_ssh_desc="$admin_ssh_desc + legacy public IP $ADMIN_SSH_CIDR"
 cat <<EOF
 Validated signer plan:
   - Bind only to private address $TRON_SIGNER_HOST:$TRON_SIGNER_PORT
   - Network profile $TRON_NETWORK with state $TRON_SIGNER_STATE_PATH
   - Allow signer ingress only from $APP_ALLOWED_CIDR
-  - Preserve existing UFW rules and allow SSH only from $ADMIN_SSH_CIDR
+  - Preserve existing UFW rules and allow SSH only from: $admin_ssh_desc
   - Install service with writes enabled=${TRON_SIGNER_WRITES_ENABLED:-false}
 EOF
 [[ "$MODE" == "execute" ]] || { echo "DRY RUN COMPLETE."; exit 0; }
@@ -88,7 +102,14 @@ ufw insert 1 allow from "$APP_ALLOWED_CIDR" to "$TRON_SIGNER_HOST" port "$TRON_S
   comment "Banxico Plus to isolated TRON signer"
 ufw insert 2 deny to "$TRON_SIGNER_HOST" port "$TRON_SIGNER_PORT" proto tcp \
   comment "Deny all other TRON signer ingress"
-ufw allow from "$ADMIN_SSH_CIDR" to any port 22 proto tcp comment "TRON signer admin SSH"
+if [[ "$ADMIN_SSH_TAILSCALE" == "true" ]]; then
+  # Scoped to the tailscale0 interface, not an IP: takes effect once Tailscale is
+  # installed and up, and needs no maintenance when the admin's public IP changes.
+  ufw allow in on tailscale0 to any port 22 proto tcp comment "TRON signer admin SSH via Tailscale"
+fi
+if [[ -n "$ADMIN_SSH_CIDR" ]]; then
+  ufw allow from "$ADMIN_SSH_CIDR" to any port 22 proto tcp comment "TRON signer admin SSH (legacy public IP fallback)"
+fi
 systemctl daemon-reload
 systemctl enable tron-signer.service
 echo "Signer installed but not started. Writes remain disabled."
