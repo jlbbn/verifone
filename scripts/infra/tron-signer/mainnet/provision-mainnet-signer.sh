@@ -17,6 +17,14 @@ APP_IP=10.10.0.2           # banxico-plus-app (privado, VPC banxico-plus-vpc; si
 BUNDLE=/root/bundle
 KEY_ID=banxico-mainnet-v1
 
+# Admin SSH: por defecto SOLO por Tailscale (interfaz tailscale0), nunca por IP pública
+# fija. Una IP de admin es dinámica y queda obsoleta; Tailscale usa su propia
+# autenticación en vez de un allowlist de IP que hay que mantener a mano.
+# ADMIN_SSH_CIDR es un fallback legado opcional: si se exporta antes de correr este
+# script (p.ej. `ADMIN_SSH_CIDR=1.2.3.4/32 bash provision-mainnet-signer.sh`) se añade
+# ADEMÁS del acceso por Tailscale, nunca en su lugar. Déjalo vacío salvo necesidad real.
+ADMIN_SSH_CIDR="${ADMIN_SSH_CIDR:-}"
+
 # IP privada propia dentro de la VPC 10.10.0.0/20
 SIGNER_IP=$(ip -4 -o addr show | awk '/ 10\.10\./{print $4}' | cut -d/ -f1 | head -1)
 [ -n "$SIGNER_IP" ] || { echo "No se encontró IP privada 10.10.x.x" >&2; exit 1; }
@@ -98,7 +106,8 @@ TRON_SIGNER_FEE_LIMIT_SUN=40000000
 TRON_SIGNER_MAX_HEAD_AGE_MS=180000
 TRON_SIGNER_MIN_ACTIVE_PEERS=3
 APP_ALLOWED_CIDR=$APP_IP/32
-ADMIN_SSH_CIDR=186.96.190.247/32
+ADMIN_SSH_CIDR=$ADMIN_SSH_CIDR
+ADMIN_SSH_TAILSCALE=true
 EOF
   chmod 600 /opt/banxico-plus/scripts/infra/tron-signer/tron-signer.env
 
@@ -131,10 +140,11 @@ EOF
   systemctl enable --now ship-logs.timer >/dev/null
 fi
 
-# --- UFW baseline: deny incoming; SSH sólo con llaves (espejo del cloud firewall) ---
+# --- UFW baseline: deny incoming; sin regla pública de 22 aquí (antes esto abría SSH
+# a cualquier IP con solo llaves como candado). install.sh añade la regla real de 22
+# scoped a tailscale0 (y, si ADMIN_SSH_CIDR no está vacío, un fallback de IP pública).
 ufw default deny incoming >/dev/null
 ufw default allow outgoing >/dev/null
-ufw allow 22/tcp comment 'SSH (llaves solamente)' >/dev/null
 ufw --force enable >/dev/null
 
 # --- Instalación oficial del firmante (dry-run y ejecución) ---
@@ -155,6 +165,8 @@ ufw allow out to 67.207.67.3 port 53 comment 'DNS DO' >/dev/null
 # 443 abierto por necesidad del envio de logs (endpoint autoscale sin IP fija); riesgo residual documentado
 ufw allow out 443/tcp comment 'envio de logs https' >/dev/null
 ufw allow out 123/udp comment 'NTP' >/dev/null
+# Tailscale: puerto UDP directo (con fallback automático a DERP relay por 443, ya abierto)
+ufw allow out 41641/udp comment 'Tailscale' >/dev/null
 ufw reload >/dev/null
 
 echo "PROVISION_OK ADDR=$ADDR SIGNER_IP=$SIGNER_IP"
