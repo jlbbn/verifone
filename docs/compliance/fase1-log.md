@@ -130,6 +130,10 @@ verificado (ver hoja "Riesgos" del plan original).
 - Decisión del titular (confirmada 2 veces): plan literal — BD **y** app migran a DigitalOcean.
 - BD gestionada PostgreSQL 18 `banxico-plus-db` creada dentro de la VPC (id `270ef2e5-4fb3-4719-87a3-9ae6d0c31c71`), tamaño db-s-1vcpu-1gb (~$15/mes).
 - Droplet `banxico-plus-app` Ubuntu 24.04 (id `591494608`, s-1vcpu-2gb, $12/mes) en la misma VPC. IP pública 165.227.125.34, IP privada 10.10.0.2.
+  **Nota (2026-09-14):** este droplet y esta IP ya no existen — fueron borrados en el
+  incidente de cuenta terminada del 2026-09-06 (ver esa entrada más abajo) y reconstruidos
+  con IP pública nueva `104.131.190.116`. Esta entrada se conserva sin alterar como registro
+  histórico de lo que era cierto en ese momento.
 - Acceso administrativo SOLO por llave SSH ed25519 dedicada (sin contraseñas) — alineado con Etapa 2.
 - La facturación de la cuenta permitió crear recursos (crédito inicial activo).
 - Pendiente: aprovisionamiento del droplet, migración de datos con respaldo verificado, cutover DNS con ventana.

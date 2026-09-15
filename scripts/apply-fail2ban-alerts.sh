@@ -4,8 +4,8 @@
 # Corre como root DIRECTAMENTE en el droplet remoto (no en Replit workspace).
 #
 # Uso desde tu terminal:
-#   ssh -i ~/.ssh/<tu-llave> root@165.227.125.34 'bash -s' < scripts/apply-fail2ban-alerts.sh
-#   ssh -i ~/.ssh/<tu-llave> root@138.197.79.6  'bash -s' < scripts/apply-fail2ban-alerts.sh
+#   ssh -i ~/.ssh/<tu-llave> root@104.131.190.116 'bash -s' < scripts/apply-fail2ban-alerts.sh  # producción (IP actualizada tras la reconstrucción del 2026-09-06; la anterior, 165.227.125.34, ya no existe)
+#   ssh -i ~/.ssh/<tu-llave> root@138.197.79.6  'bash -s' < scripts/apply-fail2ban-alerts.sh  # sandbox
 set -euo pipefail
 
 echo ">>> Configurando fail2ban alertas Resend en $(hostname)..."
