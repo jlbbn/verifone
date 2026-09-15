@@ -49,6 +49,21 @@ intención validada de transferencia.
      déjalo vacío salvo que necesites SSH por IP pública además de Tailscale.
 7. Ejecutar `bash scripts/infra/tron-signer/install.sh` (dry-run) y después
    `sudo bash scripts/infra/tron-signer/install.sh --execute`.
+7.1. Parcheo del SO con el candado de egreso activo: no hay una regla ufw
+     permanente a `mirrors.digitalocean.com`/`security.ubuntu.com` porque
+     resuelven a IPs rotativas que una regla fija no puede seguir con
+     seguridad. Usar `mainnet/os-patch-window.sh` (root): abre 80/tcp de
+     salida solo mientras corre `apt update && apt upgrade` y lo cierra al
+     terminar (trap), pase lo que pase.
+7.2. Respaldo de la llave: `provision-mainnet-signer.sh --backup-gpg
+     <fingerprint>` cifra la llave recién nacida a `/root/wallet-backup.gpg`
+     antes de borrar el archivo en texto plano. Sin esta bandera, la llave
+     solo vive dentro de `tron-signer.env` en el host, sin respaldo cifrado
+     independiente.
+7.3. `ca.key` (la CA privada de la ceremonia) debe salir de este host una vez
+     terminada — a un vault/USB offline, nunca a Replit ni por chat.
+     `server.crt`/`client.crt`/`ca.crt` vencen a los 90 días: agenda su
+     rotación desde ahora.
 8. Verificar que la llave TLS queda `root:tron-signer` modo 0640 y que el
    servicio solo escucha en la IP privada.
 9. Mantener escrituras apagadas y probar `/health`.
