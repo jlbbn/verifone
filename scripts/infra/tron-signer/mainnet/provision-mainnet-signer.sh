@@ -2,8 +2,40 @@
 # Aprovisiona el firmante MAINNET aislado (tron-signer-mainnet) de punta a punta.
 # Se ejecuta como root EN el host del firmante. Idempotente.
 # La llave privada de la wallet y el secreto HMAC nacen aquí y jamás se imprimen ni salen del host.
+#
+# Uso: bash provision-mainnet-signer.sh [--backup-gpg <fingerprint>]
+#   --backup-gpg <fingerprint>  Cifra la llave privada recién nacida a
+#                                /root/wallet-backup.gpg (gpg -r <fingerprint>) antes
+#                                de borrar el archivo en texto plano. Sin esta bandera
+#                                la llave solo queda dentro de tron-signer.env en este
+#                                host, sin ningún respaldo cifrado independiente.
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
+
+BACKUP_GPG_FINGERPRINT=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --backup-gpg) BACKUP_GPG_FINGERPRINT="${2:?--backup-gpg requiere un fingerprint}"; shift 2 ;;
+    *) echo "Argumento desconocido: $1 (uso: --backup-gpg <fingerprint>)" >&2; exit 2 ;;
+  esac
+done
+
+# --- Guardia dura: Tailscale debe estar operativo ANTES de tocar nada del host. ---
+# El acceso admin por SSH depende exclusivamente de tailscale0 (ver install.sh); si
+# Tailscale no está listo, abortamos ya mismo en vez de dejar el host sin forma
+# fiable de administrarlo tras el candado de egreso.
+command -v tailscale >/dev/null 2>&1 || {
+  echo "tailscale no está instalado. Instálalo y ejecuta 'tailscale up' antes de correr esta ceremonia." >&2
+  exit 1
+}
+ip link show tailscale0 >/dev/null 2>&1 || {
+  echo "La interfaz tailscale0 no existe. Ejecuta 'tailscale up' y confirma que la interfaz aparece antes de continuar." >&2
+  exit 1
+}
+tailscale status >/dev/null 2>&1 || {
+  echo "'tailscale status' falló. Tailscale está instalado pero no operativo en este host." >&2
+  exit 1
+}
 
 # IPs privadas verificadas en vivo el 2026-09-15 (la cuenta DO fue reconstruida el
 # 2026-09-06 tras el incidente de terminación; las IPs de la topología anterior
@@ -25,9 +57,11 @@ KEY_ID=banxico-mainnet-v1
 # ADEMÁS del acceso por Tailscale, nunca en su lugar. Déjalo vacío salvo necesidad real.
 ADMIN_SSH_CIDR="${ADMIN_SSH_CIDR:-}"
 
-# IP privada propia dentro de la VPC 10.10.0.0/20
-SIGNER_IP=$(ip -4 -o addr show | awk '/ 10\.10\./{print $4}' | cut -d/ -f1 | head -1)
-[ -n "$SIGNER_IP" ] || { echo "No se encontró IP privada 10.10.x.x" >&2; exit 1; }
+# IP privada propia del firmante dentro de tron-mainnet-vpc (10.30.0.0/20; el mismo
+# rango del nodo NODE_IP). Verificado en vivo: tron-signer-mainnet = 10.30.0.3.
+# banxico-plus-app vive en 10.10.0.0/20, una VPC distinta — nunca confundir ambas.
+SIGNER_IP=$(ip -4 -o addr show | awk '/ 10\.30\./{print $4}' | cut -d/ -f1 | head -1)
+[ -n "$SIGNER_IP" ] || { echo "No se encontró IP privada 10.30.x.x (tron-mainnet-vpc) en este host." >&2; exit 1; }
 
 apt-get update -qq >/dev/null
 apt-get install -y -qq jq nodejs npm >/dev/null 2>&1
@@ -58,15 +92,49 @@ if [ ! -f server.crt ]; then
   openssl x509 -req -in /tmp/client.csr -CA ca.crt -CAkey ca.key -CAcreateserial -days 90 -sha256 -extfile /tmp/client.ext -out /root/app-client-creds/tls/client.crt
   cp ca.crt /root/app-client-creds/tls/ca.crt
   rm -f server.csr server.ext /tmp/client.csr /tmp/client.ext
+  echo "RECORDATORIO: /etc/tron-signer/tls/ca.key debe salir de este host tras la ceremonia (vault/USB offline; nunca a Replit ni por chat). server.crt/client.crt/ca.crt vencen en 90 días — agenda su rotación ya."
 fi
 
 # --- Wallet y HMAC: nacen en el host, nunca se imprimen ---
-# Guardia contra estado parcial: config.json sin env del firmante = ceremonia interrumpida.
-if [ -f /root/app-client-creds/config.json ] && [ ! -f /opt/banxico-plus/scripts/infra/tron-signer/tron-signer.env ]; then
-  echo "Estado parcial detectado: limpia /root/app-client-creds y /etc/tron-signer/tls y re-ejecuta la ceremonia completa." >&2
-  exit 1
-fi
-if [ ! -f /root/app-client-creds/config.json ]; then
+# Idempotencia dura: la fuente de verdad es tron-signer.env, no config.json ni los
+# archivos temporales /root/.wallet-*. Si tron-signer.env ya existe en CUALQUIERA de
+# sus dos rutas posibles (recién copiado, o ya instalado por install.sh en
+# /etc/tron-signer), la wallet YA nació en este host — jamás se genera una nueva,
+# exista o no config.json.
+SRC_ENV=/opt/banxico-plus/scripts/infra/tron-signer/tron-signer.env
+INSTALLED_ENV=/etc/tron-signer/tron-signer.env
+EXISTING_ENV=""
+[ -f "$SRC_ENV" ] && EXISTING_ENV="$SRC_ENV"
+[ -z "$EXISTING_ENV" ] && [ -f "$INSTALLED_ENV" ] && EXISTING_ENV="$INSTALLED_ENV"
+
+if [ -n "$EXISTING_ENV" ]; then
+  echo "tron-signer.env ya existe en $EXISTING_ENV: reutilizando la wallet existente, no se genera una nueva."
+  # shellcheck disable=SC1090
+  set -a; source "$EXISTING_ENV"; set +a
+  ADDR="${TRON_SIGNER_ADDRESS:-}"
+  HMAC="${TRON_SIGNER_HMAC_SECRET:-}"
+  KEY_ID="${TRON_SIGNER_KEY_ID:-$KEY_ID}"
+  [ -n "$ADDR" ] && [ -n "$HMAC" ] || {
+    echo "El tron-signer.env existente no trae TRON_SIGNER_ADDRESS/TRON_SIGNER_HMAC_SECRET. Revisa a mano — no se continúa generando nada nuevo por seguridad." >&2
+    exit 1
+  }
+  if [ ! -f /opt/banxico-plus/scripts/infra/tron-signer/tron-signer.env ]; then
+    cp "$EXISTING_ENV" /opt/banxico-plus/scripts/infra/tron-signer/tron-signer.env
+    chmod 600 /opt/banxico-plus/scripts/infra/tron-signer/tron-signer.env
+  fi
+  if [ ! -f /root/app-client-creds/config.json ]; then
+    mkdir -p /root/app-client-creds/tls
+    cat > /root/app-client-creds/config.json <<EOF
+{"signerUrl":"https://$SIGNER_IP:9443","keyId":"$KEY_ID","hmacSecret":"$HMAC","caPath":"tls/ca.crt","certPath":"tls/client.crt","keyPath":"tls/client.key","address":"$ADDR","network":"mainnet"}
+EOF
+    chmod -R go-rwx /root/app-client-creds
+    echo "config.json reconstruido desde el tron-signer.env existente (la wallet no se tocó)."
+  fi
+else
+  if [ -f /root/app-client-creds/config.json ]; then
+    echo "Estado inconsistente: existe config.json pero no hay tron-signer.env en ninguna ruta conocida ($SRC_ENV, $INSTALLED_ENV). Revisa a mano antes de continuar — no se genera una wallet nueva automáticamente." >&2
+    exit 1
+  fi
   cat > /opt/banxico-plus/gen-wallet.mjs <<'EOF'
 import { utils } from "tronweb";
 import { writeFileSync } from "node:fs";
@@ -104,7 +172,7 @@ TRON_SIGNER_MAX_DAILY_USDT=500
 TRON_SIGNER_MIN_TRX_RESERVE=40
 TRON_SIGNER_FEE_LIMIT_SUN=40000000
 TRON_SIGNER_MAX_HEAD_AGE_MS=180000
-TRON_SIGNER_MIN_ACTIVE_PEERS=3
+TRON_SIGNER_MIN_ACTIVE_PEERS=2
 APP_ALLOWED_CIDR=$APP_IP/32
 ADMIN_SSH_CIDR=$ADMIN_SSH_CIDR
 ADMIN_SSH_TAILSCALE=true
@@ -116,9 +184,19 @@ EOF
 {"signerUrl":"https://$SIGNER_IP:9443","keyId":"$KEY_ID","hmacSecret":"$HMAC","caPath":"tls/ca.crt","certPath":"tls/client.crt","keyPath":"tls/client.key","address":"$ADDR","network":"mainnet"}
 EOF
   chmod -R go-rwx /root/app-client-creds
+
+  # --- Respaldo cifrado de la llave privada, opcional pero recomendado ---
+  if [ -n "$BACKUP_GPG_FINGERPRINT" ]; then
+    command -v gpg >/dev/null 2>&1 || apt-get install -y -qq gnupg >/dev/null 2>&1
+    gpg --batch --yes --trust-model always -r "$BACKUP_GPG_FINGERPRINT" \
+      -o /root/wallet-backup.gpg --encrypt /root/.wallet-priv
+    chmod 600 /root/wallet-backup.gpg
+    echo "Llave cifrada en /root/wallet-backup.gpg para $BACKUP_GPG_FINGERPRINT. Retírala de este host cuanto antes (USB/vault offline); nunca por chat ni a Replit."
+  else
+    echo "AVISO: se ejecutó sin --backup-gpg. La llave privada no queda respaldada de forma independiente; solo vive en texto plano dentro de tron-signer.env en este host." >&2
+  fi
   rm -f /root/.wallet-priv /root/.hmac-secret
 fi
-ADDR=$(cat /root/.wallet-addr)
 
 # --- Log forwarding (shipper) ---
 if [ -f "$BUNDLE"/logship/ship-logs.sh ]; then
