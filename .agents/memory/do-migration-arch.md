@@ -55,6 +55,12 @@ description: Production app + DB are migrating from Replit hosting to DigitalOce
 - Día real: mismo pipeline contra defaultdb + delta re-sync post-propagación DNS.
 
 ## Runbook del cutover (todo preparado, esperando ventana del usuario)
+0. **Paso obligatorio previo (añadido 2026-09-14):** en el droplet, verificar `STRIPE_SECRET_KEY`
+   contra el endpoint de balance de Stripe (`GET https://api.stripe.com/v1/balance` con esa
+   llave) y exigir HTTP 200 antes de continuar. No avanzar al paso 1 si no devuelve 200.
+   (Contexto: en Replit, de las candidatas probadas, solo `STRIPE_SECRET_KEY_LIVE` devolvió 200;
+   `STRIPE_SECRET_KEY` y `Secretkey1` tenían prefijo `mk_` inválido y devolvieron 401. Confirmar
+   que la llave configurada en el droplet sí sea una válida `sk_live_`/`sk_test_`, no asumirlo.)
 1. Export fresco: mismo pipeline del ensayo (CodeExecution → /tmp) contra prod.
 2. Import a `defaultdb` (NO a base de ensayo; ya borrada): scripts/migration/import-data.mjs
    + verify-import.mjs con DB_URL de defaultdb; luego `systemctl restart banxico-plus`.
