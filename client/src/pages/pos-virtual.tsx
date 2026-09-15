@@ -446,7 +446,7 @@ function SRLinkModal({ onClose }: { onClose: () => void }) {
   const [apiResult, setApiResult] = useState<any>(null);
 
   const [form, setForm] = useState<SRForm>({
-    senderName: "PATRICIO", senderCard: "", senderBank: "", senderCardType: "MASTERCARD DEBIT",
+    senderName: "", senderCard: "", senderBank: "", senderCardType: "MASTERCARD DEBIT",
     senderExpiry: "", senderCountryIdx: 0,
     receiverName: "", receiverCard: "", receiverBank: "", receiverCardType: "MASTERCARD DEBIT",
     receiverExpiry: "", receiverCountryIdx: 0,
@@ -530,10 +530,10 @@ function SRLinkModal({ onClose }: { onClose: () => void }) {
             {/* SENDER */}
             <div className="rounded-lg border border-amber-700/50 bg-amber-950/10 p-4 space-y-3">
               <p className="text-amber-400 text-[11px] font-bold tracking-widest flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse inline-block" /> SENDER — PATRICIO
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse inline-block" /> SENDER
               </p>
               {([
-                { label: "Card Holder Name", k: "senderName" as const, ph: "PATRICIO" },
+                { label: "Card Holder Name", k: "senderName" as const, ph: "NOMBRE COMPLETO" },
                 { label: "Card Number",      k: "senderCard" as const, ph: "•••• •••• •••• ••••" },
                 { label: "Issuing Bank",     k: "senderBank" as const, ph: "BANAMEX / HSBC" },
                 { label: "Expiration Date",  k: "senderExpiry" as const, ph: "MM/YY" },
