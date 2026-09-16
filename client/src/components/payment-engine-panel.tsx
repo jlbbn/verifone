@@ -62,14 +62,20 @@ function fmtDate(iso: string) {
   });
 }
 
+// Stripe renders CardElement inside its own sandboxed iframe, which has no
+// access to our page's CSS custom properties — passing "hsl(var(--foreground))"
+// resolves to nothing there and Stripe silently falls back to a near-invisible
+// default, making the typed card number look greyed-out/unreadable (though it
+// is actually being entered). Use literal colors that match our dark theme
+// instead so the text is actually legible.
 const cardElementOptions = {
   style: {
     base: {
       fontSize: "14px",
-      color: "hsl(var(--foreground))",
-      "::placeholder": { color: "hsl(var(--muted-foreground))" },
+      color: "#f2f2f2",
+      "::placeholder": { color: "#9a9a9a" },
     },
-    invalid: { color: "#ef4444" },
+    invalid: { color: "#f87171" },
   },
 };
 
