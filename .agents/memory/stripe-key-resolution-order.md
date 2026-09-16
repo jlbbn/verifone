@@ -4,21 +4,28 @@ description: how server/stripeClient.ts picks a Stripe key across candidates, an
 ---
 
 `server/stripeClient.ts` tries Stripe key candidates in order: `STRIPE_SECRET_KEY` →
-`Secretkey1` → `STRIPE_CONNECTOR_KEY` → the Replit Stripe connector's live-fetched
-credential. `isValidKey()` only accepts `sk_live_`, `sk_test_`, `rk_live_`, `rk_test_`
-prefixes and explicitly rejects `mk_`-prefixed values.
+`STRIPE_SECRET_KEY_LIVE` → `Secretkey1` → `STRIPE_CONNECTOR_KEY` → the Replit Stripe
+connector's live-fetched credential. `isValidKey()` only accepts `sk_live_`, `sk_test_`,
+`rk_live_`, `rk_test_` prefixes and explicitly rejects `mk_`-prefixed values.
 
-**Known issue (as of 16-ago-2026):** the `STRIPE_SECRET_KEY` secret in this project holds
-an `mk_`-prefixed value, which the code treats as invalid — so in practice the app was
-silently falling through to later candidates. `STRIPE_CONNECTOR_KEY` used to be hardcoded
-in `.replit` under `[userenv.development]` as the working dev fallback; a security audit
-found and removed it (SAST flags any secret literal in `.replit` as critical) because it
-had been committed to git history — do not restore a hardcoded key there even to "fix"
-dev breakage. Production is unaffected: it resolves via `STRIPE_SECRET_KEY_LIVE` /
-the connector path and was confirmed working via deploy logs ("Stripe: conexión verificada").
+**Confirmed 16-sep-2026:** `STRIPE_SECRET_KEY` and `Secretkey1` both held a Stripe
+**key ID** (the `mk_...` identifier Stripe's dashboard shows for a key, not the usable
+secret value) instead of the actual `sk_.../rk_...` value — easy to mistake for the real
+key since it's copied from the same dashboard row. The real, working live secret key was
+already sitting unused in `STRIPE_SECRET_KEY_LIVE` (verified live via `stripe.balance.retrieve()`
+before trusting it), but the code never read that variable — added it as a candidate.
+Separately found and fixed a literal typo in the file (`terimport` instead of `import` on
+line 1), present since a Jun-2026 commit, which would have hard-failed the dynamic
+`import("./stripeClient")` — but a long-lived process can keep serving from its in-memory
+ESM module cache after the on-disk file breaks, so a stale "working" log line from an old
+process is not proof the current source still parses.
+`STRIPE_PUBLISHABLE_KEY` had the same `mk_...` key-ID mixup on the publishable side; no
+valid `pk_live_`/`pk_test_` value existed anywhere in project secrets and had to be
+re-copied from the Stripe dashboard.
 
-**How to apply:** if local dev Stripe calls fail with "No valid Stripe key found", check
-whether `STRIPE_SECRET_KEY` actually has a valid `sk_test_`/`sk_live_` prefix before
-assuming the client code is broken — it may just be holding a stale/wrong-format value.
-Get a fresh test key from the user (Stripe dashboard) and store it via `requestSecrets`,
-never as a plaintext `.replit` env value.
+**How to apply:** if Stripe calls fail with "No valid Stripe key found" or a request 500s
+inexplicably right after an unrelated code change, (1) check every `STRIPE_*`-ish secret
+name for a valid `sk_test_`/`sk_live_`/`rk_..._` prefix — including `*_LIVE` variants that
+the code might not be wired to read yet — before assuming the value must be re-requested
+from the user, and (2) confirm the importing file's syntax is still currently valid,
+since a long-running dev/prod process's success log can predate a since-introduced typo.
