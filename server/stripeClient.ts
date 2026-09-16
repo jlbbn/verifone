@@ -26,6 +26,7 @@ function isValidKey(k: string): boolean {
 export async function getStripeClient(): Promise<Stripe> {
   const candidates = [
     process.env.STRIPE_SECRET_KEY,
+    process.env.STRIPE_SECRET_KEY_LIVE,
     process.env.Secretkey1,
     process.env.STRIPE_CONNECTOR_KEY,
     await getStripeKeyFromConnector(),
@@ -39,6 +40,7 @@ export async function getStripeClient(): Promise<Stripe> {
 export function getStripeMode(): 'live' | 'test' | 'unknown' {
   const candidates = [
     process.env.STRIPE_SECRET_KEY,
+    process.env.STRIPE_SECRET_KEY_LIVE,
     process.env.Secretkey1,
     process.env.STRIPE_CONNECTOR_KEY,
   ];
