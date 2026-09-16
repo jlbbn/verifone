@@ -3931,51 +3931,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
       currency:    z.string().length(3),
       description: z.string().default("Banxico Plus charge"),
       email:       z.string().email(),
+      // Preferred path: a Stripe PaymentMethod id created client-side via
+      // Stripe.js/Elements. Stripe blocks raw card numbers sent directly to
+      // its API (PCI policy), so this is required for the Stripe leg to work.
+      stripePaymentMethodId: z.string().optional(),
+      // Legacy path: raw card data, only usable for the Mercado Pago fallback
+      // (never sent to Stripe directly).
       card: z.object({
         number:   z.string().min(13).max(19),
         expMonth: z.number().int().min(1).max(12),
         expYear:  z.number().int().min(new Date().getFullYear()),
         cvv:      z.string().min(3).max(4),
         holder:   z.string().min(2),
-      }),
+      }).optional(),
+      holder:  z.string().optional(),
       docType: z.string().optional(),
       docNum:  z.string().optional(),
+    }).refine(d => d.stripePaymentMethodId || d.card, {
+      message: "Se requiere stripePaymentMethodId o card",
     });
 
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Datos inválidos", details: parsed.error.flatten() });
 
-    const { amount, currency, description, email, card } = parsed.data;
+    const { amount, currency, description, email, card, stripePaymentMethodId } = parsed.data;
+    const holderName = card?.holder ?? parsed.data.holder ?? "TITULAR";
 
     // ── Motor de Pagos unificado — intenta Stripe primero (validación real de tarjeta) ──
     // y recurre automáticamente a Mercado Pago si Stripe no está disponible. El
     // usuario/cliente ya no elige el procesador: el motor decide internamente.
     try {
+      if (!stripePaymentMethodId) throw Object.assign(new Error("No hay método de pago tokenizado para Stripe"), { code: "card_error" });
+
       const { getStripeClient } = await import("./stripeClient");
       const stripe = await getStripeClient();
 
-      // 1. Create payment method token from raw card data
-      const pm = await stripe.paymentMethods.create({
-        type: "card",
-        card: {
-          number:    card.number,
-          exp_month: card.expMonth,
-          exp_year:  card.expYear,
-          cvc:       card.cvv,
-        },
-        billing_details: {
-          name:  card.holder,
-          email: email,
-        },
-      });
-
-      // 2. Create and confirm payment intent
+      // Confirm the PaymentIntent directly against the client-tokenized
+      // PaymentMethod — no raw card data is ever sent to Stripe from here.
       const amountCents = Math.round(amount * 100);
       const idempKey = `pe-${user.username}-${Date.now()}-${randomBytes(4).toString("hex")}`;
       const intent = await stripe.paymentIntents.create({
         amount:               amountCents,
         currency:             currency.toLowerCase(),
-        payment_method:       pm.id,
+        payment_method:       stripePaymentMethodId,
         confirm:              true,
         description:          description,
         receipt_email:        email,
@@ -3991,9 +3989,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } catch (_) { /* ignore */ }
       }
 
-      const cardDetails = intent.payment_method
-        ? (await stripe.paymentMethods.retrieve(pm.id)).card
-        : pm.card;
+      let cardDetails: { last4?: string; brand?: string } | undefined;
+      try {
+        const pmRetrieved = await stripe.paymentMethods.retrieve(stripePaymentMethodId);
+        cardDetails = pmRetrieved.card ?? undefined;
+      } catch (_) { /* ignore — fall back to card?.number below */ }
 
       if (intent.status !== "succeeded") {
         const charge = await storage.createPaymentCharge({
@@ -4001,7 +4001,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           processor:    "stripe",
           amount, currency: currency.toUpperCase(), status: intent.status,
           description, email,
-          cardLast4:    cardDetails?.last4 ?? card.number.slice(-4),
+          cardLast4:    cardDetails?.last4 ?? card?.number.slice(-4) ?? "0000",
           cardBrand:    cardDetails?.brand ?? "unknown",
           receiptUrl:   null,
           errorMessage: `Estado no exitoso: ${intent.status}`,
@@ -4018,7 +4018,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status:       "succeeded",
         description,
         email,
-        cardLast4:    cardDetails?.last4 ?? card.number.slice(-4),
+        cardLast4:    cardDetails?.last4 ?? card?.number.slice(-4) ?? "0000",
         cardBrand:    cardDetails?.brand ?? "unknown",
         receiptUrl,
         errorMessage: null,
@@ -4043,22 +4043,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
           processor:    "stripe",
           amount, currency: currency.toUpperCase(), status: "failed",
           description, email,
-          cardLast4: card.number.slice(-4), cardBrand: null,
+          cardLast4: card?.number.slice(-4) ?? "0000", cardBrand: null,
           receiptUrl: null, errorMessage: msg, createdBy: user.username,
         }).catch(() => null);
         return res.status(402).json({ ...(charge ?? {}), error: msg, declineCode: decline });
       }
 
       // ── Soft error (config/network) → fallback automático a Mercado Pago ──
+      // Only possible when the caller also sent raw card data (legacy path);
+      // the Stripe-Elements flow never exposes raw card fields to us, so
+      // there is nothing to fall back with and we must surface the error.
       console.warn(`[PaymentEngine] Stripe no disponible, usando Mercado Pago — ${msg}`);
       const mpToken = process.env.MP_ACCESS_TOKEN;
-      if (!mpToken) {
+      if (!mpToken || !card) {
         const charge = await storage.createPaymentCharge({
           chargeId:     `err-${Date.now()}`,
           processor:    "stripe",
           amount, currency: currency.toUpperCase(), status: "failed",
           description, email,
-          cardLast4: card.number.slice(-4), cardBrand: null,
+          cardLast4: card?.number.slice(-4) ?? "0000", cardBrand: null,
           receiptUrl: null, errorMessage: "Motor de pagos no disponible en este momento", createdBy: user.username,
         }).catch(() => null);
         return res.status(502).json({ ...(charge ?? {}), error: "No se pudo procesar el cobro. Intenta nuevamente." });

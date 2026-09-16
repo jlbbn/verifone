@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -15,6 +15,8 @@ import {
   CreditCard, Globe, Zap, CheckCircle, RefreshCw,
   Shield, Lock, DollarSign, ChevronDown, ChevronUp,
 } from "lucide-react";
+import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import { getStripePromise } from "@/lib/stripe";
 
 type ChargeRecord = {
   id: string;
@@ -60,24 +62,245 @@ function fmtDate(iso: string) {
   });
 }
 
+const cardElementOptions = {
+  style: {
+    base: {
+      fontSize: "14px",
+      color: "hsl(var(--foreground))",
+      "::placeholder": { color: "hsl(var(--muted-foreground))" },
+    },
+    invalid: { color: "#ef4444" },
+  },
+};
+
+// ── Charge form — lives inside <Elements> so it can tokenize the card via
+// Stripe.js before it ever reaches our servers. The raw PAN/CVV never leave
+// the Stripe-hosted iframe: Stripe blocks accounts (ours included) from
+// accepting raw card fields directly on their API for PCI reasons, so this
+// is the only way a real Stripe charge can succeed.
+function ChargeForm() {
+  const { toast } = useToast();
+  const stripe = useStripe();
+  const elements = useElements();
+
+  const [amount, setAmount]     = useState("");
+  const [currency, setCurrency] = useState("USD");
+  const [desc, setDesc]         = useState("");
+  const [holder, setHolder]     = useState("");
+  const [email, setEmail]       = useState("");
+  const [docType, setDocType]   = useState("CPF");
+  const [docNum, setDocNum]     = useState("");
+  const [cardComplete, setCardComplete] = useState(false);
+  const [cardError, setCardError]       = useState<string | null>(null);
+
+  const chargeMutation = useMutation({
+    mutationFn: async (body: object) => {
+      const res = await apiRequest("POST", "/api/payment-engine/charge", body);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/payment-engine/charges"] });
+      if (data.status === "succeeded" || data.status === "approved") {
+        toast({ title: "Cobro aprobado", description: `Auth: ${data.chargeId}` });
+        setAmount(""); setDesc(""); setHolder(""); setEmail(""); setDocNum("");
+        elements?.getElement(CardElement)?.clear();
+      } else {
+        toast({ title: "Cobro rechazado", description: data.error ?? "Declined", variant: "destructive" });
+      }
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  async function handleCharge() {
+    if (!amount || !holder || !email || !cardComplete) {
+      toast({ title: "Campos requeridos", variant: "destructive" });
+      return;
+    }
+    if (!stripe || !elements) {
+      toast({ title: "Stripe aún no está listo", description: "Intenta de nuevo en un momento.", variant: "destructive" });
+      return;
+    }
+    const cardElement = elements.getElement(CardElement);
+    if (!cardElement) return;
+
+    const { paymentMethod, error } = await stripe.createPaymentMethod({
+      type: "card",
+      card: cardElement,
+      billing_details: { name: holder, email },
+    });
+
+    if (error || !paymentMethod) {
+      toast({ title: "Tarjeta inválida", description: error?.message ?? "No se pudo validar la tarjeta", variant: "destructive" });
+      return;
+    }
+
+    chargeMutation.mutate({
+      amount: parseFloat(amount),
+      currency,
+      description: desc || "Banxico Plus charge",
+      email,
+      stripePaymentMethodId: paymentMethod.id,
+      holder,
+      docType, docNum,
+    });
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <CreditCard className="w-4 h-4 text-[#c8322b]" />
+          Nuevo Cobro
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+
+        <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          <Zap className="w-3.5 h-3.5 text-[#c8322b] flex-shrink-0" />
+          Motor unificado: el sistema selecciona automáticamente Stripe o Mercado Pago.
+        </div>
+
+        {/* Amount + Currency */}
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1">
+            <Label className="text-xs">Amount *</Label>
+            <div className="relative">
+              <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+              <Input
+                placeholder="0.00"
+                className="pl-7"
+                value={amount}
+                onChange={e => setAmount(e.target.value)}
+                type="number"
+                min="0.01"
+                step="0.01"
+                data-testid="input-charge-amount"
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Currency</Label>
+            <Select value={currency} onValueChange={setCurrency}>
+              <SelectTrigger data-testid="select-charge-currency">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CURRENCIES.map(c => (
+                  <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Description */}
+        <div className="space-y-1">
+          <Label className="text-xs">Description</Label>
+          <Input
+            placeholder="Banxico Plus — service charge"
+            value={desc}
+            onChange={e => setDesc(e.target.value)}
+            data-testid="input-charge-description"
+          />
+        </div>
+
+        {/* Email */}
+        <div className="space-y-1">
+          <Label className="text-xs">Cardholder email *</Label>
+          <Input
+            type="email"
+            placeholder="customer@email.com"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            data-testid="input-charge-email"
+          />
+        </div>
+
+        {/* Card holder */}
+        <div className="space-y-1">
+          <Label className="text-xs">Cardholder name *</Label>
+          <Input
+            placeholder="JOHN DOE"
+            value={holder}
+            onChange={e => setHolder(e.target.value.toUpperCase())}
+            data-testid="input-charge-holder"
+          />
+        </div>
+
+        {/* Card details — rendered inside Stripe's hosted iframe (Stripe.js
+            CardElement). The raw card number/expiry/CVV are typed straight
+            into Stripe's iframe and never touch our frontend state or our
+            servers; only the resulting Stripe payment-method token does. */}
+        <div className="space-y-1">
+          <Label className="text-xs">Card details *</Label>
+          <div className="rounded-md border border-input bg-background px-3 py-2.5">
+            <CardElement
+              options={cardElementOptions}
+              onChange={(e) => {
+                setCardComplete(e.complete);
+                setCardError(e.error?.message ?? null);
+              }}
+            />
+          </div>
+          {cardError && <p className="text-xs text-red-500">{cardError}</p>}
+        </div>
+
+        {/* Optional ID fields — only used if the engine falls back to Mercado Pago */}
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1">
+            <Label className="text-xs">Document type</Label>
+            <Select value={docType} onValueChange={setDocType}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="CPF">CPF (Brazil)</SelectItem>
+                <SelectItem value="CNPJ">CNPJ (Brazil)</SelectItem>
+                <SelectItem value="CURP">CURP (Mexico)</SelectItem>
+                <SelectItem value="CC">CC (Colombia)</SelectItem>
+                <SelectItem value="DNI">DNI (Argentina)</SelectItem>
+                <SelectItem value="OTHER">Other</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Document number</Label>
+            <Input
+              placeholder="12345678"
+              value={docNum}
+              onChange={e => setDocNum(e.target.value)}
+              data-testid="input-charge-docnum"
+            />
+          </div>
+        </div>
+
+        <Button
+          className="w-full bg-[#c8322b] mt-1"
+          onClick={handleCharge}
+          disabled={chargeMutation.isPending || !stripe || !amount || !holder || !email || !cardComplete}
+          data-testid="button-process-charge"
+        >
+          {chargeMutation.isPending
+            ? <><RefreshCw className="w-4 h-4 animate-spin mr-2" />Processing…</>
+            : <><Zap className="w-4 h-4 mr-2" />Process Charge</>
+          }
+        </Button>
+
+        <p className="text-[10px] text-muted-foreground text-center">
+          Motor de Pagos Unificado · PCI DSS Level 1
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Unified Payment Engine Panel — Visa Quantum 9.0 ─────────────────────────
 // Single automatic engine: tries Stripe first, falls back to Mercado Pago
 // transparently on the backend. No manual processor selection.
 export function PaymentEnginePanel() {
   const { user } = useAuth();
-  const { toast } = useToast();
-
-  const [amount, setAmount]       = useState("");
-  const [currency, setCurrency]   = useState("USD");
-  const [desc, setDesc]           = useState("");
-  const [cardNum, setCardNum]     = useState("");
-  const [expiry, setExpiry]       = useState("");
-  const [cvv, setCvv]             = useState("");
-  const [holder, setHolder]       = useState("");
-  const [email, setEmail]         = useState("");
-  const [expanded, setExpanded]   = useState<string | null>(null);
-  const [docType, setDocType]     = useState("CPF");
-  const [docNum, setDocNum]       = useState("");
 
   const { data: charges = [], isLoading } = useQuery<ChargeRecord[]>({
     queryKey: ["/api/payment-engine/charges"],
@@ -92,46 +315,12 @@ export function PaymentEnginePanel() {
     enabled: !!user,
   });
 
-  const chargeMutation = useMutation({
-    mutationFn: async (body: object) => {
-      const res = await apiRequest("POST", "/api/payment-engine/charge", body);
-      return res.json();
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/payment-engine/charges"] });
-      if (data.status === "succeeded" || data.status === "approved") {
-        toast({ title: "Cobro aprobado", description: `Auth: ${data.chargeId}` });
-        setAmount(""); setDesc(""); setCardNum(""); setExpiry(""); setCvv(""); setHolder(""); setEmail(""); setDocNum("");
-      } else {
-        toast({ title: "Cobro rechazado", description: data.error ?? "Declined", variant: "destructive" });
-      }
-    },
-    onError: (err: any) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
-    },
-  });
+  const [expanded, setExpanded] = useState<string | null>(null);
 
-  function handleCharge() {
-    if (!amount || !cardNum || !expiry || !cvv || !holder || !email) {
-      toast({ title: "Campos requeridos", variant: "destructive" });
-      return;
-    }
-    const [expMonth, expYear] = expiry.split("/").map(s => s.trim());
-    chargeMutation.mutate({
-      amount: parseFloat(amount),
-      currency,
-      description: desc || "Banxico Plus charge",
-      email,
-      card: {
-        number:   cardNum.replace(/\s/g, ""),
-        expMonth: parseInt(expMonth),
-        expYear:  parseInt(expYear.length === 2 ? `20${expYear}` : expYear),
-        cvv,
-        holder,
-      },
-      docType, docNum,
-    });
-  }
+  const stripePromise = useMemo(
+    () => getStripePromise(stripeCfg?.publishableKey),
+    [stripeCfg?.publishableKey]
+  );
 
   const totalApproved = charges.filter(c => c.status === "succeeded" || c.status === "approved").length;
   const totalVolume = charges
@@ -214,178 +403,19 @@ export function PaymentEnginePanel() {
 
       <div className="grid lg:grid-cols-2 gap-5">
 
-        {/* ── Charge Form ── */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <CreditCard className="w-4 h-4 text-[#c8322b]" />
-              Nuevo Cobro
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-
-            <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-              <Zap className="w-3.5 h-3.5 text-[#c8322b] flex-shrink-0" />
-              Motor unificado: el sistema selecciona automáticamente Stripe o Mercado Pago.
-            </div>
-
-            {/* Amount + Currency */}
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-xs">Amount *</Label>
-                <div className="relative">
-                  <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                  <Input
-                    placeholder="0.00"
-                    className="pl-7"
-                    value={amount}
-                    onChange={e => setAmount(e.target.value)}
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    data-testid="input-charge-amount"
-                  />
-                </div>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Currency</Label>
-                <Select value={currency} onValueChange={setCurrency}>
-                  <SelectTrigger data-testid="select-charge-currency">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CURRENCIES.map(c => (
-                      <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Description */}
-            <div className="space-y-1">
-              <Label className="text-xs">Description</Label>
-              <Input
-                placeholder="Banxico Plus — service charge"
-                value={desc}
-                onChange={e => setDesc(e.target.value)}
-                data-testid="input-charge-description"
-              />
-            </div>
-
-            {/* Email */}
-            <div className="space-y-1">
-              <Label className="text-xs">Cardholder email *</Label>
-              <Input
-                type="email"
-                placeholder="customer@email.com"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                data-testid="input-charge-email"
-              />
-            </div>
-
-            {/* Card holder */}
-            <div className="space-y-1">
-              <Label className="text-xs">Cardholder name *</Label>
-              <Input
-                placeholder="JOHN DOE"
-                value={holder}
-                onChange={e => setHolder(e.target.value.toUpperCase())}
-                data-testid="input-charge-holder"
-              />
-            </div>
-
-            {/* Card number */}
-            <div className="space-y-1">
-              <Label className="text-xs">Card number *</Label>
-              <Input
-                placeholder="4242 4242 4242 4242"
-                value={cardNum}
-                maxLength={19}
-                onChange={e => {
-                  const v = e.target.value.replace(/\D/g, "").slice(0, 16);
-                  setCardNum(v.replace(/(.{4})/g, "$1 ").trim());
-                }}
-                data-testid="input-charge-cardnum"
-              />
-            </div>
-
-            {/* Expiry + CVV */}
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-xs">Expiry (MM/YY) *</Label>
-                <Input
-                  placeholder="MM/YY"
-                  maxLength={5}
-                  value={expiry}
-                  onChange={e => {
-                    let v = e.target.value.replace(/\D/g, "").slice(0, 4);
-                    if (v.length >= 3) v = v.slice(0, 2) + "/" + v.slice(2);
-                    setExpiry(v);
-                  }}
-                  data-testid="input-charge-expiry"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">CVV *</Label>
-                <Input
-                  placeholder="123"
-                  maxLength={4}
-                  type="password"
-                  value={cvv}
-                  onChange={e => setCvv(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                  data-testid="input-charge-cvv"
-                />
-              </div>
-            </div>
-
-            {/* Optional ID fields — only used if the engine falls back to Mercado Pago */}
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-xs">Document type</Label>
-                <Select value={docType} onValueChange={setDocType}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="CPF">CPF (Brazil)</SelectItem>
-                    <SelectItem value="CNPJ">CNPJ (Brazil)</SelectItem>
-                    <SelectItem value="CURP">CURP (Mexico)</SelectItem>
-                    <SelectItem value="CC">CC (Colombia)</SelectItem>
-                    <SelectItem value="DNI">DNI (Argentina)</SelectItem>
-                    <SelectItem value="OTHER">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Document number</Label>
-                <Input
-                  placeholder="12345678"
-                  value={docNum}
-                  onChange={e => setDocNum(e.target.value)}
-                  data-testid="input-charge-docnum"
-                />
-              </div>
-            </div>
-
-            <Button
-              className="w-full bg-[#c8322b] mt-1"
-              onClick={handleCharge}
-              disabled={chargeMutation.isPending || !amount || !cardNum || !expiry || !cvv || !holder || !email}
-              data-testid="button-process-charge"
-            >
-              {chargeMutation.isPending
-                ? <><RefreshCw className="w-4 h-4 animate-spin mr-2" />Processing…</>
-                : <><Zap className="w-4 h-4 mr-2" />Process Charge</>
-              }
-            </Button>
-
-            <p className="text-[10px] text-muted-foreground text-center">
-              Motor de Pagos Unificado · PCI DSS Level 1
-            </p>
-          </CardContent>
-        </Card>
+        {/* ── Charge Form — needs Stripe.js loaded with a valid publishable key ── */}
+        {stripePromise ? (
+          <Elements stripe={stripePromise}>
+            <ChargeForm />
+          </Elements>
+        ) : (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-10 gap-2">
+              <RefreshCw className="w-5 h-5 animate-spin text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">Cargando formulario de pago…</p>
+            </CardContent>
+          </Card>
+        )}
 
         {/* ── Transaction history ── */}
         <div className="space-y-3">
