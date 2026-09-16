@@ -1,4 +1,4 @@
----
+tro---
 name: TRON mainnet node ops
 description: Lecciones del nodo mainnet Lite y el firmante mainnet en DigitalOcean (arranque, config, firewall)
 ---
