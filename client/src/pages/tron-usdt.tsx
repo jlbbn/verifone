@@ -123,6 +123,12 @@ export default function TronUsdtPage() {
     setTronLinkCopied(true);
     setTimeout(() => setTronLinkCopied(false), 2000);
   };
+  const onConnectTronLinkClick = async () => {
+    const result = await tronLink.connect();
+    if (!result.ok) {
+      toast({ title: "No se pudo conectar TronLink", description: result.error, variant: "destructive" });
+    }
+  };
 
   const usdtBalance = balances?.usdt ?? 0;
   const explorerBase = depositInfo?.network?.toLowerCase().includes("nile")
@@ -245,71 +251,98 @@ export default function TronUsdtPage() {
 
         {/* ── Estado de la red + TronLink ── */}
         <div className="grid md:grid-cols-2 gap-6">
-          <Card className="border-border">
-            <CardContent className="p-5 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${networkStatus?.healthy ? "bg-emerald-500/10" : "bg-red-500/10"}`}>
-                  <Activity className={`w-4 h-4 ${networkStatus?.healthy ? "text-emerald-400" : "text-red-400"}`} />
+          <Card className="relative overflow-hidden border-emerald-500/15 bg-gradient-to-b from-emerald-950/30 via-card to-card">
+            <div className="absolute -top-20 -right-20 w-48 h-48 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
+            <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-emerald-400/50 to-transparent" />
+            <CardContent className="relative p-6 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center ring-1 ${networkStatus?.healthy ? "bg-emerald-500/15 ring-emerald-500/20" : "bg-red-500/15 ring-red-500/20"}`}>
+                    <Activity className={`w-4 h-4 ${networkStatus?.healthy ? "text-emerald-400" : "text-red-400"}`} />
+                  </div>
+                  <h2 className="font-semibold">Estado de la red TRON</h2>
                 </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium">Estado de la red TRON</p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {networkStatus ? `${networkStatus.network} · bloque ${networkStatus.blockNumber?.toLocaleString("en-US") ?? "—"}` : "Consultando..."}
-                  </p>
+                <Badge
+                  variant="outline"
+                  data-testid="badge-network-status"
+                  className={`text-[11px] gap-1.5 shrink-0 ${networkStatus?.healthy ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" : "bg-red-500/10 text-red-400 border-red-500/30"}`}
+                >
+                  {networkStatus?.healthy ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                  {networkStatus ? (networkStatus.healthy ? "Operando" : "Con problemas") : "Consultando..."}
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-xl border border-emerald-500/10 bg-black/20 px-3 py-2.5">
+                  <p className="text-[10px] uppercase tracking-wider text-emerald-100/40">Red</p>
+                  <p className="text-sm font-medium text-white mt-0.5 truncate">{networkStatus?.network ?? "—"}</p>
+                </div>
+                <div className="rounded-xl border border-emerald-500/10 bg-black/20 px-3 py-2.5">
+                  <p className="text-[10px] uppercase tracking-wider text-emerald-100/40">Bloque</p>
+                  <p className="text-sm font-medium text-white mt-0.5 tabular-nums truncate">{networkStatus?.blockNumber?.toLocaleString("en-US") ?? "—"}</p>
+                </div>
+                <div className="rounded-xl border border-emerald-500/10 bg-black/20 px-3 py-2.5">
+                  <p className="text-[10px] uppercase tracking-wider text-emerald-100/40">Latencia</p>
+                  <p className="text-sm font-medium text-white mt-0.5 tabular-nums truncate">{networkStatus?.latencyMs != null ? `${networkStatus.latencyMs}ms` : "—"}</p>
                 </div>
               </div>
-              <Badge
-                variant="outline"
-                data-testid="badge-network-status"
-                className={`text-[11px] gap-1.5 shrink-0 ${networkStatus?.healthy ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" : "bg-red-500/10 text-red-400 border-red-500/30"}`}
-              >
-                {networkStatus?.healthy ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-                {networkStatus ? (networkStatus.healthy ? "Operando" : "Con problemas") : "…"}
-              </Badge>
+
+              <p className="text-[11px] text-emerald-100/40">
+                {networkStatus ? `Última verificación: ${new Date(networkStatus.checkedAt).toLocaleTimeString()}` : "Consultando el nodo de la plataforma..."}
+              </p>
             </CardContent>
           </Card>
 
-          <Card className="border-border">
-            <CardContent className="p-5 space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                    <PlugZap className="w-4 h-4 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">TronLink</p>
-                    <p className="text-xs text-muted-foreground">Conecta tu wallet para autocompletar la dirección de retiro</p>
-                  </div>
+          <Card className="relative overflow-hidden border-border bg-gradient-to-b from-primary/5 via-card to-card">
+            <div className="absolute -top-20 -left-20 w-48 h-48 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
+            <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+            <CardContent className="relative p-6 space-y-4">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-lg bg-primary/15 flex items-center justify-center ring-1 ring-primary/20">
+                  <PlugZap className="w-4 h-4 text-primary" />
+                </div>
+                <div>
+                  <h2 className="font-semibold">TronLink</h2>
+                  <p className="text-xs text-muted-foreground">Conecta tu wallet para autocompletar la dirección de retiro</p>
                 </div>
               </div>
 
               {!tronLink.state.installed ? (
-                <a href="https://www.tronlink.org/" target="_blank" rel="noreferrer">
-                  <Button size="sm" variant="outline" className="w-full" data-testid="button-install-tronlink">
-                    <Download className="w-3.5 h-3.5 mr-2" /> Instalar extensión TronLink
+                <a href="https://www.tronlink.org/" target="_blank" rel="noreferrer" className="block">
+                  <Button variant="outline" className="w-full" data-testid="button-install-tronlink">
+                    <Download className="w-4 h-4 mr-2" /> Instalar extensión TronLink
                   </Button>
                 </a>
               ) : !tronLink.state.connected ? (
                 <div className="space-y-2">
-                  <Button size="sm" className="w-full" onClick={() => tronLink.connect()} disabled={tronLink.state.loading} data-testid="button-connect-tronlink">
-                    {tronLink.state.loading ? <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> : <PlugZap className="w-3.5 h-3.5 mr-2" />}
-                    Conectar TronLink
+                  <Button
+                    className="w-full"
+                    onClick={onConnectTronLinkClick}
+                    disabled={tronLink.state.loading}
+                    data-testid="button-connect-tronlink"
+                  >
+                    {tronLink.state.loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <PlugZap className="w-4 h-4 mr-2" />}
+                    {tronLink.state.loading ? "Conectando..." : "Conectar TronLink"}
                   </Button>
-                  {tronLink.state.error && <p className="text-xs text-red-400">{tronLink.state.error}</p>}
+                  {tronLink.state.error && (
+                    <p className="text-xs text-red-400 flex items-start gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> {tronLink.state.error}
+                    </p>
+                  )}
                 </div>
               ) : (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2.5">
                     <code className="text-xs flex-1 truncate font-mono" data-testid="text-tronlink-address">{tronLink.state.address}</code>
-                    <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={copyTronLinkAddress}>
+                    <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={copyTronLinkAddress}>
                       {tronLinkCopied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                     </Button>
                   </div>
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>Saldo TRX: <span className="tabular-nums text-foreground/80">{tronLink.state.trxBalance != null ? tronLink.state.trxBalance.toLocaleString("en-US", { maximumFractionDigits: 4 }) : "—"}</span></span>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">Saldo TRX: <span className="tabular-nums text-foreground/80">{tronLink.state.trxBalance != null ? tronLink.state.trxBalance.toLocaleString("en-US", { maximumFractionDigits: 4 }) : "—"}</span></span>
                     <button
                       type="button"
-                      className="text-xs text-primary underline-offset-2 hover:underline"
+                      className="text-primary font-medium underline-offset-2 hover:underline"
                       onClick={() => tronLink.state.address && setWithdrawAddress(tronLink.state.address)}
                       data-testid="button-use-tronlink-address"
                     >

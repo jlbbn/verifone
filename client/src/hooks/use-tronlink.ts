@@ -37,7 +37,13 @@ export function useTronLink() {
 
   useEffect(() => {
     const tick = () => {
-      const hasTronLink = Boolean((window as any).tronLink || (window as any).tronWeb);
+      // Some browser extensions leave a stray `window.tronWeb`/`tronLink`
+      // object behind without the real API — only trust it if `request` is
+      // actually callable, so we don't show a "Conectar" button that fails
+      // silently every time it's pressed.
+      const tronLink = (window as any).tronLink;
+      const tronWeb = (window as any).tronWeb;
+      const hasTronLink = typeof tronLink?.request === "function" || Boolean(tronWeb?.ready);
       setState((s) => ({ ...s, installed: hasTronLink }));
       if (hasTronLink) void refreshFromInjectedWallet();
     };
@@ -52,16 +58,14 @@ export function useTronLink() {
     return () => { clearInterval(interval); window.removeEventListener("message", onMessage); };
   }, []);
 
-  const connect = async () => {
+  const connect = async (): Promise<{ ok: boolean; error?: string }> => {
     setState((s) => ({ ...s, error: null, loading: true }));
     try {
       const tronLink = (window as any).tronLink;
-      if (!tronLink) {
-        setState((s) => ({
-          ...s, loading: false,
-          error: "TronLink no está instalado en este navegador. Instálalo como extensión para conectar una wallet.",
-        }));
-        return;
+      if (typeof tronLink?.request !== "function") {
+        const msg = "TronLink no está instalado en este navegador. Instálalo como extensión para conectar una wallet.";
+        setState((s) => ({ ...s, loading: false, error: msg }));
+        return { ok: false, error: msg };
       }
       const res = await tronLink.request({ method: "tron_requestAccounts" });
       if (res?.code && res.code !== 200) {
@@ -69,8 +73,11 @@ export function useTronLink() {
       }
       await refreshFromInjectedWallet();
       setState((s) => ({ ...s, loading: false }));
+      return { ok: true };
     } catch (err: any) {
-      setState((s) => ({ ...s, loading: false, error: err.message || "No se pudo conectar con TronLink." }));
+      const msg = err.message || "No se pudo conectar con TronLink.";
+      setState((s) => ({ ...s, loading: false, error: msg }));
+      return { ok: false, error: msg };
     }
   };
 
