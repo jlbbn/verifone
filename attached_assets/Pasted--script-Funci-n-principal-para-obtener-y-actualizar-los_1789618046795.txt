@@ -1,0 +1,50 @@
+<script>
+  // Función principal para obtener y actualizar los precios
+  async function updateFinancialTicker() {
+    try {
+      // 1. Consultar la API gratuita de CoinGecko para las criptos
+      const url = 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,ripple,litecoin,polkadot,cardano&vs_currencies=usd';
+      const response = await fetch(url);
+      
+      if (!response.ok) throw new Error('Error al conectar con la API de precios');
+      
+      const data = await response.json();
+
+      // 2. Mapear los datos recibidos con el formato de moneda correcto
+      const livePrices = {
+        'BTC': data.bitcoin.usd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        'ETH': data.ethereum.usd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        'XRP': data.ripple.usd.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }),
+        'LTC': data.litecoin.usd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        'DOT': data.polkadot.usd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        'ADA': data.cardano.usd.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }),
+        
+        // Para Forex (CAD/MXN) y Acciones (ON) se requiere otra API gratuita como ExchangeRate-API o Finnhub.
+        // Mientras tanto, los dejamos estáticos o simulados:
+        'CAD': '13.20',
+        'ON': '22.53'
+      };
+
+      // 3. Buscar los elementos en tu HTML y reemplazar el texto
+      // (Asume que les pusiste un ID, mira el paso 2 abajo)
+      document.getElementById('ticker-btc').innerText = `$${livePrices['BTC']}`;
+      document.getElementById('ticker-eth').innerText = `$${livePrices['ETH']}`;
+      document.getElementById('ticker-xrp').innerText = `$${livePrices['XRP']}`;
+      document.getElementById('ticker-ltc').innerText = `$${livePrices['LTC']}`;
+      document.getElementById('ticker-dot').innerText = `$${livePrices['DOT']}`;
+      document.getElementById('ticker-ada').innerText = `$${livePrices['ADA']}`;
+
+      console.log("Ticker actualizado en vivo con éxito.");
+
+    } catch (error) {
+      console.error("No se pudo actualizar el ticker:", error);
+      // Si falla la API (por ejemplo si no hay internet), mantendrá los últimos precios visibles.
+    }
+  }
+
+  // Ejecutar inmediatamente al cargar la página
+  updateFinancialTicker();
+
+  // Configurar un intervalo para que se actualice solo cada 60 segundos (60000 milisegundos)
+  setInterval(updateFinancialTicker, 60000);
+</script>
