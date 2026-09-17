@@ -57,7 +57,10 @@ function isPrivateIpv4(hostname: string): boolean {
   }
   return parts[0] === 10
     || (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31)
-    || (parts[0] === 192 && parts[1] === 168);
+    || (parts[0] === 192 && parts[1] === 168)
+    // Tailscale CGNAT range (100.64.0.0/10) — used when the app and the node
+    // no longer share a cloud VPC and are joined by a private Tailscale mesh.
+    || (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127);
 }
 
 /** Write-capable TRON paths require an explicit private node and a separately
