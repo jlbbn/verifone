@@ -1,6 +1,36 @@
 import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useSystemSettings } from '@/hooks/use-system-settings';
 import { DEFAULT_SYSTEM_SETTINGS } from '@shared/schema';
+
+// ── Live crypto prices — same feed the exchange page uses (Binance→OKX→Kraken) ──
+type PriceRecord = { price: number; change24h: number };
+type PricesResponse = Record<string, PriceRecord>;
+
+// Maps a ticker symbol like "BTC/USD" to the aggregator's lowercase asset key
+const LIVE_SYMBOL_TO_ASSET: Record<string, string> = {
+  "BTC/USD": "btc",
+  "ETH/USD": "eth",
+  "XRP/USD": "xrp",
+  "LTC/USD": "ltc",
+  "DOT/USD": "dot",
+  "ADA/USD": "ada",
+};
+
+function formatLivePrice(symbol: string, price: number): string {
+  // XRP/ADA trade under $1: show more decimals, like the rest of the app does
+  const decimals = price < 1 ? 4 : 2;
+  return `$${price.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
+}
+
+function useLiveCryptoPrices() {
+  return useQuery<PricesResponse>({
+    queryKey: ['/api/crypto-prices'],
+    refetchInterval: 20_000, // matches the backend aggregator's cache TTL
+    staleTime: 15_000,
+    retry: 1,
+  });
+}
 
 // ── World clocks — standalone component, no shared re-render ─────────────────
 const CLOCKS = [
@@ -57,7 +87,19 @@ function WorldClocks() {
 // ── Scrolling price ticker — CSS animation, zero JS per-frame ────────────────
 export function FinancialTicker() {
   const { data: settings } = useSystemSettings();
-  const items = settings?.tickerItems ?? DEFAULT_SYSTEM_SETTINGS.tickerItems;
+  const { data: livePrices } = useLiveCryptoPrices();
+  const baseItems = settings?.tickerItems ?? DEFAULT_SYSTEM_SETTINGS.tickerItems;
+
+  // Overlay live crypto prices onto the configured items; anything without a
+  // live feed (ON, CAD/MXN) keeps its configured value untouched.
+  const items = baseItems.map(item => {
+    const asset = LIVE_SYMBOL_TO_ASSET[item.symbol];
+    const record = asset ? livePrices?.[asset] : undefined;
+    if (!record) return item;
+    const changeSign = record.change24h > 0 ? "+" : record.change24h < 0 ? "-" : "";
+    const changeStr = `${changeSign}${Math.abs(record.change24h).toFixed(2)}%`;
+    return { symbol: item.symbol, value: `${formatLivePrice(item.symbol, record.price)} ${changeStr}` };
+  });
 
   const dirColor = (v: string) =>
     v.includes("+") ? "#22c55e" : v.includes("-") ? "#ef4444" : "#e5e7eb";
