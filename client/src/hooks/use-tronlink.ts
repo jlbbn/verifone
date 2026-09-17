@@ -67,15 +67,26 @@ export function useTronLink() {
         setState((s) => ({ ...s, loading: false, error: msg }));
         return { ok: false, error: msg };
       }
-      const res = await tronLink.request({ method: "tron_requestAccounts" });
+      // TronLink's own popup can be closed, ignored, or the extension can be
+      // locked with no visible prompt — without a timeout the button would
+      // spin forever and look broken instead of surfacing a clear error.
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("TronLink no respondió. Revisa si aparece una ventana emergente de la extensión (a veces se abre detrás de la pestaña) o si está bloqueada y necesita tu contraseña.")), 20_000),
+      );
+      const res = await Promise.race([tronLink.request({ method: "tron_requestAccounts" }), timeout]);
       if (res?.code && res.code !== 200) {
         throw new Error(res.message || "TronLink rechazó la solicitud de conexión.");
       }
       await refreshFromInjectedWallet();
+      const tronWeb = (window as any).tronWeb;
+      const address: string | null = tronWeb?.defaultAddress?.base58 || null;
+      if (!address) {
+        throw new Error("TronLink no devolvió ninguna dirección. Desbloquea la extensión y vuelve a intentarlo.");
+      }
       setState((s) => ({ ...s, loading: false }));
       return { ok: true };
     } catch (err: any) {
-      const msg = err.message || "No se pudo conectar con TronLink.";
+      const msg = err?.message || "No se pudo conectar con TronLink.";
       setState((s) => ({ ...s, loading: false, error: msg }));
       return { ok: false, error: msg };
     }

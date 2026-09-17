@@ -283,6 +283,12 @@ function safeNodeEndpoint(): string {
   return approvedPrivateTronNodeConfiguration().endpoint ?? "(approved private node not configured)";
 }
 
+/** Whether a private TRON node is even provisioned — distinct from whether
+ * that node is currently healthy. Never exposes the host/IP itself. */
+export function approvedNodeConfigured(): boolean {
+  return approvedPrivateTronNodeConfiguration().configured;
+}
+
 export interface TronTransactionInfo {
   txid:        string;
   blockNumber: number | null;
