@@ -1143,23 +1143,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ── Estado público (no-admin) de la red TRON: solo salud básica, sin
   // exponer endpoint privado ni datos del firmador ───────────────────────
   app.get("/api/crypto/tron-network-status", requireSession, async (_req, res) => {
+    // A regular user sees more than a single healthy/unhealthy flag: every
+    // dimension the platform actually checks (head freshness, peer count,
+    // chain identity), so an outage reads as a real diagnostic panel instead
+    // of a blank widget. Never leak the private node's host/IP here.
+    const nodeConfigured = TronClient.approvedNodeConfigured();
     try {
       const node = await TronClient.getNodeHealth();
       res.json({
         network: TronClient.TRON_NETWORK,
+        configured: true,
         healthy: node.healthy,
         blockNumber: node.blockNumber,
+        headAgeMs: node.headAgeMs,
+        activePeers: node.activePeers,
+        chainIdentityMatches: node.chainIdentityMatches,
         latencyMs: node.latencyMs,
         checkedAt: node.checkedAt,
       });
     } catch (err) {
       res.json({
         network: TronClient.TRON_NETWORK,
+        configured: nodeConfigured,
         healthy: false,
         blockNumber: null,
+        headAgeMs: null,
+        activePeers: null,
+        chainIdentityMatches: null,
         latencyMs: null,
         checkedAt: new Date().toISOString(),
-        error: (err as Error).message,
+        error: nodeConfigured ? "El nodo no respondió a tiempo." : "El nodo de la plataforma aún no está aprovisionado.",
       });
     }
   });

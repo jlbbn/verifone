@@ -28,11 +28,26 @@ interface DepositInfo {
 
 interface NetworkStatus {
   network: string;
+  configured: boolean;
   healthy: boolean;
   blockNumber: number | null;
+  headAgeMs: number | null;
+  activePeers: number | null;
+  chainIdentityMatches: boolean | null;
   latencyMs: number | null;
   checkedAt: string;
   error?: string;
+}
+
+function formatAge(ms: number | null): string {
+  if (ms == null) return "—";
+  if (ms < 1_000) return "recién";
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `hace ${s}s`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `hace ${m}min`;
+  const h = Math.round(m / 60);
+  return `hace ${h}h`;
 }
 
 interface WithdrawalRequest {
@@ -124,8 +139,11 @@ export default function TronUsdtPage() {
     setTimeout(() => setTronLinkCopied(false), 2000);
   };
   const onConnectTronLinkClick = async () => {
+    toast({ title: "Conectando con TronLink...", description: "Revisa si tu navegador abrió una ventana emergente de la extensión para aprobar la conexión." });
     const result = await tronLink.connect();
-    if (!result.ok) {
+    if (result.ok) {
+      toast({ title: "TronLink conectado", description: "Tu wallet quedó vinculada. Ya puedes usarla como destino de retiro." });
+    } else {
       toast({ title: "No se pudo conectar TronLink", description: result.error, variant: "destructive" });
     }
   };
@@ -278,20 +296,35 @@ export default function TronUsdtPage() {
                 </Badge>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-xl border border-emerald-500/10 bg-black/25 px-3 py-3">
-                  <p className="text-[10px] uppercase tracking-wider text-emerald-100/40 flex items-center gap-1"><Network className="w-3 h-3" /> Red</p>
-                  <p className="text-base font-semibold text-white mt-1 truncate">{networkStatus?.network ?? "—"}</p>
+                  <p className="text-[10px] uppercase tracking-wider text-emerald-100/40 flex items-center gap-1"><FileCode2 className="w-3 h-3" /> Bloque actual</p>
+                  <p className="text-base font-semibold text-white mt-1 tabular-nums truncate">{networkStatus?.blockNumber?.toLocaleString("en-US") ?? "—"}</p>
                 </div>
                 <div className="rounded-xl border border-emerald-500/10 bg-black/25 px-3 py-3">
-                  <p className="text-[10px] uppercase tracking-wider text-emerald-100/40 flex items-center gap-1"><FileCode2 className="w-3 h-3" /> Bloque</p>
-                  <p className="text-base font-semibold text-white mt-1 tabular-nums truncate">{networkStatus?.blockNumber?.toLocaleString("en-US") ?? "—"}</p>
+                  <p className="text-[10px] uppercase tracking-wider text-emerald-100/40 flex items-center gap-1"><Clock className="w-3 h-3" /> Antigüedad del bloque</p>
+                  <p className="text-base font-semibold text-white mt-1 tabular-nums truncate">{formatAge(networkStatus?.headAgeMs ?? null)}</p>
+                </div>
+                <div className="rounded-xl border border-emerald-500/10 bg-black/25 px-3 py-3">
+                  <p className="text-[10px] uppercase tracking-wider text-emerald-100/40 flex items-center gap-1"><Network className="w-3 h-3" /> Peers activos</p>
+                  <p className="text-base font-semibold text-white mt-1 tabular-nums truncate">{networkStatus?.activePeers ?? "—"}</p>
                 </div>
                 <div className="rounded-xl border border-emerald-500/10 bg-black/25 px-3 py-3">
                   <p className="text-[10px] uppercase tracking-wider text-emerald-100/40 flex items-center gap-1"><Radio className="w-3 h-3" /> Latencia</p>
                   <p className="text-base font-semibold text-white mt-1 tabular-nums truncate">{networkStatus?.latencyMs != null ? `${networkStatus.latencyMs}ms` : "—"}</p>
                 </div>
               </div>
+
+              {networkStatus && !networkStatus.healthy && (
+                <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-3 py-2.5 flex gap-2">
+                  <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                  <p className="text-xs text-red-200/90 leading-relaxed">
+                    {networkStatus.configured
+                      ? (networkStatus.error ?? "El nodo no está reportando un bloque reciente ni suficientes conexiones a la red.")
+                      : "El nodo de lectura de la plataforma todavía no está aprovisionado. El equipo ya está trabajando en su despliegue."}
+                  </p>
+                </div>
+              )}
 
               <div className="flex items-center gap-1.5 text-[11px] text-emerald-100/40 border-t border-emerald-500/10 pt-3">
                 <Clock className="w-3 h-3 shrink-0" />
