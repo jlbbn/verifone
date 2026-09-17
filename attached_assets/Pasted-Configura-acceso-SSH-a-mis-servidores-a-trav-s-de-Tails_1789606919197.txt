@@ -1,0 +1,32 @@
+Configura acceso SSH a mis servidores a través de Tailscale en modo userspace. La auth key está en el secret TS_AUTHKEY; no la imprimas, no la guardes en archivos ni en logs.
+
+RESTRICCIONES:
+- No modifiques firewalls, llaves SSH, servicios ni archivos en los servidores. Solo prueba la conexión.
+- No uses las IPs públicas de los servidores; usa solo las del tailnet.
+
+PASO 1 - Instalar Tailscale sin root:
+Descarga el tarball estático más reciente de https://pkgs.tailscale.com/stable/ (consulta la versión en https://pkgs.tailscale.com/stable/?mode=json, campo TarballsVersion, arquitectura amd64) y deja los binarios tailscale y tailscaled en ~/.local/bin.
+
+PASO 2 - Crear el script scripts/tailscale-up.sh que:
+- Arranque el daemon si no está corriendo:
+  tailscaled --tun=userspace-networking --state=mem: --socket=/tmp/tailscaled.sock >/tmp/tailscaled.log 2>&1 &
+- Espere a que exista el socket.
+- Se una al tailnet:
+  tailscale --socket=/tmp/tailscaled.sock up --auth-key="$TS_AUTHKEY" --hostname=replit-agent
+- Sea seguro de correr varias veces (si ya está conectado, no hace nada).
+Configúralo para que corra al iniciar el entorno.
+
+PASO 3 - Crear ~/.ssh/config con estos alias, todos con User root y
+ProxyCommand tailscale --socket=/tmp/tailscaled.sock nc %h %p
+  nyc1         100.85.242.110   (tron-mainnet-nyc1, nodo mainnet nuevo)
+  mainnet      100.88.247.67    (tron-mainnet-lite, nodo mainnet viejo)
+  nile         100.65.43.15     (tron-nile-lite)
+  signer-main  100.99.181.52    (tron-signer-mainnet)
+  signer-nile  100.69.180.26    (tron-signer-nile-2)
+  app          100.101.95.48    (banxico-plus-app)
+Usa la llave SSH que ya usas normalmente (banxico-plus-admin-derived).
+
+PASO 4 - Probar y mostrarme la salida:
+for h in nyc1 mainnet nile signer-main signer-nile app; do echo "== $h"; ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new $h hostname; done
+
+Si algo falla, detente y muéstrame el error exacto. No abras puertos ni cambies nada en los servidores para "arreglarlo".
