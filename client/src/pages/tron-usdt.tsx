@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { useTronLink } from "@/hooks/use-tronlink";
 import { QRCodeSVG } from "qrcode.react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Copy, Check, ArrowDownToLine, ArrowUpFromLine, ShieldCheck, Loader2,
   Clock, CheckCircle2, XCircle, AlertTriangle, Send, Wallet, History, Sparkles,
-  Network, FileCode2, ExternalLink, Radio, Landmark,
+  Network, FileCode2, ExternalLink, Radio, Landmark, Activity, PlugZap, Download,
 } from "lucide-react";
 import { SiTether } from "react-icons/si";
 
@@ -23,6 +24,15 @@ interface DepositInfo {
   network: string;
   token: string;
   contract: string;
+}
+
+interface NetworkStatus {
+  network: string;
+  healthy: boolean;
+  blockNumber: number | null;
+  latencyMs: number | null;
+  checkedAt: string;
+  error?: string;
 }
 
 interface WithdrawalRequest {
@@ -101,6 +111,18 @@ export default function TronUsdtPage() {
     queryKey: ["/api/crypto/tron-deposit/credits"],
     refetchInterval: 15_000,
   });
+  const { data: networkStatus } = useQuery<NetworkStatus>({
+    queryKey: ["/api/crypto/tron-network-status"],
+    refetchInterval: 20_000,
+  });
+  const tronLink = useTronLink();
+  const [tronLinkCopied, setTronLinkCopied] = useState(false);
+  const copyTronLinkAddress = () => {
+    if (!tronLink.state.address) return;
+    navigator.clipboard.writeText(tronLink.state.address);
+    setTronLinkCopied(true);
+    setTimeout(() => setTronLinkCopied(false), 2000);
+  };
 
   const usdtBalance = balances?.usdt ?? 0;
   const explorerBase = depositInfo?.network?.toLowerCase().includes("nile")
@@ -219,6 +241,85 @@ export default function TronUsdtPage() {
               <p className="text-sm font-medium text-emerald-300 mt-0.5 flex items-center gap-1">Explorar <ExternalLink className="w-3 h-3" /></p>
             </a>
           </div>
+        </div>
+
+        {/* ── Estado de la red + TronLink ── */}
+        <div className="grid md:grid-cols-2 gap-6">
+          <Card className="border-border">
+            <CardContent className="p-5 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${networkStatus?.healthy ? "bg-emerald-500/10" : "bg-red-500/10"}`}>
+                  <Activity className={`w-4 h-4 ${networkStatus?.healthy ? "text-emerald-400" : "text-red-400"}`} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">Estado de la red TRON</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {networkStatus ? `${networkStatus.network} · bloque ${networkStatus.blockNumber?.toLocaleString("en-US") ?? "—"}` : "Consultando..."}
+                  </p>
+                </div>
+              </div>
+              <Badge
+                variant="outline"
+                data-testid="badge-network-status"
+                className={`text-[11px] gap-1.5 shrink-0 ${networkStatus?.healthy ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" : "bg-red-500/10 text-red-400 border-red-500/30"}`}
+              >
+                {networkStatus?.healthy ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                {networkStatus ? (networkStatus.healthy ? "Operando" : "Con problemas") : "…"}
+              </Badge>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border">
+            <CardContent className="p-5 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                    <PlugZap className="w-4 h-4 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">TronLink</p>
+                    <p className="text-xs text-muted-foreground">Conecta tu wallet para autocompletar la dirección de retiro</p>
+                  </div>
+                </div>
+              </div>
+
+              {!tronLink.state.installed ? (
+                <a href="https://www.tronlink.org/" target="_blank" rel="noreferrer">
+                  <Button size="sm" variant="outline" className="w-full" data-testid="button-install-tronlink">
+                    <Download className="w-3.5 h-3.5 mr-2" /> Instalar extensión TronLink
+                  </Button>
+                </a>
+              ) : !tronLink.state.connected ? (
+                <div className="space-y-2">
+                  <Button size="sm" className="w-full" onClick={() => tronLink.connect()} disabled={tronLink.state.loading} data-testid="button-connect-tronlink">
+                    {tronLink.state.loading ? <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> : <PlugZap className="w-3.5 h-3.5 mr-2" />}
+                    Conectar TronLink
+                  </Button>
+                  {tronLink.state.error && <p className="text-xs text-red-400">{tronLink.state.error}</p>}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
+                    <code className="text-xs flex-1 truncate font-mono" data-testid="text-tronlink-address">{tronLink.state.address}</code>
+                    <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={copyTronLinkAddress}>
+                      {tronLinkCopied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    </Button>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Saldo TRX: <span className="tabular-nums text-foreground/80">{tronLink.state.trxBalance != null ? tronLink.state.trxBalance.toLocaleString("en-US", { maximumFractionDigits: 4 }) : "—"}</span></span>
+                    <button
+                      type="button"
+                      className="text-xs text-primary underline-offset-2 hover:underline"
+                      onClick={() => tronLink.state.address && setWithdrawAddress(tronLink.state.address)}
+                      data-testid="button-use-tronlink-address"
+                    >
+                      Usar como destino de retiro
+                    </button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         <div className="grid md:grid-cols-2 gap-6">

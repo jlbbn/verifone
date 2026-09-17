@@ -1140,6 +1140,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // ── Estado público (no-admin) de la red TRON: solo salud básica, sin
+  // exponer endpoint privado ni datos del firmador ───────────────────────
+  app.get("/api/crypto/tron-network-status", requireSession, async (_req, res) => {
+    try {
+      const node = await TronClient.getNodeHealth();
+      res.json({
+        network: TronClient.TRON_NETWORK,
+        healthy: node.healthy,
+        blockNumber: node.blockNumber,
+        latencyMs: node.latencyMs,
+        checkedAt: node.checkedAt,
+      });
+    } catch (err) {
+      res.json({
+        network: TronClient.TRON_NETWORK,
+        healthy: false,
+        blockNumber: null,
+        latencyMs: null,
+        checkedAt: new Date().toISOString(),
+        error: (err as Error).message,
+      });
+    }
+  });
+
   // ── Usuario declara (informativamente) el txid de su depósito ───────────
   const declareDepositSchema = z.object({
     txid: z.string().trim().min(10).max(100),
