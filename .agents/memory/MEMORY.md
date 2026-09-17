@@ -40,3 +40,4 @@
 - [Dev vs prod settings-table writes](dev-vs-prod-settings-writes.md) — a persisted single-row settings table is independent per environment; fix production via the app's own admin UI, not a direct query.
 - [Crypto key status vs expiration drift](crypto-key-status-staleness.md) — a seeded "status" column doesn't auto-update when expiresAt passes; compute active/expired at read time instead.
 - [Stripe raw-card-data PCI block](stripe-raw-card-pci-block.md) — accounts without special approval reject server-side paymentMethods.create with raw card fields; only fix is client-side Stripe.js/Elements tokenization.
+- [Stripe→Mercado Pago currency fallback](stripe-mp-currency-fallback.md) — MP always settles MXN; must convert amount before falling back or a USD charge silently becomes same-number pesos.

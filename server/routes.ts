@@ -2881,6 +2881,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let realCharge = false;
       // txApproved tracks the business outcome (real charge OR intentional local auth)
       let txApproved = false;
+      // What actually got charged, in what currency — recorded on the ledger
+      // below instead of a hardcoded label, so the transaction history
+      // reflects reality (Stripe here always charges USD; Mercado Pago always
+      // settles MXN; these can diverge from the operator-entered `amount`
+      // when a Stripe→MP fallback converts it).
+      let chargedCurrency: "USD" | "MXN" = "MXN";
+      let chargedAmount: number = parseFloat(amount);
 
       // ── Parse expiry MM/YY ────────────────────────────────────────────────
       const [expMMStr = "12", expYYStr = "27"] = (expiryDate ?? "12/27").trim().split("/");
@@ -2938,6 +2945,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             realCharge = true;
             txApproved = true;
             authCode = `STR-${intent.id.slice(-12).toUpperCase()}`;
+            chargedCurrency = "USD";
+            chargedAmount   = parseFloat(amount);
             console.log(`[Stripe] OK | id:${intent.id} | $${parseFloat(amount)} USD`);
           } else {
             console.log(`[Stripe] Estado no exitoso: ${intent.status}`);
@@ -2967,23 +2976,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return;
           }
 
-          // Soft error (network/config) → try Mercado Pago as secondary acquirer
+          // Soft error (network/config) → try Mercado Pago as secondary acquirer.
+          // IMPORTANT: the Stripe leg above always charges in USD, but Mercado
+          // Pago (MX account) always settles in MXN with no currency field of
+          // its own — sending the raw USD amount would silently charge pesos
+          // at face value (e.g. a $200 USD attempt becomes $200 MXN, ~18x
+          // less). Convert using the configured exchange rate before charging,
+          // and if the rate is missing/invalid, refuse rather than guess.
           console.warn(`[Stripe] Soft error, attempting MP fallback — ${msg}`);
           if (mpCardToken && process.env.MP_ACCESS_TOKEN) {
+            const settingsForFx = await storage.getSettings();
+            const tipoCambio = settingsForFx?.tipoCambio;
+            if (!tipoCambio || !(tipoCambio > 0)) {
+              console.error(`[MP-Fallback] Sin tipo de cambio configurado — no se puede convertir USD→MXN de forma segura, se aborta el respaldo`);
+              res.status(502).json({
+                error: "No se pudo procesar el cobro: Stripe no disponible y no hay tipo de cambio configurado para el respaldo en pesos.",
+                declineCode: "FX_RATE_MISSING",
+              });
+              return;
+            }
+            const amountUsd = parseFloat(amount);
+            const amountMxn = amountUsd * tipoCambio;
             try {
               const { processMPPaymentWithToken } = await import("./mercadopagoClient");
               const mpResult = await processMPPaymentWithToken({
                 cardToken: mpCardToken,
                 cardType,
                 holderEmail: "josbar93@gmail.com",
-                amount: Math.max(parseFloat(amount), 5),
-                description: `Banxico Plus POS MP-Fallback · ${cardType} · ${protocol ?? "201.1"}`,
+                amount: Math.max(amountMxn, 5),
+                description: `Banxico Plus POS MP-Fallback (USD→MXN @${tipoCambio}) · ${cardType} · ${protocol ?? "201.1"}`,
               });
               mpPaymentId = mpResult.id;
               realCharge  = mpResult.status === "approved";
               txApproved  = realCharge;
               authCode    = mpResult.authorization_code ? `MP-${mpResult.authorization_code}` : `MP-${mpResult.id}`;
-              console.log(`[MP-Fallback] ID:${mpResult.id} | Estado:${mpResult.status}`);
+              chargedCurrency = "MXN";
+              chargedAmount   = amountMxn;
+              console.log(`[MP-Fallback] ID:${mpResult.id} | Estado:${mpResult.status} | $${amountUsd} USD → $${amountMxn.toFixed(2)} MXN @${tipoCambio}`);
               if (mpResult.status === "rejected") {
                 res.status(402).json({
                   error: `Tarjeta rechazada (fallback MP): ${mpResult.status_detail}`,
@@ -3050,8 +3079,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         transactionId,
         protocol: protocol || "201.1",
         type: "payment",
-        amount: amount.toString(),
-        currency: "MXN",
+        amount: chargedAmount.toString(),
+        currency: chargedCurrency,
         status: "processing",
         authCode,
         fromAccount: `${(holderName || "TITULAR").toUpperCase()} · ${cardType.toUpperCase()} · ${maskCardNumber(cardNumber)}`,
@@ -3071,8 +3100,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         conditionMatched: acquirerDecision.conditionMatched,
         responseTimeMs:   routingResponseMs,
         approved:         txApproved,                 // aligned with actual business outcome
-        amount:           amount.toString(),
-        currency:         "MXN",
+        amount:           chargedAmount.toString(),
+        currency:         chargedCurrency,
         protocol:         protocol ?? "201.1",
         cardType,
       }).catch(err => console.error("[Routing] Error al guardar decisión:", err));
@@ -4053,6 +4082,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Only possible when the caller also sent raw card data (legacy path);
       // the Stripe-Elements flow never exposes raw card fields to us, so
       // there is nothing to fall back with and we must surface the error.
+      // IMPORTANT: Mercado Pago (MX account) always settles in MXN, regardless
+      // of what currency_id we send it — sending a USD (or other) face-value
+      // amount would silently charge pesos at that same number (e.g. a $200
+      // USD attempt becomes $200 MXN, ~18x less). Convert to MXN using the
+      // configured exchange rate before charging; if the currency is
+      // anything Y can't convert, refuse rather than guess.
       console.warn(`[PaymentEngine] Stripe no disponible, usando Mercado Pago — ${msg}`);
       const mpToken = process.env.MP_ACCESS_TOKEN;
       if (!mpToken || !card) {
@@ -4065,6 +4100,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
           receiptUrl: null, errorMessage: "Motor de pagos no disponible en este momento", createdBy: user.username,
         }).catch(() => null);
         return res.status(502).json({ ...(charge ?? {}), error: "No se pudo procesar el cobro. Intenta nuevamente." });
+      }
+
+      const upperCurrency = currency.toUpperCase();
+      let mpAmount: number;
+      if (upperCurrency === "MXN") {
+        mpAmount = amount;
+      } else {
+        const settingsForFx = await storage.getSettings();
+        const rates = { tipoCambio: settingsForFx.tipoCambio, fxRateEUR: settingsForFx.fxRateEUR, fxRateGBP: settingsForFx.fxRateGBP };
+        if (!rates.tipoCambio || !(rates.tipoCambio > 0) || !["USD", "EUR", "GBP"].includes(upperCurrency)) {
+          const charge = await storage.createPaymentCharge({
+            chargeId:     `err-${Date.now()}`,
+            processor:    "mercadopago",
+            amount, currency: upperCurrency, status: "failed",
+            description, email,
+            cardLast4: card.number.slice(-4), cardBrand: null,
+            receiptUrl: null,
+            errorMessage: `No se pudo procesar el cobro: Stripe no disponible y no hay conversión ${upperCurrency}→MXN configurada para el respaldo en Mercado Pago.`,
+            createdBy: user.username,
+          }).catch(() => null);
+          return res.status(502).json({ ...(charge ?? {}), error: "No se pudo procesar el cobro. Intenta nuevamente." });
+        }
+        const amountUsd = convertToUSD(amount, upperCurrency, rates);
+        mpAmount = amountUsd * rates.tipoCambio;
+        console.log(`[PaymentEngine/MP-Fallback] $${amount} ${upperCurrency} → $${mpAmount.toFixed(2)} MXN @${rates.tipoCambio}`);
       }
 
       try {
@@ -4096,7 +4156,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const charge = await storage.createPaymentCharge({
             chargeId:     `mp-err-${Date.now()}`,
             processor:    "mercadopago",
-            amount, currency: currency.toUpperCase(), status: "failed",
+            amount: mpAmount, currency: "MXN", status: "failed",
             description, email,
             cardLast4: card.number.slice(-4), cardBrand: null,
             receiptUrl: null, errorMessage: errMsg, createdBy: user.username,
@@ -4104,7 +4164,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(402).json({ ...charge, error: errMsg });
         }
 
-        // 2. Create MP payment
+        // 2. Create MP payment — always in MXN (the account's native
+        // currency; see conversion above), never the client-requested
+        // `currency`, which Mercado Pago cannot actually settle in.
         const payRes = await fetch("https://api.mercadopago.com/v1/payments", {
           method: "POST",
           headers: {
@@ -4114,8 +4176,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           },
           body: JSON.stringify({
             token:             tokenData.id,
-            transaction_amount: amount,
-            currency_id:       currency.toUpperCase(),
+            transaction_amount: mpAmount,
+            currency_id:       "MXN",
             description,
             installments:      1,
             payment_method_id: tokenData.payment_method_id ?? "visa",
@@ -4134,7 +4196,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const charge = await storage.createPaymentCharge({
           chargeId:     String(payData.id ?? `mp-${Date.now()}`),
           processor:    "mercadopago",
-          amount, currency: currency.toUpperCase(),
+          amount: mpAmount, currency: "MXN",
           status:       payData.status ?? "failed",
           description, email,
           cardLast4:    String(payData.card?.last_four_digits ?? card.number.slice(-4)),
@@ -4152,7 +4214,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const charge = await storage.createPaymentCharge({
           chargeId:     `err-${Date.now()}`,
           processor:    "mercadopago",
-          amount, currency: currency.toUpperCase(), status: "failed",
+          amount: mpAmount, currency: "MXN", status: "failed",
           description, email,
           cardLast4: card.number.slice(-4), cardBrand: null,
           receiptUrl: null, errorMessage: mpErr.message ?? "Unknown error",
