@@ -170,6 +170,25 @@ test("write-capable node configuration requires an explicit approved private ori
   });
 });
 
+test("write-capable node configuration accepts the Tailscale CGNAT range (100.64.0.0/10)", () => {
+  assert.deepEqual(approvedPrivateTronNodeConfiguration({
+    TRON_FULL_HOST: "http://100.85.242.110:8090",
+    TRON_APPROVED_NODE_ORIGIN: "http://100.85.242.110:8090",
+  }), {
+    configured: true,
+    endpoint: "http://100.85.242.110:8090",
+  });
+  // Just outside the /10 on both sides must still be rejected.
+  assert.equal(approvedPrivateTronNodeConfiguration({
+    TRON_FULL_HOST: "http://100.63.0.1:8090",
+    TRON_APPROVED_NODE_ORIGIN: "http://100.63.0.1:8090",
+  }).configured, false);
+  assert.equal(approvedPrivateTronNodeConfiguration({
+    TRON_FULL_HOST: "http://100.128.0.1:8090",
+    TRON_APPROVED_NODE_ORIGIN: "http://100.128.0.1:8090",
+  }).configured, false);
+});
+
 test("transaction confirmation requires an explicit successful receipt", () => {
   assert.equal(transactionExecutionStatus({ blockNumber: 10 }), "PENDING");
   assert.equal(transactionExecutionStatus({ receipt: {} }), "PENDING");
