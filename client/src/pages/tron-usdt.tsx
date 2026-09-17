@@ -251,16 +251,22 @@ export default function TronUsdtPage() {
 
         {/* ── Estado de la red + TronLink ── */}
         <div className="grid md:grid-cols-2 gap-6">
-          <Card className="relative overflow-hidden border-emerald-500/15 bg-gradient-to-b from-emerald-950/30 via-card to-card">
-            <div className="absolute -top-20 -right-20 w-48 h-48 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
-            <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-emerald-400/50 to-transparent" />
-            <CardContent className="relative p-6 space-y-4">
+          <Card className="relative overflow-hidden rounded-2xl border border-emerald-500/15 bg-gradient-to-br from-emerald-950/50 via-[#0a1a15]/80 to-[#0a1a15]/60 backdrop-blur-sm shadow-xl shadow-black/20">
+            <div className="absolute -top-24 -right-24 w-56 h-56 rounded-full bg-emerald-500/15 blur-3xl pointer-events-none" />
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-400/50 to-transparent" />
+            <CardContent className="relative p-6 space-y-5">
               <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center ring-1 ${networkStatus?.healthy ? "bg-emerald-500/15 ring-emerald-500/20" : "bg-red-500/15 ring-red-500/20"}`}>
-                    <Activity className={`w-4 h-4 ${networkStatus?.healthy ? "text-emerald-400" : "text-red-400"}`} />
+                <div className="flex items-center gap-3">
+                  <div className={`relative w-11 h-11 rounded-xl flex items-center justify-center shadow-lg ring-1 ${networkStatus?.healthy ? "bg-gradient-to-br from-emerald-400 to-teal-600 shadow-emerald-500/30 ring-white/10" : "bg-gradient-to-br from-red-500 to-rose-700 shadow-red-500/30 ring-white/10"}`}>
+                    <Activity className="w-5 h-5 text-white drop-shadow" />
+                    <span className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[#0a1a15] border flex items-center justify-center ${networkStatus?.healthy ? "border-emerald-500/40" : "border-red-500/40"}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${networkStatus?.healthy ? "bg-emerald-400" : "bg-red-400"}`} />
+                    </span>
                   </div>
-                  <h2 className="font-semibold">Estado de la red TRON</h2>
+                  <div>
+                    <h2 className="font-semibold text-white leading-tight">Estado de la red TRON</h2>
+                    <p className="text-[11px] text-emerald-100/40">Monitoreo del nodo de la plataforma</p>
+                  </div>
                 </div>
                 <Badge
                   variant="outline"
@@ -273,57 +279,63 @@ export default function TronUsdtPage() {
               </div>
 
               <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-xl border border-emerald-500/10 bg-black/20 px-3 py-2.5">
-                  <p className="text-[10px] uppercase tracking-wider text-emerald-100/40">Red</p>
-                  <p className="text-sm font-medium text-white mt-0.5 truncate">{networkStatus?.network ?? "—"}</p>
+                <div className="rounded-xl border border-emerald-500/10 bg-black/25 px-3 py-3">
+                  <p className="text-[10px] uppercase tracking-wider text-emerald-100/40 flex items-center gap-1"><Network className="w-3 h-3" /> Red</p>
+                  <p className="text-base font-semibold text-white mt-1 truncate">{networkStatus?.network ?? "—"}</p>
                 </div>
-                <div className="rounded-xl border border-emerald-500/10 bg-black/20 px-3 py-2.5">
-                  <p className="text-[10px] uppercase tracking-wider text-emerald-100/40">Bloque</p>
-                  <p className="text-sm font-medium text-white mt-0.5 tabular-nums truncate">{networkStatus?.blockNumber?.toLocaleString("en-US") ?? "—"}</p>
+                <div className="rounded-xl border border-emerald-500/10 bg-black/25 px-3 py-3">
+                  <p className="text-[10px] uppercase tracking-wider text-emerald-100/40 flex items-center gap-1"><FileCode2 className="w-3 h-3" /> Bloque</p>
+                  <p className="text-base font-semibold text-white mt-1 tabular-nums truncate">{networkStatus?.blockNumber?.toLocaleString("en-US") ?? "—"}</p>
                 </div>
-                <div className="rounded-xl border border-emerald-500/10 bg-black/20 px-3 py-2.5">
-                  <p className="text-[10px] uppercase tracking-wider text-emerald-100/40">Latencia</p>
-                  <p className="text-sm font-medium text-white mt-0.5 tabular-nums truncate">{networkStatus?.latencyMs != null ? `${networkStatus.latencyMs}ms` : "—"}</p>
+                <div className="rounded-xl border border-emerald-500/10 bg-black/25 px-3 py-3">
+                  <p className="text-[10px] uppercase tracking-wider text-emerald-100/40 flex items-center gap-1"><Radio className="w-3 h-3" /> Latencia</p>
+                  <p className="text-base font-semibold text-white mt-1 tabular-nums truncate">{networkStatus?.latencyMs != null ? `${networkStatus.latencyMs}ms` : "—"}</p>
                 </div>
               </div>
 
-              <p className="text-[11px] text-emerald-100/40">
+              <div className="flex items-center gap-1.5 text-[11px] text-emerald-100/40 border-t border-emerald-500/10 pt-3">
+                <Clock className="w-3 h-3 shrink-0" />
                 {networkStatus ? `Última verificación: ${new Date(networkStatus.checkedAt).toLocaleTimeString()}` : "Consultando el nodo de la plataforma..."}
-              </p>
+              </div>
             </CardContent>
           </Card>
 
-          <Card className="relative overflow-hidden border-border bg-gradient-to-b from-primary/5 via-card to-card">
-            <div className="absolute -top-20 -left-20 w-48 h-48 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
-            <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-            <CardContent className="relative p-6 space-y-4">
-              <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-lg bg-primary/15 flex items-center justify-center ring-1 ring-primary/20">
-                  <PlugZap className="w-4 h-4 text-primary" />
+          <Card className="relative overflow-hidden rounded-2xl border border-emerald-500/15 bg-gradient-to-br from-emerald-950/50 via-[#0a1a15]/80 to-[#0a1a15]/60 backdrop-blur-sm shadow-xl shadow-black/20">
+            <div className="absolute -top-24 -left-24 w-56 h-56 rounded-full bg-teal-500/15 blur-3xl pointer-events-none" />
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-400/50 to-transparent" />
+            <CardContent className="relative p-6 space-y-5">
+              <div className="flex items-center gap-3">
+                <div className="relative w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/30 ring-1 ring-white/10">
+                  <PlugZap className="w-5 h-5 text-white drop-shadow" />
                 </div>
                 <div>
-                  <h2 className="font-semibold">TronLink</h2>
-                  <p className="text-xs text-muted-foreground">Conecta tu wallet para autocompletar la dirección de retiro</p>
+                  <h2 className="font-semibold text-white leading-tight">TronLink</h2>
+                  <p className="text-[11px] text-emerald-100/40">Conecta tu wallet para autocompletar la dirección de retiro</p>
                 </div>
               </div>
 
               {!tronLink.state.installed ? (
                 <a href="https://www.tronlink.org/" target="_blank" rel="noreferrer" className="block">
-                  <Button variant="outline" className="w-full" data-testid="button-install-tronlink">
-                    <Download className="w-4 h-4 mr-2" /> Instalar extensión TronLink
-                  </Button>
+                  <button
+                    type="button"
+                    className="w-full rounded-xl border border-emerald-500/25 bg-emerald-500/10 hover:bg-emerald-500/15 text-emerald-300 font-medium text-sm py-3 flex items-center justify-center gap-2 transition-colors"
+                    data-testid="button-install-tronlink"
+                  >
+                    <Download className="w-4 h-4" /> Instalar extensión TronLink
+                  </button>
                 </a>
               ) : !tronLink.state.connected ? (
-                <div className="space-y-2">
-                  <Button
-                    className="w-full"
+                <div className="space-y-2.5">
+                  <button
+                    type="button"
+                    className="w-full rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-medium text-sm py-3 flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 ring-1 ring-white/10 transition-all disabled:opacity-60"
                     onClick={onConnectTronLinkClick}
                     disabled={tronLink.state.loading}
                     data-testid="button-connect-tronlink"
                   >
-                    {tronLink.state.loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <PlugZap className="w-4 h-4 mr-2" />}
+                    {tronLink.state.loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlugZap className="w-4 h-4" />}
                     {tronLink.state.loading ? "Conectando..." : "Conectar TronLink"}
-                  </Button>
+                  </button>
                   {tronLink.state.error && (
                     <p className="text-xs text-red-400 flex items-start gap-1.5">
                       <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> {tronLink.state.error}
@@ -332,17 +344,21 @@ export default function TronUsdtPage() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2.5">
-                    <code className="text-xs flex-1 truncate font-mono" data-testid="text-tronlink-address">{tronLink.state.address}</code>
-                    <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={copyTronLinkAddress}>
-                      {tronLinkCopied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                    </Button>
-                  </div>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">Saldo TRX: <span className="tabular-nums text-foreground/80">{tronLink.state.trxBalance != null ? tronLink.state.trxBalance.toLocaleString("en-US", { maximumFractionDigits: 4 }) : "—"}</span></span>
+                  <div className="flex items-center gap-2 rounded-xl border border-emerald-500/10 bg-black/25 px-3 py-3">
+                    <code className="text-xs flex-1 truncate font-mono text-emerald-100/80" data-testid="text-tronlink-address">{tronLink.state.address}</code>
                     <button
                       type="button"
-                      className="text-primary font-medium underline-offset-2 hover:underline"
+                      className="h-7 w-7 shrink-0 rounded-lg flex items-center justify-center text-emerald-100/50 hover:text-emerald-300 hover:bg-emerald-500/10 transition-colors"
+                      onClick={copyTronLinkAddress}
+                    >
+                      {tronLinkCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-emerald-100/40">Saldo TRX: <span className="tabular-nums text-white font-medium">{tronLink.state.trxBalance != null ? tronLink.state.trxBalance.toLocaleString("en-US", { maximumFractionDigits: 4 }) : "—"}</span></span>
+                    <button
+                      type="button"
+                      className="text-emerald-300 font-medium underline-offset-2 hover:underline"
                       onClick={() => tronLink.state.address && setWithdrawAddress(tronLink.state.address)}
                       data-testid="button-use-tronlink-address"
                     >
