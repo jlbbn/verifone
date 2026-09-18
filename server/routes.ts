@@ -2903,7 +2903,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const gateSettings = await storage.getSettings();
       if (gateSettings.paymentEngineDisabled) {
         return res.status(503).json({
-          error: "POS Virtual cerrado temporalmente por el administrador.",
+          error: "POS Virtual cerrado por incidente. Se está gestionando el incidente.",
           declineCode: "PAYMENT_ENGINE_DISABLED",
           reason: gateSettings.paymentEngineDisabledReason || undefined,
         });
@@ -4091,7 +4091,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const gateSettings = await storage.getSettings();
     if (gateSettings.paymentEngineDisabled) {
       return res.status(503).json({
-        error: "Motor de Pagos cerrado temporalmente por el administrador.",
+        error: "Motor de Pagos cerrado por incidente. Se está gestionando el incidente.",
         declineCode: "PAYMENT_ENGINE_DISABLED",
         reason: gateSettings.paymentEngineDisabledReason || undefined,
       });
