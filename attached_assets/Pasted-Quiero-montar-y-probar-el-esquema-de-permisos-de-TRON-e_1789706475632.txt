@@ -1,0 +1,39 @@
+Quiero montar y probar el esquema de permisos de TRON en NILE (testnet), con un
+Ledger Nano X como owner. Es validación previa a la ceremonia mainnet (#136).
+
+CONTEXTO
+- Nodo Nile: 100.65.43.15:8090 (por el túnel de Tailscale)
+- Firmante Nile: tron-signer-nile-2, 100.69.180.26:9443
+- El Ledger lo opera otra persona, en otra ubicación. La dirección owner te la paso yo.
+
+ESQUEMA A PROBAR
+- Permiso owner: la llave del Ledger, threshold 1.
+  (En mainnet será multisig 2-de-2; ahora solo hay un dispositivo.)
+- Permiso active llamado "energy-delegate": la llave del firmante, threshold 1,
+  con operations limitado EXCLUSIVAMENTE a DelegateResourceContract (57) y
+  UnDelegateResourceContract (58).
+
+QUÉ NECESITO
+1. El AccountPermissionUpdateContract exacto, en JSON, con el bitmap de operations
+   ya calculado. MUÉSTRAMELO ANTES DE EJECUTAR NADA. Yo lo reviso primero.
+   Confírmame el bitmap independientemente: quiero ver tu cálculo, no solo el valor.
+2. Cómo se firma ese contrato desde un Ledger vía TronLink en Nile. Paso a paso,
+   y qué exactamente debe aparecer en la pantalla del dispositivo al aprobar.
+3. Genera la llave del permiso active e instala el firmante en
+   tron-signer-nile-2 con TRON_NETWORK=nile. Dame la dirección pública de esa llave.
+4. Enumera TODAS las operaciones que el firmante necesita hoy en el código actual:
+   TransferContract, TriggerSmartContract, DelegateResourceContract, otras.
+   Si necesita más que delegación de energía, dímelo ahora, no después.
+5. ¿El código actual asume en algún punto que la llave del firmante tiene permiso
+   owner? Busca y respóndeme explícitamente.
+
+PRUEBAS DE ACEPTACIÓN (ejecútalas y repórtame ambas)
+  PASA: el firmante delega energía correctamente.
+  FALLA: el firmante intenta un TransferContract de USDT y la red lo rechaza
+         por permiso insuficiente.
+  Si la segunda NO falla, el esquema está mal y paramos.
+
+RESTRICCIONES
+- Todo en Nile. No toques absolutamente nada de mainnet.
+- No publiques a producción.
+- No ejecutes el AccountPermissionUpdateContract hasta que yo lo autorice.
