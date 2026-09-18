@@ -12,6 +12,7 @@ import { sql } from "drizzle-orm";
 import { createHash, timingSafeEqual } from "crypto";
 import { apiNotFoundGuard, canonicalizePathMiddleware } from "./path-guard";
 import { createMaintenanceGuard, startMaintenanceAutoEndSweep } from "./maintenance";
+import { bootstrapTailscale } from "./net/tailscale-bootstrap";
 
 /**
  * Fail loudly on database TLS/certificate errors. Production requires full
@@ -201,6 +202,13 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // ── Tailscale (userspace, no root/TUN) ──────────────────────────────────────
+  // Must be up before the server starts, so the local SOCKS5/HTTP proxy is
+  // ready by the time anything tries to reach the mainnet TRON node/signer
+  // over the tailnet. Bounded + never throws — a Tailscale failure must not
+  // stop the rest of the app (auth, payments, etc.) from starting.
+  await bootstrapTailscale();
+
   // ── DB migrations ──────────────────────────────────────────────────────────
   try {
     await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS payment_engine_access boolean NOT NULL DEFAULT false`);

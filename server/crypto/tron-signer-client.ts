@@ -2,6 +2,7 @@ import { createHmac, randomBytes, randomUUID } from "crypto";
 import { readFileSync } from "fs";
 import https from "https";
 import { configuredTronNetwork, type TronNetwork } from "./tron-network";
+import { tailnetAgentFor } from "../net/tailscale-proxy";
 
 const REQUEST_TIMEOUT_MS = Number(process.env.TRON_SIGNER_TIMEOUT_MS ?? 12_000);
 
@@ -142,9 +143,11 @@ function requestJson<T>(
   const url = new URL(path, base);
 
   return new Promise<T>((resolve, reject) => {
+    const proxyAgent = tailnetAgentFor(url);
     const req = https.request(url, {
       method,
       ...tlsOptions(),
+      ...(proxyAgent ? { agent: proxyAgent } : {}),
       headers: {
         "Accept": "application/json",
         "Content-Type": "application/json",

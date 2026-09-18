@@ -25,6 +25,7 @@
 
 import { TronWeb } from "tronweb";
 import { approvedPrivateTronNodeConfiguration } from "./tron-policy";
+import { tailnetAgentFor } from "../net/tailscale-proxy";
 import {
   configuredTronNetwork,
   tronChainIdentityMatches,
@@ -60,6 +61,18 @@ function getClient(): TronWeb {
     // Read-only client: the Banxico Plus process must never receive the hot
     // wallet private key. Signing is delegated to tron-signer-client.ts.
     _client = new TronWeb({ fullHost: FULL_HOST });
+    // The full node lives at a private tailnet address (100.64.0.0/10) in
+    // production — route only that traffic through tailscaled's local
+    // proxy, scoped to this specific axios instance (never global).
+    const agent = tailnetAgentFor(FULL_HOST);
+    if (agent) {
+      // TronWeb's HttpProviderInstance type only declares `.request()`, but
+      // the runtime object is a real axios instance with `.defaults` — cast
+      // narrowly here rather than widening the whole client's type.
+      const axiosDefaults = (_client.fullNode.instance as unknown as { defaults: { httpAgent?: unknown; httpsAgent?: unknown } }).defaults;
+      axiosDefaults.httpAgent = agent;
+      axiosDefaults.httpsAgent = agent;
+    }
   }
   return _client;
 }
