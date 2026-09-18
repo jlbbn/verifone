@@ -1,24 +1,37 @@
 #!/usr/bin/env bash
-# Aprovisiona el firmante MAINNET aislado (tron-signer-mainnet) de punta a punta.
-# Se ejecuta como root EN el host del firmante. Idempotente.
-# La llave privada de la wallet y el secreto HMAC nacen aquí y jamás se imprimen ni salen del host.
+# Aprovisiona el firmante MAINNET aislado (tron-signer-mainnet) en dos fases
+# separadas. Se ejecuta como root EN el host del firmante. Idempotente.
 #
-# Uso: bash provision-mainnet-signer.sh [--backup-gpg <fingerprint>]
-#   --backup-gpg <fingerprint>  Cifra la llave privada recién nacida a
-#                                /root/wallet-backup.gpg (gpg -r <fingerprint>) antes
-#                                de borrar el archivo en texto plano. Sin esta bandera
-#                                la llave solo queda dentro de tron-signer.env en este
-#                                host, sin ningún respaldo cifrado independiente.
+# FASE A (por defecto, sin argumentos): todo lo que NO requiere clave privada
+# — dependencias del SO, TLS, UFW, systemd unit instalada, log shipping. La
+# wallet NO se genera y el servicio tron-signer.service queda instalado pero
+# SIN ARRANCAR (signer.mjs exige TRON_SIGNER_ADDRESS para arrancar siquiera,
+# así que sin Fase B el proceso no puede correr por diseño, no por accidente).
+#
+# FASE B (--ceremony, requiere autorización explícita aparte de correr este
+# script): genera la wallet+HMAC, arranca el servicio con
+# TRON_SIGNER_WRITES_ENABLED=false y verifica salud. La llave privada nace en
+# este host y jamás se imprime ni sale de él.
+#
+# Uso:
+#   bash provision-mainnet-signer.sh                       # Fase A
+#   bash provision-mainnet-signer.sh --ceremony [--backup-gpg <fingerprint>]  # Fase B
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
+RUN_CEREMONY=false
 BACKUP_GPG_FINGERPRINT=""
 while [ $# -gt 0 ]; do
   case "$1" in
+    --ceremony) RUN_CEREMONY=true; shift ;;
     --backup-gpg) BACKUP_GPG_FINGERPRINT="${2:?--backup-gpg requiere un fingerprint}"; shift 2 ;;
-    *) echo "Argumento desconocido: $1 (uso: --backup-gpg <fingerprint>)" >&2; exit 2 ;;
+    *) echo "Argumento desconocido: $1 (uso: [--ceremony] [--backup-gpg <fingerprint>])" >&2; exit 2 ;;
   esac
 done
+if [ -n "$BACKUP_GPG_FINGERPRINT" ] && [ "$RUN_CEREMONY" != true ]; then
+  echo "--backup-gpg solo aplica junto con --ceremony (Fase B)." >&2
+  exit 2
+fi
 
 # --- Guardia dura: Tailscale debe estar operativo ANTES de tocar nada del host. ---
 # El acceso admin por SSH depende exclusivamente de tailscale0 (ver install.sh); si
@@ -37,15 +50,14 @@ tailscale status >/dev/null 2>&1 || {
   exit 1
 }
 
-# IPs privadas verificadas en vivo el 2026-09-15 (la cuenta DO fue reconstruida el
-# 2026-09-06 tras el incidente de terminación; las IPs de la topología anterior
-# ya no existen). tron-mainnet-lite y tron-signer-mainnet viven en la VPC
-# tron-mainnet-vpc (10.30.0.0/20), separada de banxico-plus-vpc (10.10.0.0/20)
-# donde vive la app — sin peering entre ambas (cuota de VPC peerings=0 en la
-# cuenta), así que APP_IP solo fija la regla de firewall para cuando exista una
-# ruta privada real (tarea de conectividad aparte); no implica alcance hoy.
-NODE_IP=10.30.0.2          # nodo TRON mainnet lite (privado, VPC tron-mainnet-vpc)
-APP_IP=10.10.0.2           # banxico-plus-app (privado, VPC banxico-plus-vpc; sin ruta aún)
+# Topología actual (confirmar antes de correr, ver tailscale status de los 3 hosts):
+# tron-mainnet-nyc1 (nodo), tron-signer-mainnet (este host) y banxico-plus-app ya
+# NO comparten VPC de DigitalOcean (nodo en nyc1, resto en nyc3, sin peering) — la
+# única ruta privada entre ellos es la malla Tailscale (100.64.0.0/10). Estas IPs
+# reemplazan las VPC 10.x que usaba la topología anterior; deben confirmarse con
+# `tailscale status` en vivo antes de correr, nunca asumidas de un despliegue viejo.
+NODE_IP="${TRON_NODE_TAILSCALE_IP:-100.85.242.110}"   # tron-mainnet-nyc1, vía Tailscale
+APP_IP="${APP_TAILSCALE_IP:-100.101.95.48}"           # banxico-plus-app, vía Tailscale
 BUNDLE=/root/bundle
 KEY_ID=banxico-mainnet-v1
 
@@ -57,11 +69,11 @@ KEY_ID=banxico-mainnet-v1
 # ADEMÁS del acceso por Tailscale, nunca en su lugar. Déjalo vacío salvo necesidad real.
 ADMIN_SSH_CIDR="${ADMIN_SSH_CIDR:-}"
 
-# IP privada propia del firmante dentro de tron-mainnet-vpc (10.30.0.0/20; el mismo
-# rango del nodo NODE_IP). Verificado en vivo: tron-signer-mainnet = 10.30.0.3.
-# banxico-plus-app vive en 10.10.0.0/20, una VPC distinta — nunca confundir ambas.
-SIGNER_IP=$(ip -4 -o addr show | awk '/ 10\.30\./{print $4}' | cut -d/ -f1 | head -1)
-[ -n "$SIGNER_IP" ] || { echo "No se encontró IP privada 10.30.x.x (tron-mainnet-vpc) en este host." >&2; exit 1; }
+# IP propia del firmante dentro de la malla Tailscale (100.64.0.0/10). Se lee de
+# `tailscale ip -4` en vez de grepear una subred VPC fija, porque ya no hay una
+# subred VPC compartida que identifique a este host.
+SIGNER_IP=$(tailscale ip -4 2>/dev/null | head -1)
+[ -n "$SIGNER_IP" ] || { echo "No se obtuvo una IP de Tailscale ('tailscale ip -4' vacío) en este host." >&2; exit 1; }
 
 apt-get update -qq >/dev/null
 apt-get install -y -qq jq nodejs npm >/dev/null 2>&1
@@ -78,6 +90,8 @@ else
 fi
 
 # --- TLS: CA propia de la ceremonia mainnet; certificados de 90 días ---
+# Los certificados no requieren la wallet — se generan en Fase A para que la
+# app pueda recibir sus credenciales de cliente cuanto antes.
 mkdir -p /etc/tron-signer/tls; cd /etc/tron-signer/tls
 if [ ! -f server.crt ]; then
   openssl ecparam -name prime256v1 -genkey -noout -out ca.key
@@ -94,6 +108,56 @@ if [ ! -f server.crt ]; then
   rm -f server.csr server.ext /tmp/client.csr /tmp/client.ext
   echo "RECORDATORIO: /etc/tron-signer/tls/ca.key debe salir de este host tras la ceremonia (vault/USB offline; nunca a Replit ni por chat). server.crt/client.crt/ca.crt vencen en 90 días — agenda su rotación ya."
 fi
+
+# --- Log forwarding (shipper) ---
+if [ -f "$BUNDLE"/logship/ship-logs.sh ]; then
+  cp "$BUNDLE"/logship/ship-logs.sh /opt/banxico-plus/ship-logs.sh
+  chmod +x /opt/banxico-plus/ship-logs.sh
+  cp "$BUNDLE"/logship/ship-logs.service "$BUNDLE"/logship/ship-logs.timer /etc/systemd/system/
+  if [ -n "${INFRA_TOKEN:-}" ] && [ ! -f /etc/tron-signer/shipper.env ]; then
+    umask 077
+    cat > /etc/tron-signer/shipper.env <<EOF
+INGEST_URL=https://banxicoplusllc.org/api/infra/logs
+INGEST_TOKEN=$INFRA_TOKEN
+HOSTTAG=tron-signer-mainnet
+UNITS=tron-signer ssh
+EOF
+    umask 022
+  fi
+  mkdir -p /var/lib/tron-signer
+  systemctl daemon-reload
+  systemctl enable --now ship-logs.timer >/dev/null
+fi
+
+# --- UFW baseline: deny incoming; sin regla pública de 22 aquí (antes esto abría SSH
+# a cualquier IP con solo llaves como candado). install.sh añade la regla real de 22
+# scoped a tailscale0 (y, si ADMIN_SSH_CIDR no está vacío, un fallback de IP pública).
+ufw default deny incoming >/dev/null
+ufw default allow outgoing >/dev/null
+ufw --force enable >/dev/null
+
+if [ "$RUN_CEREMONY" != true ]; then
+  cat <<EOF
+
+=== FASE A completa (sin wallet) ===
+tron-signer-mainnet: dependencias, TLS y baseline UFW listos. La unidad
+systemd tron-signer.service TODAVÍA NO se instaló (install.sh se ejecuta en
+Fase B, junto con la wallet, porque install.sh valida TRON_SIGNER_ENV_FILE y
+ese archivo solo existe una vez generada la wallet).
+
+Credenciales de cliente para la app ya disponibles en:
+  /root/app-client-creds/tls/{ca.crt,client.crt,client.key}
+Cópialas a banxico-plus-app por un canal fuera de este chat (scp sobre Tailscale).
+
+Para continuar con la ceremonia (Fase B) cuando el esquema de permisos esté
+definido y autorizado explícitamente:
+  bash provision-mainnet-signer.sh --ceremony [--backup-gpg <fingerprint>]
+EOF
+  exit 0
+fi
+
+# ============================= FASE B (ceremonia) =============================
+echo "=== Iniciando FASE B: generación de wallet y arranque del firmante ==="
 
 # --- Wallet y HMAC: nacen en el host, nunca se imprimen ---
 # Idempotencia dura: la fuente de verdad es tron-signer.env, no config.json ni los
@@ -197,33 +261,6 @@ EOF
   fi
   rm -f /root/.wallet-priv /root/.hmac-secret
 fi
-
-# --- Log forwarding (shipper) ---
-if [ -f "$BUNDLE"/logship/ship-logs.sh ]; then
-  cp "$BUNDLE"/logship/ship-logs.sh /opt/banxico-plus/ship-logs.sh
-  chmod +x /opt/banxico-plus/ship-logs.sh
-  cp "$BUNDLE"/logship/ship-logs.service "$BUNDLE"/logship/ship-logs.timer /etc/systemd/system/
-  if [ -n "${INFRA_TOKEN:-}" ] && [ ! -f /etc/tron-signer/shipper.env ]; then
-    umask 077
-    cat > /etc/tron-signer/shipper.env <<EOF
-INGEST_URL=https://banxicoplusllc.org/api/infra/logs
-INGEST_TOKEN=$INFRA_TOKEN
-HOSTTAG=tron-signer-mainnet
-UNITS=tron-signer ssh
-EOF
-    umask 022
-  fi
-  mkdir -p /var/lib/tron-signer
-  systemctl daemon-reload
-  systemctl enable --now ship-logs.timer >/dev/null
-fi
-
-# --- UFW baseline: deny incoming; sin regla pública de 22 aquí (antes esto abría SSH
-# a cualquier IP con solo llaves como candado). install.sh añade la regla real de 22
-# scoped a tailscale0 (y, si ADMIN_SSH_CIDR no está vacío, un fallback de IP pública).
-ufw default deny incoming >/dev/null
-ufw default allow outgoing >/dev/null
-ufw --force enable >/dev/null
 
 # --- Instalación oficial del firmante (dry-run y ejecución) ---
 cd /opt/banxico-plus/scripts/infra/tron-signer
