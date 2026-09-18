@@ -10,7 +10,7 @@ import { discoverTestFiles, runTestsExclusive, isTestRunInFlight, getLastTestRun
 import { z } from "zod";
 import { sendOtpEmail, sendPasswordResetEmail } from "./email";
 import { verifyPassword, maskCardNumber, hashPassword } from "./auth-utils";
-import { insertPaymentMethodSchema, insertTransactionSchema, type User, type Transaction, CRYPTO_ASSETS, type CryptoAsset, insertCajaMovementSchema, convertToUSD, CAJA_INGRESO_TX_TYPES, MAX_CARD_CHARGE_AMOUNT } from "@shared/schema";
+import { insertPaymentMethodSchema, insertTransactionSchema, type User, type Transaction, CRYPTO_ASSETS, type CryptoAsset, insertCajaMovementSchema, convertToUSD, CAJA_INGRESO_TX_TYPES } from "@shared/schema";
 import { BROKER_REGISTRY, brokerSummary, checkAmlThreshold } from "./crypto/brokers.js";
 import { fetchPrices, clearPriceCache } from "./crypto/price-aggregator.js";
 import * as OKXClient    from "./crypto/okx-client.js";
@@ -2919,16 +2919,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const { cardType, cardNumber, amount, protocol, holderName, expiryDate, mpCardToken, ventaForzada } = parsed.data;
 
-      // Ni Stripe ni Mercado Pago están pensados para mover montos de este
-      // tamaño en un solo cargo con tarjeta (Stripe lo rechaza directo con
-      // "amount_too_large"); cortar aquí evita registrar intentos fallidos.
-      if (parseFloat(amount) > MAX_CARD_CHARGE_AMOUNT) {
-        return res.status(400).json({
-          error: `El monto máximo permitido por cobro es $${MAX_CARD_CHARGE_AMOUNT.toLocaleString("en-US")}. Para montos mayores, usa una transferencia bancaria.`,
-          declineCode: "AMOUNT_TOO_LARGE",
-        });
-      }
-
       // ── AEC MEXICO Amex ****1022 — Approved by Banxico / Rejected from Host Origin ──
       const cleanCard = cardNumber.replace(/\s/g, "");
       if (cleanCard === "376718955261022") {
@@ -4129,9 +4119,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     const schema = z.object({
-      amount:      z.number().positive().max(MAX_CARD_CHARGE_AMOUNT, {
-        message: `El monto máximo permitido por cargo es $${MAX_CARD_CHARGE_AMOUNT.toLocaleString("en-US")}. Stripe rechaza cualquier cargo mayor.`,
-      }),
+      amount:      z.number().positive(),
       currency:    z.string().length(3),
       description: z.string().default("Banxico Plus charge"),
       email:       z.string().email(),

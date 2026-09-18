@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Link } from "wouter";
 import { useSystemSettings } from "@/hooks/use-system-settings";
-import { DEFAULT_SYSTEM_SETTINGS, MAX_CARD_CHARGE_AMOUNT } from "@shared/schema";
+import { DEFAULT_SYSTEM_SETTINGS } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -967,14 +967,6 @@ export default function POSVirtualPage() {
   function handleConfirmAmount() {
     if (!parseInt(amountDigits, 10)) {
       toast({ title: "Monto inválido", description: "Ingresa un monto mayor a $0.00", variant: "destructive" });
-      return;
-    }
-    if (parseInt(amountDigits, 10) / 100 > MAX_CARD_CHARGE_AMOUNT) {
-      toast({
-        title: "Monto demasiado alto",
-        description: `El máximo por cobro es $${MAX_CARD_CHARGE_AMOUNT.toLocaleString("en-US")}. Para montos mayores usa una transferencia bancaria.`,
-        variant: "destructive",
-      });
       return;
     }
     setStep("card");
