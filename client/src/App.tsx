@@ -55,8 +55,15 @@ function AppLayout({ children }: { children: React.ReactNode }) {
     return <Redirect to="/login" />;
   }
 
-  // ── Mantenimiento global — bloquea a todos los usuarios excepto ADMIN ──
-  if (settings?.maintenanceMode && user?.role !== "ADMIN" && user?.email !== "optimaqrh@gmail.com") {
+  // ── Mantenimiento global ──────────────────────────────────────────────────
+  // Modo suave (histórico): exime a ADMIN y al correo de soporte.
+  // Modo duro (maintenanceHardLockdown): bloquea a TODOS, sin excepción,
+  // salvo una sesión que ya pasó por el enlace de bypass firmado (ver
+  // server/maintenance.ts) — reflejado aquí como settings.maintenanceBypassed.
+  const maintenanceBypassed = settings?.maintenanceBypassed === true;
+  const maintenanceSoftExempt = !settings?.maintenanceHardLockdown
+    && (user?.role === "ADMIN" || user?.email === "optimaqrh@gmail.com");
+  if (settings?.maintenanceMode && !maintenanceBypassed && !maintenanceSoftExempt) {
     return (
       <div className="flex h-screen w-full flex-col items-center justify-center bg-[#0f0f0f] px-6" data-testid="screen-maintenance">
         <div className="max-w-md w-full mx-auto text-center">

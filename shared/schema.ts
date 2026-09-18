@@ -330,6 +330,18 @@ export interface SystemSettings {
   fxRateGBP: number;  // USD por 1 GBP
   // Mantenimiento global
   maintenanceMode: boolean;
+  // Mantenimiento global "duro": bloquea también a ADMIN y al correo exento
+  // (solo un enlace de bypass firmado, ver server/maintenance.ts, puede pasar).
+  maintenanceHardLockdown: boolean;
+  // ISO datetime; al pasar esta hora el servidor apaga automáticamente
+  // maintenanceMode y maintenanceHardLockdown. null = sin apagado automático.
+  maintenanceEndsAt: string | null;
+  // Hash SHA-256 del token de bypass vigente. Nunca se expone al cliente
+  // (se filtra en el handler de /api/settings); solo server/maintenance.ts
+  // lo compara contra el token recibido en el enlace de bypass.
+  maintenanceBypassTokenHash: string | null;
+  // Computed per-request by the server, never persisted — omit when writing.
+  maintenanceBypassed?: boolean;
   // Caja / Balances
   saldoAperturaUSD: number;
   saldoSistemaUSD: number;
@@ -362,6 +374,9 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   fxRateEUR: 1.085,
   fxRateGBP: 1.27,
   maintenanceMode: false,
+  maintenanceHardLockdown: false,
+  maintenanceEndsAt: null,
+  maintenanceBypassTokenHash: null,
   saldoAperturaUSD: 0,
   saldoSistemaUSD: 0,
   feedMerchant1: "GRUPO ASGE VENADO 69",
