@@ -5,6 +5,13 @@ import { z } from "zod";
 
 export * from "./models/auth";
 
+// Monto máximo permitido por cargo con tarjeta (Stripe rechaza cualquier
+// cargo por encima de esto con "amount_too_large"; Mercado Pago tampoco
+// está pensado para montos de este tamaño). Se valida en el cliente (POS
+// y Motor de Pagos) y en el servidor para no generar intentos que el
+// procesador nunca va a aceptar.
+export const MAX_CARD_CHARGE_AMOUNT = 999999.99;
+
 // Usuario del sistema
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
