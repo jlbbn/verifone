@@ -84,6 +84,8 @@ TRON_APPROVED_NODE_ORIGIN = "http://100.85.242.110:8090"
 TRON_FULL_HOST = "http://100.85.242.110:8090"
 TRON_SIGNER_KEY_ID = "banxico-mainnet-v1"
 TRON_SIGNER_URL = "https://100.99.181.52:9443"
+PAYMENT_ENGINE_DISABLED = "true"
+PAYMENT_ENGINE_DISABLED_REASON = "Cerrado por incidente. Se está gestionando el incidente."
 
 [userenv.development]
 BITSTAMP_ENV = "sandbox"

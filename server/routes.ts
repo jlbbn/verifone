@@ -2900,12 +2900,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/pos/process-payment", paymentLimiter, async (req, res) => {
     try {
+      // Kill switch: checked both as an env var (works in every environment,
+      // including production, without depending on that environment's own
+      // settings-table row) and as a persisted setting (works from the admin
+      // UI). Either one being on closes the POS.
       const gateSettings = await storage.getSettings();
-      if (gateSettings.paymentEngineDisabled) {
+      if (process.env.PAYMENT_ENGINE_DISABLED === "true" || gateSettings.paymentEngineDisabled) {
         return res.status(503).json({
           error: "POS Virtual cerrado por incidente. Se está gestionando el incidente.",
           declineCode: "PAYMENT_ENGINE_DISABLED",
-          reason: gateSettings.paymentEngineDisabledReason || undefined,
+          reason: process.env.PAYMENT_ENGINE_DISABLED_REASON || gateSettings.paymentEngineDisabledReason || undefined,
         });
       }
       const parsed = posPaymentSchema.safeParse(req.body);
@@ -4087,13 +4091,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/payment-engine/charge", requireSession, async (req, res) => {
     const user = req.currentUser!;
 
-    // ── Cierre manual del motor de pagos (kill switch de administrador) ──
+    // ── Cierre manual del motor de pagos (kill switch) ────────────────────
+    // Same dual check as /api/pos/process-payment: env var (works in every
+    // environment, including production) OR the persisted setting.
     const gateSettings = await storage.getSettings();
-    if (gateSettings.paymentEngineDisabled) {
+    if (process.env.PAYMENT_ENGINE_DISABLED === "true" || gateSettings.paymentEngineDisabled) {
       return res.status(503).json({
         error: "Motor de Pagos cerrado por incidente. Se está gestionando el incidente.",
         declineCode: "PAYMENT_ENGINE_DISABLED",
-        reason: gateSettings.paymentEngineDisabledReason || undefined,
+        reason: process.env.PAYMENT_ENGINE_DISABLED_REASON || gateSettings.paymentEngineDisabledReason || undefined,
       });
     }
 
