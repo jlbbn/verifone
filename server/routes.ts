@@ -2900,6 +2900,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/pos/process-payment", paymentLimiter, async (req, res) => {
     try {
+      const gateSettings = await storage.getSettings();
+      if (gateSettings.paymentEngineDisabled) {
+        return res.status(503).json({
+          error: "POS Virtual cerrado temporalmente por el administrador.",
+          declineCode: "PAYMENT_ENGINE_DISABLED",
+          reason: gateSettings.paymentEngineDisabledReason || undefined,
+        });
+      }
       const parsed = posPaymentSchema.safeParse(req.body);
       if (!parsed.success) {
         res.status(400).json({ error: "Datos de pago inválidos" });
@@ -4078,6 +4086,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/payment-engine/charge", requireSession, async (req, res) => {
     const user = req.currentUser!;
+
+    // ── Cierre manual del motor de pagos (kill switch de administrador) ──
+    const gateSettings = await storage.getSettings();
+    if (gateSettings.paymentEngineDisabled) {
+      return res.status(503).json({
+        error: "Motor de Pagos cerrado temporalmente por el administrador.",
+        declineCode: "PAYMENT_ENGINE_DISABLED",
+        reason: gateSettings.paymentEngineDisabledReason || undefined,
+      });
+    }
 
     // ── Verificar permiso de acceso al Motor de Pagos ────────────────────
     if (user.role !== "ADMIN") {
