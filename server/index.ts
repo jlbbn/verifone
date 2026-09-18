@@ -11,6 +11,7 @@ import { isTlsCertificateError } from "./db-ssl";
 import { sql } from "drizzle-orm";
 import { createHash, timingSafeEqual } from "crypto";
 import { apiNotFoundGuard, canonicalizePathMiddleware } from "./path-guard";
+import { createMaintenanceGuard, startMaintenanceAutoEndSweep } from "./maintenance";
 
 /**
  * Fail loudly on database TLS/certificate errors. Production requires full
@@ -60,6 +61,10 @@ app.set("trust proxy", true);
 // before ANY route matching, including helmet/compression. See path-guard.ts
 // for why this must run first.
 app.use(canonicalizePathMiddleware);
+
+// Hard maintenance lockdown — blocks every /api/* request (including
+// ADMIN's) except a bypassed session. See server/maintenance.ts.
+app.use(createMaintenanceGuard(storage));
 
 app.use(
   helmet({
@@ -265,6 +270,7 @@ app.use((req, res, next) => {
   const port = parseInt(process.env.PORT || "5000", 10);
   server.listen({ port, host: "0.0.0.0", reusePort: true }, () => {
     log(`serving on port ${port}`);
+    startMaintenanceAutoEndSweep(storage);
     import("./stripeClient").then(({ getStripeClient }) =>
       getStripeClient().then(client =>
         client.balance.retrieve().then(() =>

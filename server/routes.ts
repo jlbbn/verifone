@@ -18,6 +18,7 @@ import * as KrakenClient from "./crypto/kraken-client.js";
 import { executeSwap, availableBroker, bitstampTradingEnabled } from "./crypto/broker-executor.js";
 import * as TronClient from "./crypto/tron-client.js";
 import * as TronSigner from "./crypto/tron-signer-client.js";
+import * as Maintenance from "./maintenance";
 import {
   configuredDailyLimit,
   configuredDailyLimitAmount,
@@ -3445,13 +3446,95 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ── System Settings ────────────────────────────────────────────────────────
-  app.get("/api/settings", requireSession, async (_req, res) => {
+  app.get("/api/settings", requireSession, async (req, res) => {
     try {
       const settings = await storage.getSettings();
-      res.json(settings);
+      const { maintenanceBypassTokenHash, ...publicSettings } = settings;
+      res.json({
+        ...publicSettings,
+        // Computed per-request, never persisted: lets the frontend tell a
+        // bypassed session apart from a genuinely blocked one without ever
+        // shipping the bypass hash itself to the browser.
+        maintenanceBypassed: Maintenance.requestHasValidBypass(req, maintenanceBypassTokenHash),
+      });
     } catch {
       res.status(500).json({ error: "Error al obtener configuración" });
     }
+  });
+
+  // ── Activar mantenimiento duro desde un enlace (fuera del panel admin) ───
+  // Un solo clic autenticado como ADMIN activa el mantenimiento y devuelve el
+  // enlace de bypass una única vez (nunca se persiste en claro ni se vuelve
+  // a mostrar). Este navegador queda exento de inmediato (cookie propia).
+  app.get("/api/admin/maintenance/activate", requireRole("ADMIN"), async (req, res) => {
+    const untilRaw = typeof req.query.until === "string" ? req.query.until : null;
+    let until: string | null = null;
+    if (untilRaw) {
+      const parsed = new Date(untilRaw);
+      if (Number.isNaN(parsed.getTime())) {
+        res.status(400).send("Parámetro 'until' inválido (usa formato ISO 8601, ej. 2026-09-18T06:00:00.000Z).");
+        return;
+      }
+      until = parsed.toISOString();
+    }
+    const presetToken = typeof req.query.bypassToken === "string" ? req.query.bypassToken : undefined;
+    const { raw, hash } = Maintenance.generateBypassToken(presetToken);
+    await storage.updateSettings({
+      maintenanceMode: true,
+      maintenanceHardLockdown: true,
+      maintenanceEndsAt: until,
+      maintenanceBypassTokenHash: hash,
+    });
+    res.cookie(Maintenance.MAINTENANCE_BYPASS_COOKIE, raw, {
+      httpOnly: true, secure: true, sameSite: "lax", maxAge: 24 * 60 * 60 * 1000,
+    });
+    const bypassLink = `${req.protocol}://${req.get("host")}/api/maintenance/bypass?token=${raw}`;
+    res.send(`<!doctype html><html><head><meta charset="utf-8"><title>Mantenimiento activado</title></head>
+      <body style="font-family:system-ui,sans-serif;background:#0f0f0f;color:#fff;padding:40px;max-width:640px;margin:0 auto;">
+        <h2>Mantenimiento global activado</h2>
+        <p>Bloqueo duro: TODOS los usuarios, incluido este administrador, salvo con el enlace de abajo.</p>
+        <p>Termina automáticamente: ${until ?? "no configurado — apágalo manualmente cuando quieras"}</p>
+        <p><strong>Guarda este enlace ahora — solo se muestra una vez:</strong></p>
+        <p style="word-break:break-all;background:#1a1a1a;padding:12px;border-radius:8px;">${bypassLink}</p>
+        <p style="color:#999;font-size:13px;">Este navegador ya quedó exento (no necesitas el enlace aquí). Úsalo en cualquier otro dispositivo/navegador que necesites usar mientras dure el mantenimiento.</p>
+      </body></html>`);
+  });
+
+  // ── Apagar mantenimiento manualmente desde un enlace ─────────────────────
+  app.get("/api/admin/maintenance/deactivate", requireRole("ADMIN"), async (_req, res) => {
+    await storage.updateSettings({
+      maintenanceMode: false,
+      maintenanceHardLockdown: false,
+      maintenanceEndsAt: null,
+      maintenanceBypassTokenHash: null,
+    });
+    res.send(`<!doctype html><html><body style="font-family:system-ui,sans-serif;background:#0f0f0f;color:#fff;padding:40px;">
+      <h2>Mantenimiento desactivado</h2><p>El sistema volvió a operar con normalidad para todos los usuarios.</p>
+      </body></html>`);
+  });
+
+  // ── Enlace de bypass de mantenimiento ────────────────────────────────────
+  // Sin auth deliberadamente: es el único camino de entrada mientras el
+  // lockdown duro está activo (incluso para ADMIN). La protección real es
+  // que el token crudo solo se entrega una vez, fuera de banda.
+  app.get("/api/maintenance/bypass", async (req, res) => {
+    const token = typeof req.query.token === "string" ? req.query.token : "";
+    if (!token) {
+      res.status(400).send("Falta el token de acceso.");
+      return;
+    }
+    const settings = await storage.getSettings();
+    if (!settings.maintenanceBypassTokenHash || Maintenance.hashBypassToken(token) !== settings.maintenanceBypassTokenHash) {
+      res.status(403).send("Enlace de mantenimiento inválido o expirado.");
+      return;
+    }
+    res.cookie(Maintenance.MAINTENANCE_BYPASS_COOKIE, token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      maxAge: 24 * 60 * 60 * 1000,
+    });
+    res.redirect("/");
   });
 
   app.patch("/api/settings", requireSession, requireRole("ADMIN"), async (req, res) => {

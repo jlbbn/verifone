@@ -440,6 +440,37 @@ export default function AdminSettingsPage() {
                   data-testid="switch-maintenance-mode"
                 />
               </div>
+
+              <div className="flex items-center justify-between gap-4 rounded-md border p-4 mt-3">
+                <div className="space-y-0.5">
+                  <Label htmlFor="maintenanceHardLockdown">Bloqueo duro (incluye administradores)</Label>
+                  <p className="text-xs text-muted-foreground">
+                    {draft.maintenanceHardLockdown
+                      ? "Activo — nadie entra, ni siquiera ADMIN, salvo con un enlace de bypass"
+                      : "Inactivo — ADMIN y el correo de soporte siguen operando durante el mantenimiento"}
+                  </p>
+                </div>
+                <Switch
+                  id="maintenanceHardLockdown"
+                  checked={draft.maintenanceHardLockdown}
+                  onCheckedChange={(checked) => set("maintenanceHardLockdown", checked)}
+                  data-testid="switch-maintenance-hard-lockdown"
+                />
+              </div>
+
+              <div className="rounded-md border p-4 mt-3 space-y-2">
+                <Label htmlFor="maintenanceEndsAt">Apagado automático</Label>
+                <Input
+                  id="maintenanceEndsAt"
+                  type="datetime-local"
+                  value={draft.maintenanceEndsAt ? draft.maintenanceEndsAt.slice(0, 16) : ""}
+                  onChange={(e) => set("maintenanceEndsAt", e.target.value ? new Date(e.target.value).toISOString() : null)}
+                  data-testid="input-maintenance-ends-at"
+                />
+                <p className="text-xs text-muted-foreground">
+                  El sistema apaga el mantenimiento por sí solo al llegar esta hora. Déjalo vacío para apagarlo manualmente.
+                </p>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
