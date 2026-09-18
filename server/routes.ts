@@ -462,6 +462,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ── Enlace de bypass de mantenimiento ────────────────────────────────────
+  // Registrado ANTES del "deny-by-default" de abajo a propósito: sin auth,
+  // es el único camino de entrada mientras el lockdown duro está activo
+  // (incluso para ADMIN, incluso sin sesión previa en ese navegador). La
+  // protección real es que el token crudo solo se entrega una vez, fuera
+  // de banda, nunca se persiste en claro.
+  app.get("/api/maintenance/bypass", async (req, res) => {
+    const token = typeof req.query.token === "string" ? req.query.token : "";
+    if (!token) {
+      res.status(400).send("Falta el token de acceso.");
+      return;
+    }
+    const settings = await storage.getSettings();
+    if (!settings.maintenanceBypassTokenHash || Maintenance.hashBypassToken(token) !== settings.maintenanceBypassTokenHash) {
+      res.status(403).send("Enlace de mantenimiento inválido o expirado.");
+      return;
+    }
+    res.cookie(Maintenance.MAINTENANCE_BYPASS_COOKIE, token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      maxAge: 24 * 60 * 60 * 1000,
+    });
+    res.redirect("/");
+  });
+
   // A partir de aquí, todas las rutas /api requieren sesión válida (deny-by-default).
   app.use("/api", requireSession);
 
@@ -3511,30 +3537,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.send(`<!doctype html><html><body style="font-family:system-ui,sans-serif;background:#0f0f0f;color:#fff;padding:40px;">
       <h2>Mantenimiento desactivado</h2><p>El sistema volvió a operar con normalidad para todos los usuarios.</p>
       </body></html>`);
-  });
-
-  // ── Enlace de bypass de mantenimiento ────────────────────────────────────
-  // Sin auth deliberadamente: es el único camino de entrada mientras el
-  // lockdown duro está activo (incluso para ADMIN). La protección real es
-  // que el token crudo solo se entrega una vez, fuera de banda.
-  app.get("/api/maintenance/bypass", async (req, res) => {
-    const token = typeof req.query.token === "string" ? req.query.token : "";
-    if (!token) {
-      res.status(400).send("Falta el token de acceso.");
-      return;
-    }
-    const settings = await storage.getSettings();
-    if (!settings.maintenanceBypassTokenHash || Maintenance.hashBypassToken(token) !== settings.maintenanceBypassTokenHash) {
-      res.status(403).send("Enlace de mantenimiento inválido o expirado.");
-      return;
-    }
-    res.cookie(Maintenance.MAINTENANCE_BYPASS_COOKIE, token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "lax",
-      maxAge: 24 * 60 * 60 * 1000,
-    });
-    res.redirect("/");
   });
 
   app.patch("/api/settings", requireSession, requireRole("ADMIN"), async (req, res) => {
