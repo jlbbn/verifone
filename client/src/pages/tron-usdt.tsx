@@ -39,6 +39,33 @@ interface NetworkStatus {
   error?: string;
 }
 
+// ── Admin-only extended node diagnostics (GET /api/admin/tron/node-panel) ──
+interface NodePanelDiagnostics {
+  status: "no_configurado" | "configurado_pero_inalcanzable" | "ok";
+  network: string;
+  nodeVersion: string | null;
+  versionMatchesExpected: boolean;
+  expectedVersion: string;
+  peers: { active: number | null; passive: number | null; total: number | null };
+  sync: {
+    beginSyncNum: number | null;
+    block: number | null;
+    solidityBlock: number | null;
+    state: "sincronizado" | "sincronizando" | "desconocido";
+  };
+  head: { blockNumber: number | null; blockTimestamp: number | null; ageSeconds: number | null };
+  networkComparison: { tronGridBlock: number; blockDiff: number; semaphore: "verde" | "amarillo" | "rojo" } | null;
+  latencyMs: number | null;
+  checkedAt: string;
+  error?: string;
+}
+
+const SEMAPHORE_STYLES: Record<string, string> = {
+  verde: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
+  amarillo: "bg-amber-500/10 text-amber-400 border-amber-500/30",
+  rojo: "bg-red-500/10 text-red-400 border-red-500/30",
+};
+
 function formatAge(ms: number | null): string {
   if (ms == null) return "—";
   if (ms < 1_000) return "recién";
@@ -129,6 +156,12 @@ export default function TronUsdtPage() {
   const { data: networkStatus } = useQuery<NetworkStatus>({
     queryKey: ["/api/crypto/tron-network-status"],
     refetchInterval: 20_000,
+  });
+  const isAdmin = user?.role === "ADMIN";
+  const { data: nodePanel } = useQuery<NodePanelDiagnostics>({
+    queryKey: ["/api/admin/tron/node-panel"],
+    enabled: isAdmin,
+    refetchInterval: 15_000,
   });
   const tronLink = useTronLink();
   const [tronLinkCopied, setTronLinkCopied] = useState(false);
@@ -326,9 +359,75 @@ export default function TronUsdtPage() {
                 </div>
               )}
 
+              {/* ── Panel extendido (solo admin) ── */}
+              {isAdmin && nodePanel?.status === "no_configurado" && (
+                <div className="rounded-xl bg-emerald-500/5 border border-emerald-500/15 px-3 py-2.5 flex gap-2">
+                  <AlertTriangle className="w-4 h-4 text-emerald-300/70 shrink-0 mt-0.5" />
+                  <p className="text-xs text-emerald-100/70 leading-relaxed">
+                    El nodo privado de la plataforma todavía no está configurado (falta TRON_FULL_HOST / TRON_APPROVED_NODE_ORIGIN). Esto no es un error del panel.
+                  </p>
+                </div>
+              )}
+
+              {isAdmin && nodePanel?.status === "configurado_pero_inalcanzable" && (
+                <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-3 py-2.5 flex gap-2">
+                  <XCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                  <p className="text-xs text-red-200/90 leading-relaxed">
+                    El nodo está configurado pero no respondió: {nodePanel.error ?? "sin detalle"}.
+                  </p>
+                </div>
+              )}
+
+              {isAdmin && nodePanel?.status === "ok" && (
+                <div className="space-y-3 border-t border-emerald-500/10 pt-4" data-testid="section-admin-node-panel">
+                  <p className="text-[10px] uppercase tracking-wider text-emerald-100/40">Diagnóstico detallado (admin)</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-xl border border-emerald-500/10 bg-black/25 px-3 py-3">
+                      <p className="text-[10px] uppercase tracking-wider text-emerald-100/40">Versión java-tron</p>
+                      <p className={`text-sm font-medium mt-1 flex items-center gap-1.5 ${nodePanel.versionMatchesExpected ? "text-white" : "text-amber-300"}`}>
+                        {nodePanel.nodeVersion ?? "—"}
+                        {nodePanel.versionMatchesExpected
+                          ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          : <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />}
+                      </p>
+                      <p className="text-[10px] text-emerald-100/30 mt-0.5">Esperada: {nodePanel.expectedVersion}</p>
+                    </div>
+                    <div className="rounded-xl border border-emerald-500/10 bg-black/25 px-3 py-3">
+                      <p className="text-[10px] uppercase tracking-wider text-emerald-100/40">Peers (activos/pasivos)</p>
+                      <p className="text-sm font-medium text-white mt-1 tabular-nums">
+                        {nodePanel.peers.active ?? "—"} / {nodePanel.peers.passive ?? "—"}
+                        <span className="text-emerald-100/40 font-normal"> · total {nodePanel.peers.total ?? "—"}</span>
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-emerald-500/10 bg-black/25 px-3 py-3">
+                      <p className="text-[10px] uppercase tracking-wider text-emerald-100/40">Sincronización</p>
+                      <p className="text-sm font-medium text-white mt-1 capitalize">{nodePanel.sync.state}</p>
+                      <p className="text-[10px] text-emerald-100/30 mt-0.5 tabular-nums">
+                        begin {nodePanel.sync.beginSyncNum ?? "—"} · block {nodePanel.sync.block?.toLocaleString("en-US") ?? "—"} · solidez {nodePanel.sync.solidityBlock?.toLocaleString("en-US") ?? "—"}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-emerald-500/10 bg-black/25 px-3 py-3">
+                      <p className="text-[10px] uppercase tracking-wider text-emerald-100/40">Comparación con la red</p>
+                      {nodePanel.networkComparison ? (
+                        <div className="flex items-center gap-2 mt-1">
+                          <Badge variant="outline" className={`text-[10px] gap-1 ${SEMAPHORE_STYLES[nodePanel.networkComparison.semaphore]}`}>
+                            {nodePanel.networkComparison.blockDiff > 0 ? `${nodePanel.networkComparison.blockDiff} bloques atrás` : nodePanel.networkComparison.blockDiff < 0 ? `${Math.abs(nodePanel.networkComparison.blockDiff)} bloques adelante` : "al día"}
+                          </Badge>
+                        </div>
+                      ) : (
+                        <p className="text-sm font-medium text-emerald-100/40 mt-1">No disponible</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center gap-1.5 text-[11px] text-emerald-100/40 border-t border-emerald-500/10 pt-3">
                 <Clock className="w-3 h-3 shrink-0" />
                 {networkStatus ? `Última verificación: ${new Date(networkStatus.checkedAt).toLocaleTimeString()}` : "Consultando el nodo de la plataforma..."}
+                {isAdmin && nodePanel?.status === "ok" && nodePanel.latencyMs != null && (
+                  <span className="text-emerald-100/30">· diagnóstico admin {nodePanel.latencyMs}ms</span>
+                )}
               </div>
             </CardContent>
           </Card>

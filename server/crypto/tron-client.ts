@@ -283,6 +283,248 @@ function safeNodeEndpoint(): string {
   return approvedPrivateTronNodeConfiguration().endpoint ?? "(approved private node not configured)";
 }
 
+// ─── Extended node diagnostics panel (admin-only) ──────────────────────────
+// Backs the "Estado de la red TRON" admin panel. Separate from
+// getNodeHealth() above (used by the writes-readiness gate and the
+// lower-detail user-facing status) because this needs more fields, a
+// stricter 5s timeout, and its own 10s cache so admins opening the panel
+// don't hammer the node every render.
+
+/** Pinned to the exact java-tron release running on the node
+ * (tronprotocol/java-tron digest sha256:9db63abdb977830c7d2d56a3c96c3e5506a21d560d54f6c523871dcdc11abf34,
+ * GreatVoyage-v4.8.2.1). Update this whenever the node's image is updated. */
+export const EXPECTED_TRON_VERSION = "4.8.2.1";
+
+/** True if a reported codeVersion is compatible with EXPECTED_TRON_VERSION.
+ * Checked in both directions because java-tron's own `codeVersion` field is
+ * sometimes reported with fewer version segments than the release tag (e.g.
+ * "4.8.2" for a "GreatVoyage-v4.8.2.1" build) — a strict equality check
+ * would falsely alarm on a node that is actually running the pinned image.
+ * A genuinely different release (different major/minor/patch) still fails
+ * both directions. */
+export function tronVersionMatchesExpected(reported: string | null): boolean {
+  if (!reported) return false;
+  const a = reported.trim();
+  const b = EXPECTED_TRON_VERSION;
+  return a.startsWith(b) || b.startsWith(a);
+}
+
+/** Parses java-tron's "Num:12345,ID:abcd..." block-reference strings
+ * (returned by getnodeinfo's `block` and `solidityBlock` fields) into just
+ * the block number. */
+function parseNodeInfoBlockNum(raw: unknown): number | null {
+  if (typeof raw !== "string") return null;
+  const match = raw.match(/Num:(\d+)/);
+  return match ? Number(match[1]) : null;
+}
+
+export type TronSyncState = "sincronizado" | "sincronizando" | "desconocido";
+export type TronNetworkSemaphore = "verde" | "amarillo" | "rojo";
+
+export interface TronNodeDiagnostics {
+  status: "no_configurado" | "configurado_pero_inalcanzable" | "ok";
+  network: typeof TRON_NETWORK;
+  nodeVersion: string | null;
+  versionMatchesExpected: boolean;
+  expectedVersion: string;
+  peers: { active: number | null; passive: number | null; total: number | null };
+  sync: {
+    beginSyncNum: number | null;
+    block: number | null;
+    solidityBlock: number | null;
+    state: TronSyncState;
+  };
+  head: { blockNumber: number | null; blockTimestamp: number | null; ageSeconds: number | null };
+  networkComparison: {
+    tronGridBlock: number;
+    blockDiff: number;
+    semaphore: TronNetworkSemaphore;
+  } | null;
+  latencyMs: number | null;
+  checkedAt: string;
+  error?: string;
+}
+
+const NODE_PANEL_TIMEOUT_MS = 5_000;
+const NODE_PANEL_CACHE_MS = 10_000;
+
+/** A block is considered current if younger than this. TRON produces a block
+ * every ~3s, so 60s of headroom comfortably covers normal network jitter
+ * without flagging a healthy node as "still syncing". solidityBlock is
+ * intentionally NOT used for this — by design it trails ~20 blocks behind
+ * the head for finality, which is normal and unrelated to sync progress. */
+const SYNCED_MAX_HEAD_AGE_SECONDS = 60;
+
+/** Our node running slightly ahead of TronGrid's own head is normal (the
+ * public API lags a few blocks behind actual network heads), so small
+ * negative differences are not an alarm. */
+const NETWORK_DIFF_GREEN_MIN = -10;
+const NETWORK_DIFF_YELLOW_MAX = 100;
+const NETWORK_DIFF_GREEN_MAX = 5;
+
+function classifyNetworkDiff(blockDiff: number): TronNetworkSemaphore {
+  if (blockDiff >= NETWORK_DIFF_YELLOW_MAX) return "rojo";
+  if (blockDiff >= NETWORK_DIFF_GREEN_MAX) return "amarillo";
+  if (blockDiff >= NETWORK_DIFF_GREEN_MIN) return "verde";
+  // More than 10 blocks ahead of TronGrid is unusual enough to flag, even
+  // though it isn't the "falling behind" case the red/yellow bands target.
+  return "amarillo";
+}
+
+async function withPanelTimeout<T>(promise: Promise<T>, operation: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`TRON node timeout during ${operation}`)),
+          NODE_PANEL_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+/** TronGrid's public getnowblock — no API key required for this read, used
+ * strictly as an external reference point to compare our node's head
+ * against, never for signing or balance checks. Failure here degrades the
+ * panel (networkComparison: null) rather than failing the whole request. */
+async function fetchTronGridCurrentBlock(): Promise<number> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), NODE_PANEL_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${trongridHost()}/wallet/getnowblock`, {
+      method: "POST",
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error(`TronGrid responded ${res.status}`);
+    const data = await res.json();
+    const blockNumber = Number(data?.block_header?.raw_data?.number);
+    if (!Number.isFinite(blockNumber)) throw new Error("TronGrid returned no block number");
+    return blockNumber;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function computeNodeDiagnostics(): Promise<TronNodeDiagnostics> {
+  const node = approvedPrivateTronNodeConfiguration();
+  if (!node.configured) {
+    return {
+      status: "no_configurado",
+      network: TRON_NETWORK,
+      nodeVersion: null,
+      versionMatchesExpected: false,
+      expectedVersion: EXPECTED_TRON_VERSION,
+      peers: { active: null, passive: null, total: null },
+      sync: { beginSyncNum: null, block: null, solidityBlock: null, state: "desconocido" },
+      head: { blockNumber: null, blockTimestamp: null, ageSeconds: null },
+      networkComparison: null,
+      latencyMs: null,
+      checkedAt: new Date().toISOString(),
+    };
+  }
+
+  const started = Date.now();
+  try {
+    const tw = getClient();
+    const [block, nodeInfo] = await withPanelTimeout(
+      Promise.all([tw.trx.getCurrentBlock(), tw.trx.getNodeInfo()]),
+      "node panel diagnostics",
+    );
+    const latencyMs = Date.now() - started;
+
+    const header = (block as any)?.block_header?.raw_data;
+    const blockNumber = Number.isFinite(Number(header?.number)) ? Number(header.number) : null;
+    const blockTimestamp = Number.isFinite(Number(header?.timestamp)) ? Number(header.timestamp) : null;
+    const ageSeconds = blockTimestamp ? Math.max(0, (Date.now() - blockTimestamp) / 1000) : null;
+
+    const nodeVersion: string | null = (nodeInfo as any)?.configNodeInfo?.codeVersion ?? null;
+    const active = Number.isFinite(Number((nodeInfo as any)?.activeConnectCount))
+      ? Number((nodeInfo as any).activeConnectCount) : null;
+    const passive = Number.isFinite(Number((nodeInfo as any)?.passiveConnectCount))
+      ? Number((nodeInfo as any).passiveConnectCount) : null;
+    const total = active !== null && passive !== null ? active + passive : null;
+
+    const beginSyncNum = Number.isFinite(Number((nodeInfo as any)?.beginSyncNum))
+      ? Number((nodeInfo as any).beginSyncNum) : null;
+    const solidityBlock = parseNodeInfoBlockNum((nodeInfo as any)?.solidityBlock);
+    const infoBlock = parseNodeInfoBlockNum((nodeInfo as any)?.block) ?? blockNumber;
+
+    const syncState: TronSyncState = ageSeconds === null
+      ? "desconocido"
+      : ageSeconds < SYNCED_MAX_HEAD_AGE_SECONDS ? "sincronizado" : "sincronizando";
+
+    let networkComparison: TronNodeDiagnostics["networkComparison"] = null;
+    if (blockNumber !== null) {
+      try {
+        const tronGridBlock = await fetchTronGridCurrentBlock();
+        const blockDiff = tronGridBlock - blockNumber;
+        networkComparison = { tronGridBlock, blockDiff, semaphore: classifyNetworkDiff(blockDiff) };
+      } catch {
+        networkComparison = null;
+      }
+    }
+
+    return {
+      status: "ok",
+      network: TRON_NETWORK,
+      nodeVersion,
+      versionMatchesExpected: tronVersionMatchesExpected(nodeVersion),
+      expectedVersion: EXPECTED_TRON_VERSION,
+      peers: { active, passive, total },
+      sync: { beginSyncNum, block: infoBlock, solidityBlock, state: syncState },
+      head: { blockNumber, blockTimestamp, ageSeconds },
+      networkComparison,
+      latencyMs,
+      checkedAt: new Date().toISOString(),
+    };
+  } catch (err) {
+    return {
+      status: "configurado_pero_inalcanzable",
+      network: TRON_NETWORK,
+      nodeVersion: null,
+      versionMatchesExpected: false,
+      expectedVersion: EXPECTED_TRON_VERSION,
+      peers: { active: null, passive: null, total: null },
+      sync: { beginSyncNum: null, block: null, solidityBlock: null, state: "desconocido" },
+      head: { blockNumber: null, blockTimestamp: null, ageSeconds: null },
+      networkComparison: null,
+      latencyMs: null,
+      checkedAt: new Date().toISOString(),
+      error: (err as Error).message,
+    };
+  }
+}
+
+let _panelCache: { data: TronNodeDiagnostics; expiresAt: number } | null = null;
+let _panelInFlight: Promise<TronNodeDiagnostics> | null = null;
+
+/** Cached (10s) + de-duplicated (concurrent callers share one in-flight
+ * request) entry point for the admin node-panel endpoint. Never called from
+ * the browser directly — only from the admin-only backend route. */
+export async function getNodePanelDiagnostics(): Promise<TronNodeDiagnostics> {
+  const now = Date.now();
+  if (_panelCache && _panelCache.expiresAt > now) {
+    return _panelCache.data;
+  }
+  if (_panelInFlight) {
+    return _panelInFlight;
+  }
+  _panelInFlight = computeNodeDiagnostics().then((data) => {
+    _panelCache = { data, expiresAt: Date.now() + NODE_PANEL_CACHE_MS };
+    _panelInFlight = null;
+    return data;
+  }).catch((err) => {
+    _panelInFlight = null;
+    throw err;
+  });
+  return _panelInFlight;
+}
+
 /** Whether a private TRON node is even provisioned — distinct from whether
  * that node is currently healthy. Never exposes the host/IP itself. */
 export function approvedNodeConfigured(): boolean {
