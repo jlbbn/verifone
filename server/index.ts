@@ -10,6 +10,7 @@ import { db } from "./db";
 import { isTlsCertificateError } from "./db-ssl";
 import { sql } from "drizzle-orm";
 import { createHash, timingSafeEqual } from "crypto";
+import { apiNotFoundGuard, canonicalizePathMiddleware } from "./path-guard";
 
 /**
  * Fail loudly on database TLS/certificate errors. Production requires full
@@ -54,6 +55,11 @@ const app = express();
 // client IP (set from X-Forwarded-For by the trusted infrastructure layer).
 // This is required for the OKX webhook IP allowlist to work correctly.
 app.set("trust proxy", true);
+
+// Canonicalize the request path (decode %XX, collapse duplicate slashes)
+// before ANY route matching, including helmet/compression. See path-guard.ts
+// for why this must run first.
+app.use(canonicalizePathMiddleware);
 
 app.use(
   helmet({
@@ -216,6 +222,11 @@ app.use((req, res, next) => {
   }
 
   const server = await registerRoutes(app);
+
+  // ── Deny-by-default for unmatched API-shaped paths ──────────────────────────
+  // Registered after every real /api/* route: anything shaped like an API path
+  // that reaches here failed to match a real endpoint. See path-guard.ts.
+  app.use(apiNotFoundGuard);
 
   // ── Global Express error handler ───────────────────────────────────────────
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

@@ -936,6 +936,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // ── Panel detallado del nodo TRON propio (admin-only) ────────────────────
+  // Nunca expone el host/IP del nodo. Cacheado 10s + timeout 5s dentro de
+  // TronClient.getNodePanelDiagnostics(), así refrescos automáticos del panel
+  // (cada 15s) o varios admins abiertos a la vez no saturan el nodo.
+  app.get("/api/admin/tron/node-panel", requireRole("ADMIN"), async (_req, res) => {
+    try {
+      const diagnostics = await TronClient.getNodePanelDiagnostics();
+      res.json(diagnostics);
+    } catch (err) {
+      res.status(502).json({
+        status: "configurado_pero_inalcanzable",
+        error: (err as Error).message,
+        checkedAt: new Date().toISOString(),
+      });
+    }
+  });
+
   // ── Evidencia Nile: solo nodo + auditoría DB; nunca contacta al firmador ─
   app.get("/api/admin/tron/nile-evidence", requireRole("ADMIN"), async (_req, res) => {
     const network = TronClient.TRON_NETWORK;
