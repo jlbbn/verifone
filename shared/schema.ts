@@ -364,6 +364,11 @@ export interface SystemSettings {
   minTrxReserve: number;
   // Anuncios de plataforma (visible en el dashboard de todos los usuarios)
   platformAnnouncement?: string;
+  // Cierre manual del motor de pagos (Stripe/Mercado Pago) y el POS virtual.
+  // Cuando es true, /api/pos/process-payment y /api/payment-engine/charge
+  // rechazan cualquier cobro con 503 en vez de tocar un procesador real.
+  paymentEngineDisabled: boolean;
+  paymentEngineDisabledReason?: string;
 }
 
 export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
@@ -399,6 +404,8 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   maxDailyDispersalUsdt: 0,
   minTrxReserve: 40,
   platformAnnouncement: "",
+  paymentEngineDisabled: false,
+  paymentEngineDisabledReason: "",
   terminalParams: [
     { label: "APLICACION",    value: "RETAIL" },
     { label: "VERSION",       value: "PROVEEOPENAT400" },
