@@ -11,6 +11,7 @@ import { open, readFile, rename } from "node:fs/promises";
 import { createServer } from "node:https";
 import { dirname } from "node:path";
 import { TronWeb } from "tronweb";
+import { isPrivateIpv4 } from "./private-ip.mjs";
 import {
   approvedPrivateNodeOrigin,
   validateUnsignedTransferTransaction,
@@ -542,15 +543,6 @@ function positiveInt(value, name) {
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new Error(`${name} must be a positive integer`);
   return parsed;
-}
-
-function isPrivateIpv4(value) {
-  const parts = value.split(".").map(Number);
-  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return false;
-  return parts[0] === 10
-    || parts[0] === 127
-    || (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31)
-    || (parts[0] === 192 && parts[1] === 168);
 }
 
 function usdtToAtomic(value) {

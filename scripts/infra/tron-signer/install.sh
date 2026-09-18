@@ -40,13 +40,29 @@ fi
 
 python3 - "$TRON_SIGNER_HOST" "$APP_ALLOWED_CIDR" "$ADMIN_SSH_CIDR" <<'PY'
 import ipaddress, sys
+
+# Python's stdlib ipaddress.is_private does NOT cover the Tailscale CGNAT
+# range (100.64.0.0/10, RFC 6598) — confirmed live: ip_address("100.85.242.110")
+# .is_private is False. When the app/node/signer are joined by Tailscale
+# instead of a shared cloud VPC, this check must accept that range too, or a
+# perfectly valid Tailscale-only deployment gets rejected here. Mirrors
+# isPrivateIpv4() in server/crypto/tron-policy.ts and private-ip.mjs.
+TAILSCALE_CGNAT = ipaddress.ip_network("100.64.0.0/10")
+
+def is_private_or_tailscale(addr_or_net):
+    return addr_or_net.is_private or (
+        isinstance(addr_or_net, ipaddress.IPv4Network) and addr_or_net.subnet_of(TAILSCALE_CGNAT)
+    ) or (
+        isinstance(addr_or_net, ipaddress.IPv4Address) and addr_or_net in TAILSCALE_CGNAT
+    )
+
 host = ipaddress.ip_address(sys.argv[1])
 app = ipaddress.ip_network(sys.argv[2], strict=False)
 admin_raw = sys.argv[3]
-if not host.is_private or host.is_loopback or host.version != 4:
-    raise SystemExit("TRON_SIGNER_HOST must be the host's private IPv4 address")
-if not app.is_private or app.version != 4 or app.prefixlen < 24:
-    raise SystemExit("APP_ALLOWED_CIDR must be a narrowly scoped private IPv4 range (/24 or narrower)")
+if not is_private_or_tailscale(host) or host.is_loopback or host.version != 4:
+    raise SystemExit("TRON_SIGNER_HOST must be the host's private or Tailscale IPv4 address")
+if not is_private_or_tailscale(app) or app.version != 4 or app.prefixlen < 24:
+    raise SystemExit("APP_ALLOWED_CIDR must be a narrowly scoped private/Tailscale IPv4 range (/24 or narrower)")
 if admin_raw:
     admin = ipaddress.ip_network(admin_raw, strict=False)
     if admin.prefixlen != admin.max_prefixlen:
