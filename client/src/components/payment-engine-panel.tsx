@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { getStripePromise } from "@/lib/stripe";
+import { MAX_CARD_CHARGE_AMOUNT } from "@shared/schema";
 
 type ChargeRecord = {
   id: string;
@@ -124,6 +125,14 @@ function ChargeForm() {
       toast({ title: "Campos requeridos", variant: "destructive" });
       return;
     }
+    if (parseFloat(amount) > MAX_CARD_CHARGE_AMOUNT) {
+      toast({
+        title: "Monto demasiado alto",
+        description: `El máximo por cargo es $${MAX_CARD_CHARGE_AMOUNT.toLocaleString("en-US")}. Para montos mayores usa una transferencia bancaria.`,
+        variant: "destructive",
+      });
+      return;
+    }
     if (!stripe || !elements) {
       toast({ title: "Stripe aún no está listo", description: "Intenta de nuevo en un momento.", variant: "destructive" });
       return;
@@ -181,6 +190,7 @@ function ChargeForm() {
                 onChange={e => setAmount(e.target.value)}
                 type="number"
                 min="0.01"
+                max={MAX_CARD_CHARGE_AMOUNT}
                 step="0.01"
                 data-testid="input-charge-amount"
               />
