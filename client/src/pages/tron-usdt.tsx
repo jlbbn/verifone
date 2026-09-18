@@ -234,15 +234,7 @@ export default function TronUsdtPage() {
   };
 
   return (
-    <div className="min-h-full relative bg-[#06110d] overflow-hidden">
-      {/* ── Ambient backdrop ── */}
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute inset-0 opacity-[0.05] [background-image:linear-gradient(to_right,#fff_1px,transparent_1px),linear-gradient(to_bottom,#fff_1px,transparent_1px)] [background-size:36px_36px]" />
-        <div className="absolute -top-40 left-1/4 w-[32rem] h-[32rem] rounded-full bg-emerald-500/10 blur-[120px]" />
-        <div className="absolute top-1/3 -right-32 w-[28rem] h-[28rem] rounded-full bg-teal-500/10 blur-[120px]" />
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-500/40 to-transparent" />
-      </div>
-
+    <div className="min-h-full bg-gradient-to-b from-background via-background to-muted/20">
       <div className="relative max-w-5xl mx-auto px-4 md:px-6 py-8 space-y-7">
         {/* ── Header ── */}
         <div className="relative overflow-hidden rounded-2xl border border-emerald-500/15 bg-gradient-to-br from-emerald-950/50 via-[#0a1a15]/80 to-[#0a1a15]/60 backdrop-blur-sm px-5 py-5 sm:px-7 sm:py-6">
