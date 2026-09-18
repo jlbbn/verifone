@@ -62,7 +62,7 @@ test("TRON network profile defaults to mainnet, selects Nile explicitly and reje
   assert.deepEqual(configuredTronNetwork({ TRON_NETWORK: "nile" }), {
     network: "nile",
     label: "TRON Nile Testnet (TRC-20)",
-    usdtContract: "TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj",
+    usdtContract: "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf",
     genesisBlockId: NILE_GENESIS,
   });
   assert.throws(
@@ -108,7 +108,7 @@ test("signer payload and health profile are bound to the selected network contra
     { TRON_NETWORK: "nile" },
   );
   assert.equal(payload.network, "nile");
-  assert.equal(payload.contract, "TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj");
+  assert.equal(payload.contract, "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf");
   assert.equal(signerProfileMatches({
     network: "nile",
     contract: payload.contract,

@@ -17,7 +17,7 @@ const TRON_NETWORK_PROFILES: Record<TronNetwork, TronNetworkProfile> = {
   nile: {
     network: "nile",
     label: "TRON Nile Testnet (TRC-20)",
-    usdtContract: "TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj",
+    usdtContract: "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf",
     genesisBlockId: "0000000000000000d698d4192c56cb6be724a558448e2684802de4d6cd8690dc",
   },
 };

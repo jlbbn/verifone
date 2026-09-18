@@ -1,0 +1,32 @@
+Decidido: arquitectura A, dos cuentas. Implementa en NILE.
+
+ESQUEMA
+- Cuenta FRÍA: owner = llave del Ledger (threshold 1). Guarda el grueso de USDT
+  y el TRX en stake. Además lleva un permiso active "energy-delegate" con
+  operations = 0000000000000006000000000000000000000000000000000000000000000000
+  (solo DelegateResourceContract 57 y UnDelegateResourceContract 58), cuya llave
+  la tiene un proceso automatizado. Esa llave NO puede mover fondos.
+- Cuenta CALIENTE: cuenta normal con llave propia, la que ya usa el firmante.
+  Saldo operativo chico. Hace las dispersiones con TriggerSmartContract, como hoy.
+  Recibe energía delegada desde la cuenta fría.
+
+QUÉ NECESITO, EN ORDEN Y SIN EJECUTAR NADA TODAVÍA
+1. El AccountPermissionUpdateContract final para la cuenta FRÍA, con la dirección
+   del Ledger que te voy a pasar y la dirección de la llave energy-delegate que
+   generes. Muéstramelo antes de ejecutarlo.
+2. El reabastecimiento de la hot wallet: propón el mecanismo. Mi requisito es que
+   mover USDT de fría a caliente exija firma del Ledger, no un proceso automático.
+   Dime cómo lo implementarías y qué visibilidad tiene el admin de ese flujo.
+3. Qué cambios de código hacen falta para DelegateResourceContract y para firmar
+   con Permission_id explícito, dado lo que encontraste en transaction-policy.mjs:77-79.
+   Nota que esto solo aplica al proceso de delegación, NO al firmante de dispersiones,
+   que sigue operando con su llave propia sin permission_id.
+4. Los topes actuales del firmante: cuáles son, dónde están en el código, y si son
+   evadibles por alguien que controle el proceso del firmante.
+5. Resuelve la discrepancia del contrato USDT de Nile (signer vs app). Verifica
+   cuál es el correcto contra el explorador de Nile, no escojas a ojo.
+6. Blind signing: dame un procedimiento concreto para verificar el contenido del
+   AccountPermissionUpdateContract si el Ledger muestra "Unknown/Contract Data".
+   Necesito pasos ejecutables, no "confía en el hash".
+
+No implementes hasta que yo apruebe el punto 1.
