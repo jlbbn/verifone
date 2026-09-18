@@ -58,10 +58,15 @@ export function signerConfiguration(env: NodeJS.ProcessEnv = process.env) {
     env.TRON_SIGNER_KEY_ID?.trim()
     && env.TRON_SIGNER_HMAC_SECRET?.trim(),
   );
+  // mTLS material can arrive either as file paths (a host with a local
+  // filesystem the operator controls) or as inline PEM content via secrets
+  // (a Replit Deployment, which has no out-of-band file transfer path — the
+  // operator pastes the cert/key/ca content into Replit Secrets instead of
+  // committing it to the repo or a chat transcript).
   const hasMtls = Boolean(
-    env.TRON_SIGNER_MTLS_CERT_PATH?.trim()
-    && env.TRON_SIGNER_MTLS_KEY_PATH?.trim()
-    && env.TRON_SIGNER_CA_PATH?.trim(),
+    (env.TRON_SIGNER_MTLS_CERT_PATH?.trim() || env.TRON_SIGNER_MTLS_CERT?.trim())
+    && (env.TRON_SIGNER_MTLS_KEY_PATH?.trim() || env.TRON_SIGNER_MTLS_KEY?.trim())
+    && (env.TRON_SIGNER_CA_PATH?.trim() || env.TRON_SIGNER_CA?.trim()),
   );
   return {
     configured: Boolean(url && hasHmac && hasMtls),
@@ -100,17 +105,19 @@ export function buildSignerAuthentication(
   };
 }
 
+function materialFor(pathVar: string, inlineVar: string): Buffer {
+  const path = process.env[pathVar]?.trim();
+  if (path) return readFileSync(path);
+  const inline = process.env[inlineVar]?.trim();
+  if (inline) return Buffer.from(inline, "utf8");
+  throw new Error("TRON signer mTLS is not configured");
+}
+
 function tlsOptions() {
-  const certPath = process.env.TRON_SIGNER_MTLS_CERT_PATH?.trim();
-  const keyPath = process.env.TRON_SIGNER_MTLS_KEY_PATH?.trim();
-  const caPath = process.env.TRON_SIGNER_CA_PATH?.trim();
-  if (!certPath || !keyPath || !caPath) {
-    throw new Error("TRON signer mTLS is not configured");
-  }
   return {
-    cert: readFileSync(certPath),
-    key: readFileSync(keyPath),
-    ca: readFileSync(caPath),
+    cert: materialFor("TRON_SIGNER_MTLS_CERT_PATH", "TRON_SIGNER_MTLS_CERT"),
+    key: materialFor("TRON_SIGNER_MTLS_KEY_PATH", "TRON_SIGNER_MTLS_KEY"),
+    ca: materialFor("TRON_SIGNER_CA_PATH", "TRON_SIGNER_CA"),
     rejectUnauthorized: true,
     minVersion: "TLSv1.3" as const,
   };

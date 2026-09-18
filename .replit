@@ -76,6 +76,10 @@ MP_PUBLIC_KEY = "TEST-9b1bf33e-307f-42f4-b071-5cae2ed28e68"
 RESEND_FROM = "Banxico Plus <noreply@banxicoplusllc.org>"
 PRODUCTION_URL = "https://banxicoplusllc.org"
 INFRA_LOG_TOKEN = "614bf10bfc293c1e8b1d40dd20a2902c60c7739119e41fb787bb114192206692"
+TRON_APPROVED_NODE_ORIGIN = "http://100.85.242.110:8090"
+TRON_FULL_HOST = "http://100.85.242.110:8090"
+TRON_SIGNER_KEY_ID = "banxico-mainnet-v1"
+TRON_SIGNER_URL = "https://100.99.181.52:9443"
 
 [userenv.development]
 BITSTAMP_ENV = "sandbox"
