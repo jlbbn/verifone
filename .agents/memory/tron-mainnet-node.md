@@ -32,3 +32,24 @@ comportamiento observado en ambas redes.
 **How to apply:** No asumir que `solidityEnable=true` en config.conf implica un
 rol solidity-node funcional en un despliegue de un solo droplet; probar
 `walletsolidity/*` en vivo antes de confiar en la config declarada.
+
+## Infra mainnet recreada 7-sep-2026: IPs y VPC nuevos, ceremonia incompleta
+La VPC `tron-mainnet-vpc` (10.30.0.0/20) y sus droplets (`tron-mainnet-lite`
+165.227.106.97/10.30.0.2, `tron-signer-mainnet` 165.227.191.242/10.30.0.3)
+fueron recreados el 7-sep-2026 — IDs/IPs de ago-2026 en este archivo quedaron
+obsoletos. `banxico-plus-app` vive en una VPC distinta (`banxico-plus-vpc`,
+10.10.0.0/20) sin *VPC peering* hacia `tron-mainnet-vpc`: sin eso, la app no
+tiene ruta privada al firmante/nodo aunque todo lo demás funcione.
+**Why:** un rearmado de infraestructura (nueva VPC/droplets) no reaprovisiona
+por sí solo el firmante — la ceremonia manual (wallet+HMAC nacidos en host)
+debe re-ejecutarse a mano; nada la dispara automáticamente. Señales de
+ceremonia incompleta tras un rearmado: cero filas nuevas en `infra_logs` para
+el host desde la fecha de recreación, firewalls de nube de DO creados pero con
+`droplet_ids: []` (no adjuntos), TCP a 9443 devuelve "connection refused"
+instantáneo (nada escuchando) mientras SSH sí acepta la conexión (host vivo).
+**How to apply:** Antes de diagnosticar un firmante que no responde, comparar
+`droplet.created_at` (API de DO) contra la última fila de `infra_logs` de ese
+host; si el droplet es más nuevo que el último log, sospechar ceremonia nunca
+completada en el host actual, no un fallo transitorio. Revisar también que los
+firewalls de nube declarados (`GET /v2/firewalls`) tengan el droplet real en
+`droplet_ids`.

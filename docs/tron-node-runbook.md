@@ -91,6 +91,59 @@ El FullNode puede permanecer activo durante una pausa: no puede firmar por sí s
 - Pausar ambos candados inmediatamente.
 - Conservar evidencia on-chain, logs y registro de auditoría.
 
+### Firmante mainnet no responde su healthcheck (15-sep-2026)
+
+**Síntoma:** `curl -sk https://10.30.0.3:9443/health` desde el propio FullNode
+mainnet (10.30.0.2, misma VPC `tron-mainnet-vpc`) devuelve *connection refused*
+de forma instantánea (<5ms), no timeout. SSH al firmante con la llave admin
+derivada también es rechazado (esperado por diseño de la ceremonia).
+
+**Diagnóstico remoto (sin acceso SSH al firmante, solo evidencia externa):**
+- El droplet `tron-signer-mainnet` (165.227.191.242 / 10.30.0.3) y su VPC
+  `tron-mainnet-vpc` (10.30.0.0/20) fueron recreados el 2026-09-07 — distintos
+  de los IDs/IPs documentados en `.agents/memory/tron-mainnet-node.md` (ago 2026).
+  Imagen base: `ubuntu-24-04-x64` estándar, no una imagen pre-provisionada.
+- `infra_logs` (tabla que recibe el journal reenviado por el shipper del host)
+  no tiene ninguna entrada de `tron-signer-mainnet` ni `tron-mainnet-lite`
+  posterior a esa recreación; solo quedan logs de una encarnación anterior del
+  droplet (24-ago-2026, incluyendo un `signer_started` legítimo ese día).
+- Ping a 10.30.0.3 responde en ~1-3ms (host arriba, ruta de red intacta). El
+  puerto 22 acepta la conexión TCP y solo rechaza la autenticación (servicio
+  sshd corriendo). El puerto 9443 rechaza la conexión TCP instantáneamente —
+  patrón típico de "nada escuchando en ese puerto", no de un DROP de firewall.
+- Los firewalls de nube de DigitalOcean `tron-mainnet-node-fw` y
+  `tron-mainnet-signer-fw` existen pero tienen `droplet_ids: []` (no están
+  adjuntos a ningún droplet); por contraste, `tron-nile-signer-fw` sí está
+  adjunto a su droplet. Esto es inconsistente con la ceremonia documentada y
+  sugiere que el rearmado de infraestructura del 7-sep quedó a medias.
+- No existe *VPC peering* entre `banxico-plus-vpc` (10.10.0.0/20, donde vive
+  la app) y `tron-mainnet-vpc` (10.30.0.0/20): la app no tiene ruta privada
+  al firmante ni al nodo aunque el healthcheck funcionara.
+
+**Conclusión más probable:** tras recrear el droplet del firmante mainnet el
+7-sep-2026, la ceremonia de aprovisionamiento
+(`scripts/infra/tron-signer/mainnet/provision-mainnet-signer.sh` +
+`install.sh --execute` + `systemctl start tron-signer`) nunca se completó en
+el host nuevo — por eso no hay wallet/HMAC nuevos, no hay servicio escuchando
+en 9443 y no hay logs reenviados. No se puede confirmar esto con certeza total
+sin acceso SSH del tenedor de la ceremonia al host.
+
+**Acción requerida (solo el tenedor de acceso del firmante mainnet):**
+1. Confirmar `systemctl status tron-signer` en el host; si no existe o está
+   inactivo, ejecutar la ceremonia de aprovisionamiento completa desde cero
+   (nueva wallet, nuevo HMAC — el material anterior, si existió, vivía solo en
+   el droplet destruido y no es recuperable).
+2. Adjuntar `tron-mainnet-node-fw` y `tron-mainnet-signer-fw` a sus droplets
+   correspondientes en DigitalOcean (o recrearlos con el allowlist angosto de
+   `ufw.rules.example`, no `10.30.0.0/20` completo para 9443) — no se tocaron
+   en este diagnóstico por tratarse de una infraestructura de custodia de
+   llave activa.
+3. Resolver la falta de VPC peering entre `banxico-plus-vpc` y
+   `tron-mainnet-vpc` (o mover la app a la misma VPC) antes de habilitar
+   escrituras, o la app tampoco podrá alcanzar el firmante en producción.
+4. Re-probar `curl -sk https://10.30.0.3:9443/health` desde el FullNode y
+   confirmar el payload `SignerHealth` esperado.
+
 ## Actualizaciones
 
 1. Leer notas del release y alertas de seguridad.
