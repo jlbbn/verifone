@@ -144,6 +144,50 @@ sin acceso SSH del tenedor de la ceremonia al host.
 4. Re-probar `curl -sk https://10.30.0.3:9443/health` desde el FullNode y
    confirmar el payload `SignerHealth` esperado.
 
+### FullNode mainnet caído desde el 17-sep-2026, sin monitoreo automático hasta esta verificación
+
+**Contexto:** el 14-sep-2026 se detectó que el FullNode mainnet
+(`tron-mainnet-lite`, 165.227.106.97) iba ~102.000 bloques (~85h) por detrás
+tras un reinicio del contenedor el 13-sep. Esta entrada documenta la
+re-verificación posterior pedida antes de confiar en el nodo para saldos.
+
+**Hallazgo (19-sep-2026, ~06:45 UTC), verificado por SSH directo al host:**
+- El contenedor `tron-mainnet-node` **no existe** (`docker ps -a` vacío) y el
+  servicio `tron-mainnet-node.service` está `inactive (dead)`. `journalctl`
+  muestra la última parada limpia el **17-sep-2026 06:03:37 UTC**: no ha vuelto
+  a arrancar desde entonces (host con ~2 días de uptime continuo, sin reboots
+  posteriores a esa parada) — no es un caso de "atrasado sincronizando", es un
+  nodo completamente detenido.
+- `curl http://127.0.0.1:8090/wallet/getnowblock` desde el propio host devuelve
+  `Connection refused`: no hay nada escuchando el RPC. No hay forma de leer un
+  `headAgeSeconds` en vivo sin reiniciar el contenedor primero.
+- El puerto 8090 del Cloud Firewall de DigitalOcean solo permite origen
+  `10.10.0.0/20` y `10.30.0.0/20` (VPC), consistente con la política — no se
+  puede ni se debe exponerlo públicamente para verificar esto desde fuera.
+- Cross-check contra la TronGrid pública (`api.trongrid.io/wallet/getnowblock`)
+  confirma que la cadena real sigue avanzando con normalidad; la brecha es
+  enteramente atribuible al nodo local, no a un problema de referencia externa.
+- Conclusión: el nodo sigue sin ser una fuente de verdad válida para saldos,
+  conciliación o salud del firmante. No se tocó el contenedor ni se intentó
+  reiniciarlo — reanudar el FullNode (posible resync largo, uso de disco) queda
+  fuera del alcance de esta verificación y debe decidirse aparte.
+
+**Brecha de monitoreo cerrada en esta misma verificación:** el
+`tron-mainnet-health.timer` existía desplegado en el host pero estaba
+`disabled`/`inactive` (nunca se habilitó), y el `.service` llamaba
+`healthcheck.sh` directamente sin ningún wrapper de alerta — a diferencia del
+patrón ya prepared-but-not-executed de `scripts/infra/tron-node/monitor.sh`
+para Nile. Se agregó `scripts/infra/tron-mainnet/monitor.sh` (mismo patrón,
+pero con `TRON_ALERT_HOOK_PATH` opcional en vez de obligatorio, ya que mainnet
+no tiene todavía un adaptador de entrega aprobado) y se desplegó en vivo:
+`tron-mainnet-health.timer` ahora corre cada minuto y cualquier fallo de salud
+(incluyendo el nodo caído verificado arriba) queda registrado en el journal del
+host a severidad `daemon.alert` (`journalctl -p alert -t tron-mainnet-monitor`).
+Esto no sustituye un canal de guardia real: para reenviar además a un canal
+externo, provisionar y confirmar un adaptador siguiendo la ceremonia de
+"Certificados y alertas" arriba, luego declarar `TRON_ALERT_HOOK_PATH` en
+`/etc/tron-mainnet/monitor.env` (ver `monitor.env.example`).
+
 ## Actualizaciones
 
 1. Leer notas del release y alertas de seguridad.

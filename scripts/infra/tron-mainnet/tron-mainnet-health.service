@@ -3,4 +3,7 @@ Description=Healthcheck del TRON Mainnet Lite FullNode
 
 [Service]
 Type=oneshot
-ExecStart=/opt/tron-mainnet/healthcheck.sh
+# El archivo es opcional (prefijo "-"): sin el, TRON_ALERT_HOOK_PATH queda sin
+# definir y monitor.sh solo registra en el journal a severidad daemon.alert.
+EnvironmentFile=-/etc/tron-mainnet/monitor.env
+ExecStart=/opt/tron-mainnet/monitor.sh
