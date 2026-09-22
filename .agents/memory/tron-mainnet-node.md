@@ -53,3 +53,39 @@ host; si el droplet es más nuevo que el último log, sospechar ceremonia nunca
 completada en el host actual, no un fallo transitorio. Revisar también que los
 firewalls de nube declarados (`GET /v2/firewalls`) tengan el droplet real en
 `droplet_ids`.
+
+## Verificar head-age del FullNode mainnet requiere SSH, no curl remoto (19-sep-2026)
+El puerto 8090 del Cloud Firewall solo acepta `10.10.0.0/20`/`10.30.0.0/20`
+(VPC), así que `curl` externo a la IP pública del nodo casi siempre da
+timeout — un único intento que sí respondió resultó ser un fluke de red, no
+conectividad real. La única forma confiable de leer `wallet/getnowblock` desde
+fuera de la VPC es SSH al host (22 está abierto a 0.0.0.0/0 por la regla
+residual amplia ya documentada arriba) y curlear `127.0.0.1:8090` desde dentro.
+**Why:** confiar en un timeout externo como "nodo caído" sin entrar por SSH
+puede confundir una política de firewall correcta con una falla real; hay que
+diferenciar "no alcanzable desde aquí" de "no está escuchando ni siquiera en
+localhost".
+**How to apply:** Para verificar salud/head-age del FullNode mainnet, usar
+`scripts/derive-do-ssh-key.sh` + `ssh root@<IP-pública>` y correr el curl
+local, no intentarlo desde la red del agente.
+
+## FullNode mainnet puede quedar completamente detenido, no solo atrasado (19-sep-2026)
+El 17-sep-2026 06:03 UTC el contenedor `tron-mainnet-node` se detuvo
+limpiamente (`docker stop`, exit 143) y nunca volvió a arrancar — `docker ps
+-a` vacío, servicio `inactive (dead)`, sin reboots posteriores del host que lo
+hubieran re-disparado. `Restart=on-failure` con `StartLimitBurst=3` no ayuda
+si el proceso ya agotó su ventana de reintentos antes de la parada limpia.
+Además, `tron-mainnet-health.timer` estaba desplegado pero `disabled`, y el
+`.service` no tenía wrapper de alerta (a diferencia del patrón
+`scripts/infra/tron-node/monitor.sh` de Nile) — la caída pasó inadvertida casi
+3 días hasta esta verificación manual.
+**Why:** "atrasado sincronizando" y "completamente detenido" requieren
+diagnósticos y arreglos distintos; sin monitoreo activo ninguno de los dos se
+detecta a tiempo.
+**How to apply:** Antes de confiar en este nodo para saldos, no asumir que
+"desplegado" implica "corriendo" — verificar `docker ps` y
+`systemctl is-active tron-mainnet-node.service` por SSH. El monitor ahora
+desplegado (`scripts/infra/tron-mainnet/monitor.sh` + `tron-mainnet-health.timer`
+habilitado) registra fallas en el journal a severidad `daemon.alert`, pero
+`TRON_ALERT_HOOK_PATH` sigue sin un adaptador de entrega aprobado — no hay
+alerta real a una persona todavía (ver task de seguimiento).
