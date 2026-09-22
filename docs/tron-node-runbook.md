@@ -228,12 +228,29 @@ externo, provisionar y confirmar un adaptador siguiendo la ceremonia de
   esperado durante esta ventana, no un bug a corregir por separado.
 - Conclusión: no hay nada que reconciliar retroactivamente — ambas
   direcciones son restos de configuración/prueba sin fondos ni historial.
-  `PLATFORM_TRON_PRIVATE_KEY` se eliminará de Secrets por completo cuando
-  la ceremonia mainnet del firmante (ver README de
-  `scripts/infra/tron-signer/`) genere la dirección de plataforma
-  definitiva; la app no debe volver a tener una llave privada TRON propia.
-  `PLATFORM_TRON_ADDRESS` se fijará entonces a esa dirección real. Ref. interna:
-  task #135 (bloqueada hasta esa ceremonia).
+
+## Cambio de arquitectura (2026-09-22): firmante hardware con aprobación manual
+
+La ceremonia de generar la llave dentro de un droplet (firmante de software
+aislado) queda descartada. El diseño definitivo es:
+
+- El firmante es un **Ledger Nano X** (hardware wallet). La llave privada de
+  `PLATFORM_TRON_ADDRESS` nunca existe en ningún servidor, droplet ni secret
+  de la app — vive únicamente dentro del dispositivo físico.
+- `PLATFORM_TRON_ADDRESS` está fijada a `TAD1jHKHPAh5wbGYyCXiSevt9DCD9ouy4u`
+  (env var, no secret — es una dirección pública). Verificada contra la
+  pantalla "Recibir" de Ledger Live (paso 3/3, dirección coincide carácter a
+  carácter con el texto pegado por el operador).
+- `PLATFORM_TRON_PRIVATE_KEY` no existe como secret en esta app (confirmado
+  vía `viewEnvVars`) y no debe volver a crearse — no hay ningún flujo en el
+  código que deba o pueda firmar automáticamente con una llave propia.
+- Cada transacción de salida (dispersión, retiro) requiere aprobación humana
+  física en el dispositivo Ledger. **El throughput de firmas queda limitado a
+  lo que una persona apruebe manualmente** — no hay firma automática ni cola
+  de firmas por software. Cualquier diseño futuro de dispersión/retiro debe
+  asumir latencia humana en el paso de firma, no un firmante disponible 24/7.
+- La tarea de aprovisionar software de firma en los droplets nuevos queda sin
+  objeto: ya no hay ninguna llave de firmante que provisionar ahí.
 
 ## Checklist de activación mainnet del firmante
 
