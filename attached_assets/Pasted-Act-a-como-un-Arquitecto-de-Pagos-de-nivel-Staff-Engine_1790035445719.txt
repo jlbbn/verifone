@@ -1,0 +1,21 @@
+Actúa como un Arquitecto de Pagos de nivel Staff Engineer. Necesito implementar dos flujos operativos específicos sobre nuestra integración de Stripe en el POS existente.
+
+Directivas de Implementación:
+
+1. Flujo de Autorización + Captura Manual (Auth & Capture):
+- Modifica la creación del PaymentIntent para que soporte el parámetro `capture_method: 'manual'` cuando el operador seleccione pre-autorización.
+- Persiste esta transacción en la base de datos con el estado inicial `authorized` (o el equivalente si Stripe devuelve `requires_capture`).
+- Crea dos acciones/endpoints nuevos en el backend para interactuar con la API: `stripe.paymentIntents.capture(id)` y `stripe.paymentIntents.cancel(id)`.
+- En el frontend (UI), implementa una vista/panel de "Autorizaciones Pendientes" que consulte estos registros y exponga los botones "Capturar" y "Cancelar" conectados a las nuevas acciones.
+
+2. Flujo MOTO (Mail Order / Telephone Order):
+- En el método de cobro donde la tarjeta es digitada manualmente por el operador (sin lector físico), inyecta estrictamente la propiedad `payment_method_options: { card: { moto: true } }` al crear o confirmar el PaymentIntent.
+
+REGLAS DURAS E INQUEBRANTABLES (Violarlas es un error crítico):
+- Cero mockups y cero estados hardcodeados. Todo cargo, captura y cancelación debe pasar por la API real de Stripe.
+- El estado en base de datos y el recibo en la UI deben reflejar EXACTAMENTE el objeto devuelto por Stripe. Si requiere captura: 'authorized' / Si captura exitosa: 'paid' (o 'succeeded') / Si falla: 'declined'. Prohibido inventar un estado "aprobado" localmente.
+- Prohibido generar o inventar códigos de autorización falsos en el frontend o backend.
+- AISLAMIENTO ESTRICTO: NO TOCAR por ningún motivo la lógica de `selectAcquirer` ni alterar ninguna rama de código que pertenezca a MercadoPago.
+
+Formato de Salida Requerido:
+Prohibido escribir en los archivos físicos o ejecutar comandos en la terminal de inmediato. Primero, muéstrame el DIFF completo de los archivos afectados o los bloques de código exactos que vas a modificar/crear. Detente ahí y espera mi orden explícita ("Aplica los cambios") antes de persistirlos en el disco.
