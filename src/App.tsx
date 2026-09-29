@@ -21,6 +21,10 @@ interface TxnReceipt {
   code: string | null; ref: string; time: string; total: number; approved: boolean; mode: EntryMode | null;
 }
 
+interface LogEntry {
+  id: number; time: string; kind: "tx" | "rx" | "err" | "info"; text: string;
+}
+
 const MODEL_STYLES: Record<TerminalModel, { body: string; edge: string; screen: string; label: string }> = {
   VX520: { body: "bg-gradient-to-b from-[#3a4250] to-[#23282f]", edge: "border-[#14171c]", screen: "bg-[#b8d94e]", label: "Verifone VX520" },
   P400:  { body: "bg-gradient-to-b from-[#1c1e24] to-[#0c0d10]", edge: "border-[#000000]", screen: "bg-[#0d2237]", label: "Verifone P400" },
@@ -113,6 +117,9 @@ export default function App() {
   const [printing, setPrinting] = useState(false);
   const [declineReason, setDeclineReason] = useState<string | null>(null);
   const [commError, setCommError] = useState<string | null>(null);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const logId = useRef(0);
+  const consoleRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -127,6 +134,16 @@ export default function App() {
     const t = setTimeout(() => setToast(null), 4000);
     return () => clearTimeout(t);
   }, [toast]);
+
+  // Autoscroll del monitor de red
+  useEffect(() => {
+    consoleRef.current?.scrollTo({ top: consoleRef.current.scrollHeight });
+  }, [logs]);
+
+  function log(kind: LogEntry["kind"], text: string) {
+    const time = new Date().toLocaleTimeString("es-MX", { hour12: false, timeZone: "America/Mexico_City" });
+    setLogs((prev) => [...prev.slice(-199), { id: ++logId.current, time, kind, text }]);
+  }
 
   const set = <K extends keyof TerminalParams>(key: K, value: TerminalParams[K]) =>
     setConfig((c) => ({ ...c, [key]: value }));
@@ -146,6 +163,7 @@ export default function App() {
 
   // ── Consola TMS: Push / Export / Import ─────────────────────────────────────
   function pushToTerminal() {
+    log("info", `TMS PUSH → inyectando ${Object.keys(config.flags).length} parámetros al terminal ${config.terminalId}`);
     setScreen("SYS_CARGA");
     setCargaProgress(0);
     const t0 = Date.now();
@@ -183,8 +201,10 @@ export default function App() {
           flags: { ...DEFAULT_PARAMS.flags, ...(obj.flags ?? {}) },
         });
         setToast(`Perfil importado desde ${file.name}`);
+        log("info", `Perfil JSON importado: ${file.name}`);
       } catch {
         setToast("Error: el archivo no es un perfil válido");
+        log("err", `Error al importar ${file.name}: no es un perfil JSON válido`);
       }
     };
     reader.readAsText(file);
@@ -396,6 +416,7 @@ export default function App() {
 
     // Modo simulación (sin red): comportamiento local original
     if (config.offlineMode) {
+      log("info", `MODO SIMULACIÓN — no se envía petición de red (${proto.name} $${fmt(total)})`);
       setTimeout(() => {
         let code: string | null;
         if (!authRequired) code = null;
@@ -434,6 +455,9 @@ export default function App() {
     };
     const ctrl = new AbortController();
     const timeout = setTimeout(() => ctrl.abort(), 8000);
+    log("tx", `→ POST ${url}`);
+    log("info", `  Headers: Content-Type: application/json · Authorization: Bearer ${config.authToken ? `****${config.authToken.slice(-4)}` : "(VACÍO)"}`);
+    log("tx", `  Body: ${JSON.stringify(body)}`);
     try {
       const res = await fetch(url, {
         method: "POST",
@@ -445,10 +469,14 @@ export default function App() {
         body: JSON.stringify(body),
       });
       clearTimeout(timeout);
+      log("rx", `← HTTP ${res.status} ${res.statusText}`);
+      const rawText = await res.text();
+      if (rawText) log("rx", `  ${rawText}`);
+      else log("rx", "  (respuesta sin cuerpo)");
       if (res.status === 200 || res.status === 201) {
         let serverCode: string | null = null;
         try {
-          const data = await res.json();
+          const data = JSON.parse(rawText);
           serverCode = data.authCode ?? data.auth_code ?? data.authorization ?? null;
         } catch { /* respuesta sin cuerpo JSON */ }
         const code = serverCode ?? (authRequired ? randNum(authLen) : null);
@@ -470,6 +498,7 @@ export default function App() {
     } catch (e) {
       clearTimeout(timeout);
       const isTimeout = e instanceof DOMException && e.name === "AbortError";
+      log("err", `[NETWORK FATAL ERROR] ${isTimeout ? "Timeout de 8s excedido" : String(e)} — posible CORS, host inalcanzable o puerto cerrado (${url})`);
       setCommError(isTimeout ? "TIMEOUT DE RED" : "ERROR DE COMUNICACIÓN");
       setScreen("ERROR_RED");
       // Rollback a IDLE sin imprimir comprobante
@@ -1000,6 +1029,42 @@ export default function App() {
                     <Icon className="w-4 h-4" /> {label}
                   </button>
                 ))}
+              </div>
+            </Panel>
+
+            <Panel title="Monitor de Red (Telemetría)" desc="Diálogo crudo entre el POS y el motor: peticiones, headers, respuestas y errores fatales.">
+              <div
+                ref={consoleRef}
+                className="bg-black rounded-md h-64 overflow-y-auto p-3 font-mono text-[11px] leading-relaxed border border-gray-800"
+              >
+                {logs.length === 0 ? (
+                  <p className="text-gray-600">$ esperando actividad de red — configura Host/Token, dale Push y cobra en el POS...</p>
+                ) : (
+                  logs.map((l) => (
+                    <p key={l.id} className="whitespace-pre-wrap break-all">
+                      <span className="text-gray-600">[{l.time}]</span>{" "}
+                      <span className={
+                        l.kind === "tx" ? "text-emerald-400"
+                        : l.kind === "rx" ? "text-gray-100"
+                        : l.kind === "err" ? "text-red-400 font-bold"
+                        : "text-amber-300"
+                      }>
+                        {l.text}
+                      </span>
+                    </p>
+                  ))
+                )}
+              </div>
+              <div className="flex justify-between items-center">
+                <p className="text-[10px] text-gray-400">
+                  <span className="text-emerald-500 font-mono">verde</span> = request · <span className="font-mono text-gray-600">blanco</span> = response · <span className="text-red-500 font-mono">rojo</span> = error fatal
+                </p>
+                <button
+                  onClick={() => setLogs([])}
+                  className="text-[10px] font-medium text-gray-500 hover:text-[#c8322b] transition-colors"
+                >
+                  Limpiar consola
+                </button>
               </div>
             </Panel>
 
