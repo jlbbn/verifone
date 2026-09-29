@@ -12,7 +12,7 @@ import type { TerminalParams, TerminalModel, CommMode } from "./params";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type Screen =
-  | "IDLE" | "MONTO" | "TARJETA" | "PROCESANDO" | "APROBADO" | "DECLINADO"
+  | "IDLE" | "MONTO" | "TARJETA" | "PROCESANDO" | "APROBADO" | "DECLINADO" | "ERROR_RED"
   | "PWD" | "SYSMENU" | "SYS_REPORTE" | "SYS_COMMS" | "SYS_CONFIG" | "SYS_CARGA" | "SYS_ACERCA";
 
 type EntryMode = "CHIP" | "CTLS" | "BANDA";
@@ -111,6 +111,8 @@ export default function App() {
   const [flagIndex, setFlagIndex] = useState(0);
   const [cargaProgress, setCargaProgress] = useState(0);
   const [printing, setPrinting] = useState(false);
+  const [declineReason, setDeclineReason] = useState<string | null>(null);
+  const [commError, setCommError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -237,6 +239,8 @@ export default function App() {
       `PUERTO: ${config.port}`,
       `SSL: ${config.ssl ? "SI" : "NO"}`,
       `TMS: ${config.tmsId}`,
+      `TOKEN: ${config.authToken ? `****${config.authToken.slice(-4)}` : "NO CONFIGURADO"}`,
+      `MODO: ${config.offlineMode ? "SIMULACION" : "RED REAL"}`,
       "──────────────────────────",
       ...FEATURE_FLAGS.map((f) => `${f.padEnd(18, ".")} ${config.flags[f] ? "SI" : "NO"}`),
       "──────────────────────────",
@@ -378,33 +382,104 @@ export default function App() {
     setConfig((c) => ({ ...c, flags: { ...c.flags, [flag]: !c.flags[flag] } }));
   }
 
-  function runAuthorization() {
+  // ── Network layer: autorización contra el motor central ─────────────────────
+  async function runAuthorization() {
     setScreen("PROCESANDO");
-    setTimeout(() => {
-      // Banderas operativas:
-      // - AUTH REQUERIDO = NO  → la operación se aprueba sin código
-      // - VALIDAR PROTOCOLO = NO → se acepta el código manual sin validar longitud
-      let code: string | null;
-      if (!authRequired) {
-        code = null;
-      } else {
-        const manual = config.authCode.trim();
-        const manualOk = validateProto ? manual.length === authLen : manual.length > 0;
-        code = manualOk ? manual : randNum(authLen);
-      }
-      const approved = !config.forceDecline;
-      setTxn({
-        code,
-        ref: `VF${randNum(10)}`,
-        time: new Date().toLocaleString("es-MX", { timeZone: "America/Mexico_City", hour12: false }),
-        total,
-        approved,
-        mode: entryMode,
+    setDeclineReason(null);
+
+    const baseTxn = {
+      ref: `VF${randNum(10)}`,
+      time: new Date().toLocaleString("es-MX", { timeZone: "America/Mexico_City", hour12: false }),
+      total,
+      mode: entryMode,
+    };
+
+    // Modo simulación (sin red): comportamiento local original
+    if (config.offlineMode) {
+      setTimeout(() => {
+        let code: string | null;
+        if (!authRequired) code = null;
+        else {
+          const manual = config.authCode.trim();
+          const manualOk = validateProto ? manual.length === authLen : manual.length > 0;
+          code = manualOk ? manual : randNum(authLen);
+        }
+        const approved = !config.forceDecline;
+        if (!approved) setDeclineReason("RESP: 05 · NO AUTORIZADA");
+        setTxn({ ...baseTxn, code, approved });
+        setReceiptKind("venta");
+        setScreen(approved ? "APROBADO" : "DECLINADO");
+        if (approved) setToast(`${proto.name} aprobada · Auth ${code ?? "NO REQUERIDO"} · ${config.currency} $${fmt(total)}`);
+      }, 1600);
+      return;
+    }
+
+    // Petición real: URL y esquema se construyen con los parámetros de red
+    const url = `${config.ssl ? "https" : "http"}://${config.host}:${config.port}/api/engine/sales/forced`;
+    const body = {
+      mti: "0200",
+      processingCode: proto.processingCode,
+      protocol: config.protocol,
+      operation: proto.name,
+      amount: total,
+      tip,
+      currency: config.currency,
+      terminalId: config.terminalId,
+      merchant: config.merchant,
+      serial: config.serial,
+      cardNumber: maskCard(config.cardNumber),
+      cardholder: config.holderName.toUpperCase(),
+      entryMode,
+      timestamp: new Date().toISOString(),
+    };
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 8000);
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        signal: ctrl.signal,
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${config.authToken}`,
+        },
+        body: JSON.stringify(body),
       });
-      setReceiptKind("venta");
-      setScreen(approved ? "APROBADO" : "DECLINADO");
-      if (approved) setToast(`${proto.name} aprobada · Auth ${code ?? "NO REQUERIDO"} · ${config.currency} $${fmt(total)}`);
-    }, 1600);
+      clearTimeout(timeout);
+      if (res.status === 200 || res.status === 201) {
+        let serverCode: string | null = null;
+        try {
+          const data = await res.json();
+          serverCode = data.authCode ?? data.auth_code ?? data.authorization ?? null;
+        } catch { /* respuesta sin cuerpo JSON */ }
+        const code = serverCode ?? (authRequired ? randNum(authLen) : null);
+        setTxn({ ...baseTxn, code, approved: true });
+        setReceiptKind("venta");
+        setScreen("APROBADO");
+        setToast(`${proto.name} aprobada · Auth ${code ?? "NO REQUERIDO"} · ${config.currency} $${fmt(total)}`);
+      } else if (res.status === 401) {
+        setDeclineReason("TOKEN INVÁLIDO · RECHAZO DE RED (401)");
+        setTxn({ ...baseTxn, code: null, approved: false });
+        setReceiptKind("venta");
+        setScreen("DECLINADO");
+      } else {
+        setDeclineReason(`RECHAZO DE RED · HTTP ${res.status}`);
+        setTxn({ ...baseTxn, code: null, approved: false });
+        setReceiptKind("venta");
+        setScreen("DECLINADO");
+      }
+    } catch (e) {
+      clearTimeout(timeout);
+      const isTimeout = e instanceof DOMException && e.name === "AbortError";
+      setCommError(isTimeout ? "TIMEOUT DE RED" : "ERROR DE COMUNICACIÓN");
+      setScreen("ERROR_RED");
+      // Rollback a IDLE sin imprimir comprobante
+      setTimeout(() => {
+        setScreen("IDLE");
+        setAmountDigits("");
+        setEntryMode(null);
+        setCommError(null);
+      }, 2500);
+    }
   }
 
   const screenText = useMemo(() => ({
@@ -492,8 +567,18 @@ export default function App() {
           <div className="flex flex-col items-center justify-center h-full gap-1">
             <XCircle className={`w-6 h-6 ${p}`} />
             <p className={`text-sm font-bold ${p}`}>DECLINADA</p>
-            <p className={`text-[9px] font-mono ${s}`}>RESP: 05 · NO AUTORIZADA</p>
+            <p className={`text-[9px] font-mono ${s}`}>{declineReason ?? "RESP: 05 · NO AUTORIZADA"}</p>
             <p className={`text-[8px] mt-1 ${s}`}>ENTER PARA REINTENTAR</p>
+          </div>
+        );
+      case "ERROR_RED":
+        return (
+          <div className="flex flex-col items-center justify-center h-full gap-2">
+            <XCircle className={`w-6 h-6 ${p}`} />
+            <p className={`text-sm font-bold ${p}`}>{commError ?? "ERROR DE COMUNICACIÓN"}</p>
+            <p className={`text-[8px] font-mono ${s}`}>{config.commMode} · {config.host}:{config.port}</p>
+            <p className={`text-[8px] ${s}`}>REVISE PARAMETROS DE RED</p>
+            <p className={`text-[8px] mt-1 ${s} animate-pulse`}>REGRESANDO...</p>
           </div>
         );
       case "PWD":
@@ -810,7 +895,20 @@ export default function App() {
                 <Field label="TMS ID">
                   <input className={inputCls} value={config.tmsId} onChange={(e) => set("tmsId", e.target.value)} />
                 </Field>
-                <Toggle checked={config.ssl} onChange={(v) => set("ssl", v)} label="SSL activado" />
+                <Field label="Token de Aprovisionamiento">
+                  <input
+                    className={inputCls}
+                    type="password"
+                    value={config.authToken}
+                    onChange={(e) => set("authToken", e.target.value)}
+                    placeholder="Bearer token del motor"
+                  />
+                </Field>
+                <Toggle checked={config.ssl} onChange={(v) => set("ssl", v)} label="SSL activado (https)" />
+                <Toggle checked={config.offlineMode} onChange={(v) => set("offlineMode", v)} label="Modo simulación (sin red)" />
+                <p className="text-[10px] text-gray-400">
+                  El POS envía <span className="font-mono">POST {config.ssl ? "https" : "http"}://{config.host}:{config.port}/api/engine/sales/forced</span> con header <span className="font-mono">Authorization: Bearer ***</span>.
+                </p>
               </Panel>
             </div>
 

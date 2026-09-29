@@ -18,6 +18,8 @@ export interface TerminalParams {
   port: number;
   ssl: boolean;
   tmsId: string;
+  authToken: string;
+  offlineMode: boolean;
   // Venta
   currency: "MXN" | "USD";
   tipPercent: number;
@@ -98,6 +100,8 @@ export const DEFAULT_PARAMS: TerminalParams = {
   port: 4443,
   ssl: true,
   tmsId: "TMS-0007",
+  authToken: "",
+  offlineMode: false,
   currency: "MXN",
   tipPercent: 0,
   protocol: "101.1",
