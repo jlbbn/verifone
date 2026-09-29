@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Wifi, Signal, Nfc, Battery, Printer, CreditCard, Terminal,
   Delete, RotateCcw, FlaskConical, Receipt, CheckCircle, XCircle,
-  Lock, ChevronUp, ChevronDown,
+  Lock, ChevronUp, ChevronDown, Send, Download, Upload,
 } from "lucide-react";
 import {
   FEATURE_FLAGS, PROTOCOLS,
@@ -18,7 +18,7 @@ type Screen =
 type EntryMode = "CHIP" | "CTLS" | "BANDA";
 
 interface TxnReceipt {
-  code: string; ref: string; time: string; total: number; approved: boolean; mode: EntryMode | null;
+  code: string | null; ref: string; time: string; total: number; approved: boolean; mode: EntryMode | null;
 }
 
 const MODEL_STYLES: Record<TerminalModel, { body: string; edge: string; screen: string; label: string }> = {
@@ -53,11 +53,12 @@ function maskCard(s: string) {
 }
 
 // ─── UI helpers ───────────────────────────────────────────────────────────────
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+function Panel({ title, desc, children, className = "" }: { title: string; desc?: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+    <div className={`bg-white rounded-xl border border-gray-200 shadow-sm ${className}`}>
       <div className="px-4 pt-3 pb-2 border-b border-gray-100">
         <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
+        {desc && <p className="text-[11px] text-gray-400 mt-0.5">{desc}</p>}
       </div>
       <div className="p-4 space-y-4">{children}</div>
     </div>
@@ -106,9 +107,11 @@ export default function App() {
   const [menuIndex, setMenuIndex] = useState(0);
   const [commIndex, setCommIndex] = useState(0);
   const [portEdit, setPortEdit] = useState<string | null>(null);
+  const [hostEdit, setHostEdit] = useState<string | null>(null);
   const [flagIndex, setFlagIndex] = useState(0);
   const [cargaProgress, setCargaProgress] = useState(0);
   const [printing, setPrinting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const t = setInterval(() => setClock(new Date()), 1000);
@@ -131,10 +134,59 @@ export default function App() {
   const total = amount + tip;
   const proto = protocolInfo(config.protocol);
   const authLen = proto.authDigits ?? 6;
+  const authRequired = config.flags["AUTH REQUERIDO"];
+  const validateProto = config.flags["VALIDAR PROTOCOLO"];
+  const proto101Enabled = config.flags["PROTO 101.1"];
   const style = MODEL_STYLES[config.model];
   const isLight = config.model === "E280S";
   const screenDark = config.model !== "VX520";
   const dim = config.brightness / 100;
+
+  // ── Consola TMS: Push / Export / Import ─────────────────────────────────────
+  function pushToTerminal() {
+    setScreen("SYS_CARGA");
+    setCargaProgress(0);
+    const t0 = Date.now();
+    const iv = setInterval(() => {
+      const pct = Math.min(100, Math.round(((Date.now() - t0) / 2200) * 100));
+      setCargaProgress(pct);
+      if (pct >= 100) {
+        clearInterval(iv);
+        setToast("Configuración inyectada al terminal");
+        setTimeout(() => setScreen("IDLE"), 600);
+      }
+    }, 60);
+  }
+
+  function exportProfile() {
+    const blob = new Blob([JSON.stringify(config, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `verifone-${config.terminalId}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setToast(`Perfil exportado: verifone-${config.terminalId}.json`);
+  }
+
+  function importProfile(file: File) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const obj = JSON.parse(String(reader.result));
+        if (typeof obj !== "object" || obj === null) throw new Error("formato inválido");
+        setConfig({
+          ...DEFAULT_PARAMS,
+          ...obj,
+          flags: { ...DEFAULT_PARAMS.flags, ...(obj.flags ?? {}) },
+        });
+        setToast(`Perfil importado desde ${file.name}`);
+      } catch {
+        setToast("Error: el archivo no es un perfil válido");
+      }
+    };
+    reader.readAsText(file);
+  }
 
   // ── Acciones de sistema ─────────────────────────────────────────────────────
   function openFunction(i: number) {
@@ -149,9 +201,9 @@ export default function App() {
           setScreen("SYSMENU");
         }, 1400);
         break;
-      case "MODO COMUNICACION": setCommIndex(0); setPortEdit(null); setScreen("SYS_COMMS"); break;
+      case "MODO COMUNICACION": setCommIndex(0); setPortEdit(null); setHostEdit(null); setScreen("SYS_COMMS"); break;
       case "CONFIG TERMINAL": setFlagIndex(0); setScreen("SYS_CONFIG"); break;
-      case "CARGA PARAM":
+      case "CARGA PARAM": {
         setScreen("SYS_CARGA");
         setCargaProgress(0);
         const t0 = Date.now();
@@ -161,17 +213,18 @@ export default function App() {
           if (pct >= 100) {
             clearInterval(iv);
             setConfig(DEFAULT_PARAMS);
-            setToast("Parámetros cargados desde TMS");
+            setToast("Parámetros descargados desde TMS");
             setTimeout(() => setScreen("SYSMENU"), 600);
           }
         }, 60);
         break;
+      }
       case "ACERCA DE": setScreen("SYS_ACERCA"); break;
     }
   }
 
   function buildReport(): string[] {
-    const lines = [
+    return [
       "*** REPORTE DE PARAMETROS ***",
       `TERMINAL: ${config.terminalId}`,
       `SERIE: ${config.serial}`,
@@ -185,14 +238,13 @@ export default function App() {
       `SSL: ${config.ssl ? "SI" : "NO"}`,
       `TMS: ${config.tmsId}`,
       "──────────────────────────",
-      ...FEATURE_FLAGS.map((f) => `${f.padEnd(16, ".")} ${config.flags[f] ? "SI" : "NO"}`),
+      ...FEATURE_FLAGS.map((f) => `${f.padEnd(18, ".")} ${config.flags[f] ? "SI" : "NO"}`),
       "──────────────────────────",
       `MONEDA: ${config.currency}`,
       `PROTOCOLO: ${config.protocol} ${proto.name}`,
-      `AUTH REQUERIDO: ${proto.authDigits ?? "N/A"} DÍGITOS`,
+      `AUTH REQUERIDO: ${authRequired ? `${authLen} DÍGITOS` : "NO"}`,
       new Date().toLocaleString("es-MX", { timeZone: "America/Mexico_City", hour12: false }),
     ];
-    return lines;
   }
 
   // ── Teclado ─────────────────────────────────────────────────────────────────
@@ -210,6 +262,10 @@ export default function App() {
       const n = parseInt(d, 10);
       if (n >= 1 && n <= FUNCIONES.length) { setMenuIndex(n - 1); openFunction(n - 1); return; }
     }
+    if (screen === "SYS_COMMS" && hostEdit !== null) {
+      setHostEdit((prev) => (prev !== null && prev.length < 15 ? prev + d : prev));
+      return;
+    }
     if (screen === "SYS_COMMS" && portEdit !== null) {
       setPortEdit((prev) => (prev !== null && prev.length < 5 ? prev + d : prev));
       return;
@@ -221,6 +277,16 @@ export default function App() {
     }
   }
 
+  function pressDotOrDoubleZero() {
+    // Editando el HOST, la tecla 00 funciona como punto decimal de la IP
+    if (screen === "SYS_COMMS" && hostEdit !== null) {
+      setHostEdit((prev) => (prev !== null && prev.length < 15 ? prev + "." : prev));
+      return;
+    }
+    pressDigit("0");
+    pressDigit("0");
+  }
+
   function moveSelection(dir: number) {
     if (screen === "SYSMENU") setMenuIndex((i) => (i + dir + FUNCIONES.length) % FUNCIONES.length);
     else if (screen === "SYS_COMMS") setCommIndex((i) => (i + dir + 5) % 5);
@@ -230,6 +296,7 @@ export default function App() {
   function pressClear() {
     if (screen === "MONTO" || screen === "IDLE") setAmountDigits((prev) => prev.slice(0, -1));
     else if (screen === "PWD") setPwdDigits((prev) => prev.slice(0, -1));
+    else if (screen === "SYS_COMMS" && hostEdit !== null) setHostEdit((prev) => prev !== null ? prev.slice(0, -1) : null);
     else if (screen === "SYS_COMMS" && portEdit !== null) setPortEdit((prev) => prev !== null ? prev.slice(0, -1) : null);
   }
 
@@ -240,7 +307,8 @@ export default function App() {
       case "PWD": setScreen("IDLE"); setPwdDigits(""); setPwdError(false); break;
       case "SYSMENU": setScreen("IDLE"); break;
       case "SYS_COMMS":
-        if (portEdit !== null) setPortEdit(null);
+        if (hostEdit !== null) setHostEdit(null);
+        else if (portEdit !== null) setPortEdit(null);
         else setScreen("SYSMENU");
         break;
       case "SYS_CONFIG": case "SYS_ACERCA": setScreen("SYSMENU"); break;
@@ -258,7 +326,14 @@ export default function App() {
 
   function pressEnter() {
     switch (screen) {
-      case "MONTO": if (amount > 0) setScreen("TARJETA"); break;
+      case "MONTO":
+        if (amount <= 0) break;
+        if (config.protocol === "101.1" && !proto101Enabled) {
+          setToast("Protocolo 101.1 deshabilitado — actívalo en CONFIG TERMINAL o en la consola");
+          break;
+        }
+        setScreen("TARJETA");
+        break;
       case "TARJETA": if (entryMode) runAuthorization(); break;
       case "APROBADO": case "DECLINADO":
         setScreen("IDLE"); setAmountDigits(""); setEntryMode(null); break;
@@ -286,12 +361,16 @@ export default function App() {
         set("commMode", next);
         break;
       }
+      case 1: // HOST
+        if (hostEdit === null) setHostEdit("");
+        else if (hostEdit.trim()) { set("host", hostEdit); setHostEdit(null); }
+        break;
       case 2: // PUERTO
         if (portEdit === null) setPortEdit("");
         else { set("port", parseInt(portEdit || "0", 10)); setPortEdit(null); }
         break;
       case 3: set("ssl", !config.ssl); break;
-      default: break; // HOST y TMS solo lectura (se editan desde el panel)
+      default: break; // TMS ID solo lectura (se edita desde la consola)
     }
   }
 
@@ -302,10 +381,17 @@ export default function App() {
   function runAuthorization() {
     setScreen("PROCESANDO");
     setTimeout(() => {
-      // 101.1 exige código de aprobación de 4 dígitos: el manual solo se
-      // acepta si cumple la longitud del protocolo; si no, se autogenera.
-      const manual = config.authCode.trim();
-      const code = manual.length === authLen ? manual : randNum(authLen);
+      // Banderas operativas:
+      // - AUTH REQUERIDO = NO  → la operación se aprueba sin código
+      // - VALIDAR PROTOCOLO = NO → se acepta el código manual sin validar longitud
+      let code: string | null;
+      if (!authRequired) {
+        code = null;
+      } else {
+        const manual = config.authCode.trim();
+        const manualOk = validateProto ? manual.length === authLen : manual.length > 0;
+        code = manualOk ? manual : randNum(authLen);
+      }
       const approved = !config.forceDecline;
       setTxn({
         code,
@@ -317,7 +403,7 @@ export default function App() {
       });
       setReceiptKind("venta");
       setScreen(approved ? "APROBADO" : "DECLINADO");
-      if (approved) setToast(`${proto.name} aprobada · Auth ${code} · ${config.currency} $${fmt(total)}`);
+      if (approved) setToast(`${proto.name} aprobada · Auth ${code ?? "NO REQUERIDO"} · ${config.currency} $${fmt(total)}`);
     }, 1600);
   }
 
@@ -328,22 +414,6 @@ export default function App() {
   }), [screenDark]);
 
   // ── Pantallas ───────────────────────────────────────────────────────────────
-  function renderMenuList(items: readonly string[], selected: number, title: string, footer: string) {
-    return (
-      <div className="flex flex-col h-full">
-        <p className={`text-[9px] font-bold mb-1 ${screenText.secondary}`}>{title}</p>
-        <div className="flex-1 space-y-px overflow-hidden">
-          {items.map((item, i) => (
-            <p key={item} className={`text-[9px] px-1 rounded ${i === selected ? `${screenText.highlight} font-bold ${screenText.primary}` : screenText.secondary}`}>
-              {i === selected ? "▶" : "\u00A0"} {i + 1}. {item}
-            </p>
-          ))}
-        </div>
-        <p className={`text-[8px] ${screenText.secondary}`}>{footer}</p>
-      </div>
-    );
-  }
-
   function renderScreen() {
     const p = screenText.primary;
     const s = screenText.secondary;
@@ -363,7 +433,12 @@ export default function App() {
           <div className="flex flex-col h-full justify-between">
             <div>
               <p className={`text-[9px] font-bold ${s}`}>{proto.kind} · PROTOCOLO {config.protocol}</p>
-              <p className={`text-[8px] ${s}`}>{proto.name} · REQUIERE AUTH {authLen} DÍGITOS</p>
+              <p className={`text-[8px] ${s}`}>
+                {proto.name} · {authRequired ? `REQUIERE AUTH ${authLen} DÍGITOS` : "AUTH NO REQUERIDO"}
+              </p>
+              {config.protocol === "101.1" && !proto101Enabled && (
+                <p className={`text-[8px] font-bold ${p}`}>** PROTOCOLO DESHABILITADO **</p>
+              )}
             </div>
             <div className="text-right">
               <p className={`text-[9px] ${s}`}>MONTO {config.currency}</p>
@@ -398,6 +473,7 @@ export default function App() {
             <p className={`text-[8px] ${s}`}>CONECTANDO CON AUTORIZADOR</p>
             <p className={`text-[8px] font-mono ${s}`}>{config.commMode} · {config.host}:{config.port} {config.ssl ? "SSL" : ""}</p>
             <p className={`text-[8px] font-mono ${s}`}>ISO 8583 · MTI 0200 · DE3 {proto.processingCode} · {config.protocol}</p>
+            {!validateProto && <p className={`text-[8px] font-bold ${p}`}>SIN VALIDACION DE PROTOCOLO</p>}
           </div>
         );
       case "APROBADO":
@@ -406,7 +482,7 @@ export default function App() {
             <CheckCircle className={`w-6 h-6 ${p}`} />
             <p className={`text-sm font-bold ${p}`}>APROBADA</p>
             <p className={`text-[8px] font-bold ${s}`}>{proto.name}</p>
-            <p className={`text-[9px] font-mono ${s}`}>AUTH: {txn?.code}</p>
+            <p className={`text-[9px] font-mono ${s}`}>AUTH: {txn?.code ?? "NO REQUERIDO"}</p>
             <p className={`text-[9px] font-mono ${s}`}>REF: {txn?.ref}</p>
             <p className={`text-[8px] mt-1 ${s}`}>ENTER PARA NUEVA OPERACIÓN</p>
           </div>
@@ -432,7 +508,19 @@ export default function App() {
           </div>
         );
       case "SYSMENU":
-        return renderMenuList(FUNCIONES, menuIndex, "MENU DE FUNCIONES", "2/8 = NAVEGAR · ENTER = ABRIR · X = SALIR");
+        return (
+          <div className="flex flex-col h-full">
+            <p className={`text-[9px] font-bold mb-1 ${s}`}>MENU DE FUNCIONES</p>
+            <div className="flex-1 space-y-px overflow-hidden">
+              {FUNCIONES.map((item, i) => (
+                <p key={item} className={`text-[9px] px-1 rounded ${i === menuIndex ? `${screenText.highlight} font-bold ${p}` : s}`}>
+                  {i === menuIndex ? "▶" : "\u00A0"} {i + 1}. {item}
+                </p>
+              ))}
+            </div>
+            <p className={`text-[8px] ${s}`}>2/8 = NAVEGAR · ENTER = ABRIR · X = SALIR</p>
+          </div>
+        );
       case "SYS_REPORTE":
         return (
           <div className="flex flex-col items-center justify-center h-full gap-2">
@@ -442,11 +530,11 @@ export default function App() {
         );
       case "SYS_COMMS": {
         const rows = [
-          { label: "MODO", value: config.commMode, editable: true },
-          { label: "HOST", value: config.host, editable: false },
-          { label: "PUERTO", value: portEdit !== null ? `${portEdit}_` : String(config.port), editable: true },
-          { label: "SSL", value: config.ssl ? "SI" : "NO", editable: true },
-          { label: "TMS ID", value: config.tmsId, editable: false },
+          { label: "MODO", value: config.commMode, ro: false },
+          { label: "HOST", value: hostEdit !== null ? `${hostEdit}_` : config.host, ro: false },
+          { label: "PUERTO", value: portEdit !== null ? `${portEdit}_` : String(config.port), ro: false },
+          { label: "SSL", value: config.ssl ? "SI" : "NO", ro: false },
+          { label: "TMS ID", value: config.tmsId, ro: true },
         ];
         return (
           <div className="flex flex-col h-full">
@@ -454,16 +542,15 @@ export default function App() {
             <div className="flex-1 space-y-px">
               {rows.map((r, i) => (
                 <p key={r.label} className={`text-[9px] px-1 rounded ${i === commIndex ? `${screenText.highlight} font-bold ${p}` : s}`}>
-                  {i === commIndex ? "▶" : "\u00A0"} {r.label}: {r.value}{r.editable ? "" : " (RO)"}
+                  {i === commIndex ? "▶" : "\u00A0"} {r.label}: {r.value}{r.ro ? " (RO)" : ""}
                 </p>
               ))}
             </div>
-            <p className={`text-[8px] ${s}`}>ENTER = CAMBIAR · X = VOLVER</p>
+            <p className={`text-[8px] ${s}`}>ENTER = CAMBIAR · 00 = PUNTO · X = VOLVER</p>
           </div>
         );
       }
       case "SYS_CONFIG": {
-        // Ventana de 6 banderas alrededor de la selección
         const win = 6;
         const start = Math.min(Math.max(0, flagIndex - win + 1), FEATURE_FLAGS.length - win);
         const visible = FEATURE_FLAGS.slice(start, start + win);
@@ -476,7 +563,7 @@ export default function App() {
                 const idx = start + i;
                 return (
                   <p key={f} className={`text-[9px] px-1 rounded ${idx === flagIndex ? `${screenText.highlight} font-bold ${p}` : s}`}>
-                    {idx === flagIndex ? "▶" : "\u00A0"} {f.padEnd(15, ".")} {config.flags[f] ? "SI" : "NO"}
+                    {idx === flagIndex ? "▶" : "\u00A0"} {f.padEnd(16, ".")} {config.flags[f] ? "SI" : "NO"}
                   </p>
                 );
               })}
@@ -525,7 +612,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 md:p-6">
-      <div className="max-w-[1400px] mx-auto space-y-6">
+      <div className="max-w-[1500px] mx-auto space-y-6">
         {/* Encabezado */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
@@ -534,7 +621,7 @@ export default function App() {
             </div>
             <div>
               <h1 className="text-xl font-bold text-gray-900">Verifone Dev Studio</h1>
-              <p className="text-xs text-gray-500">Configura el POS desde adentro — modo sistema, parámetros y venta</p>
+              <p className="text-xs text-gray-500">Consola TMS + terminal configurable desde adentro</p>
             </div>
           </div>
           <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 border border-amber-300 bg-amber-50 rounded-full px-3 py-1">
@@ -542,9 +629,9 @@ export default function App() {
           </span>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-6">
-          {/* ── Terminal visual ── */}
-          <div className="flex flex-col items-center gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-[400px_1fr] gap-6 items-start">
+          {/* ── Terminal visual (al lado, como confirmación) ── */}
+          <div className="flex flex-col items-center gap-6 xl:sticky xl:top-6">
             <div className={`w-[320px] rounded-[28px] border-4 ${style.edge} ${style.body} p-4 shadow-2xl`}>
               {/* Marca */}
               <div className="flex items-center justify-between mb-2 px-1">
@@ -589,7 +676,7 @@ export default function App() {
                 {keyBtn("✓", pressEnter, "!bg-[#2e7d32] hover:!bg-[#256629] !text-white")}
                 {keyBtn("F", pressF, "!bg-[#274472] hover:!bg-[#1d3559] !text-white")}
                 {keyBtn("0", () => pressDigit("0"))}
-                {keyBtn("00", () => { pressDigit("0"); pressDigit("0"); })}
+                {keyBtn("00", pressDotOrDoubleZero)}
                 {keyBtn(<RotateCcw className="w-4 h-4 mx-auto" />, () => { setConfig(DEFAULT_PARAMS); setScreen("IDLE"); setAmountDigits(""); setEntryMode(null); setTxn(null); setReport(null); })}
               </div>
             </div>
@@ -626,143 +713,182 @@ export default function App() {
                     {config.tipPercent > 0 && <p>PROPINA:  $ {fmt(tip)}</p>}
                     <p className="font-bold">TOTAL {config.currency}: $ {fmt(txn.total)}</p>
                     <div className="border-t border-dashed border-gray-300 my-2" />
-                    <p className="font-bold">{txn.approved ? "APROBADA" : "DECLINADA"} · AUTH: {txn.code}</p>
+                    <p className="font-bold">{txn.approved ? "APROBADA" : "DECLINADA"} · AUTH: {txn.code ?? "NO REQUERIDO"}</p>
                     <p>REF: {txn.ref}</p>
                     <p>{txn.time}</p>
                   </div>
                 ) : (
                   <p className="text-xs text-gray-400 text-center py-6">
-                    Sin impresiones. Haz una venta o genera el reporte desde el menú de sistema (tecla F, clave {SUPERVISOR_PASSWORD}).
+                    Sin impresiones. Haz una operación o genera el reporte desde el menú de sistema (tecla F, clave {SUPERVISOR_PASSWORD}).
                   </p>
                 )}
               </div>
             </div>
           </div>
 
-          {/* ── Panel de ajustes ── */}
+          {/* ── Consola TMS (protagonista) ── */}
           <div className="space-y-4">
-            <Panel title="Terminal">
-              <Field label="Modelo">
-                <select className={inputCls} value={config.model} onChange={(e) => set("model", e.target.value as TerminalModel)}>
-                  <option value="VX520">Verifone VX520</option>
-                  <option value="P400">Verifone P400</option>
-                  <option value="E280S">Verifone e280s</option>
-                </select>
-              </Field>
-              <Field label="Nombre del comercio">
-                <input className={inputCls} value={config.merchant} onChange={(e) => set("merchant", e.target.value.toUpperCase().slice(0, 22))} />
-              </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="ID Terminal">
-                  <input className={inputCls} value={config.terminalId} onChange={(e) => set("terminalId", e.target.value)} />
+            <Panel title="Consola de Configuración (TMS)" desc="Edita los parámetros e inyéctalos al terminal. Los cambios también pueden hacerse desde adentro del POS (tecla F).">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={pushToTerminal}
+                  className="flex items-center gap-2 rounded-md bg-[#c8322b] px-4 py-2 text-sm font-semibold text-white hover:bg-[#a82520] transition-colors"
+                >
+                  <Send className="w-4 h-4" /> Push to Terminal
+                </button>
+                <button
+                  onClick={exportProfile}
+                  className="flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  <Download className="w-4 h-4" /> Exportar JSON
+                </button>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  <Upload className="w-4 h-4" /> Importar JSON
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) importProfile(f);
+                    e.target.value = "";
+                  }}
+                />
+              </div>
+              <p className="text-[10px] text-gray-400">
+                Push simula la inyección remota: el POS muestra la barra de CARGA PARAM y aplica los parámetros al instante. Exportar/Importar replica la clonación de perfiles entre terminales.
+              </p>
+            </Panel>
+
+            <div className="grid md:grid-cols-2 gap-4">
+              <Panel title="Identidad">
+                <Field label="Modelo">
+                  <select className={inputCls} value={config.model} onChange={(e) => set("model", e.target.value as TerminalModel)}>
+                    <option value="VX520">Verifone VX520</option>
+                    <option value="P400">Verifone P400</option>
+                    <option value="E280S">Verifone e280s</option>
+                  </select>
                 </Field>
+                <Field label="Nombre del comercio">
+                  <input className={inputCls} value={config.merchant} onChange={(e) => set("merchant", e.target.value.toUpperCase().slice(0, 22))} />
+                </Field>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="ID Terminal">
+                    <input className={inputCls} value={config.terminalId} onChange={(e) => set("terminalId", e.target.value)} />
+                  </Field>
+                  <Field label="Serie">
+                    <input className={inputCls} value={config.serial} onChange={(e) => set("serial", e.target.value)} />
+                  </Field>
+                </div>
                 <Field label="Moneda">
                   <select className={inputCls} value={config.currency} onChange={(e) => set("currency", e.target.value as "MXN" | "USD")}>
                     <option value="MXN">MXN</option>
                     <option value="USD">USD</option>
                   </select>
                 </Field>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Monto (directo)">
-                  <input
-                    className={inputCls} type="number" min={0} step="0.01" value={amount || ""}
-                    onChange={(e) => setAmountDigits(e.target.value ? String(Math.round(parseFloat(e.target.value) * 100)) : "")}
-                  />
-                </Field>
-                <Field label="Propina %">
-                  <input className={inputCls} type="number" min={0} max={30} value={config.tipPercent} onChange={(e) => set("tipPercent", Math.max(0, Math.min(30, Number(e.target.value) || 0)))} />
-                </Field>
-              </div>
-            </Panel>
+              </Panel>
 
-            <Panel title="Comunicación">
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Modo">
-                  <select className={inputCls} value={config.commMode} onChange={(e) => set("commMode", e.target.value as CommMode)}>
-                    {COMM_MODES.map(m => <option key={m} value={m}>{m}</option>)}
-                  </select>
-                </Field>
-                <Field label="Puerto">
-                  <input className={inputCls} type="number" value={config.port} onChange={(e) => set("port", Number(e.target.value) || 0)} />
-                </Field>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Host">
+              <Panel title="Red y Host">
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Modo">
+                    <select className={inputCls} value={config.commMode} onChange={(e) => set("commMode", e.target.value as CommMode)}>
+                      {COMM_MODES.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Puerto">
+                    <input className={inputCls} type="number" value={config.port} onChange={(e) => set("port", Number(e.target.value) || 0)} />
+                  </Field>
+                </div>
+                <Field label="Host / IP">
                   <input className={inputCls} value={config.host} onChange={(e) => set("host", e.target.value)} />
                 </Field>
                 <Field label="TMS ID">
                   <input className={inputCls} value={config.tmsId} onChange={(e) => set("tmsId", e.target.value)} />
                 </Field>
-              </div>
-              <Toggle checked={config.ssl} onChange={(v) => set("ssl", v)} label="SSL activado" />
-              <p className="text-[10px] text-gray-400 flex items-center gap-1">
-                <Lock className="w-3 h-3" /> Estos valores también se editan desde adentro: tecla F → clave {SUPERVISOR_PASSWORD} → MODO COMUNICACION
-              </p>
-            </Panel>
+                <Toggle checked={config.ssl} onChange={(v) => set("ssl", v)} label="SSL activado" />
+              </Panel>
+            </div>
 
-            <Panel title="Parámetros internos (banderas)">
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+            <Panel title="Banderas de Operación (Feature Flags)" desc="Las mismas del menú CONFIG TERMINAL del POS — sincronizadas en ambas direcciones. PROTO 101.1, VALIDAR PROTOCOLO y AUTH REQUERIDO impactan directo el flujo de venta.">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2">
                 {FEATURE_FLAGS.map((f) => (
                   <Toggle key={f} compact checked={config.flags[f]} onChange={() => toggleFlag(f)} label={f} />
                 ))}
               </div>
-              <p className="text-[10px] text-gray-400">Las mismas banderas del menú CONFIG TERMINAL del POS — ambos lados sincronizados.</p>
             </Panel>
 
-            <Panel title="Tarjeta de prueba">
-              <Field label="Número">
-                <input className={inputCls} value={config.cardNumber} onChange={(e) => set("cardNumber", e.target.value.replace(/\D/g, "").slice(0, 16))} />
-              </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Titular">
-                  <input className={inputCls} value={config.holderName} onChange={(e) => set("holderName", e.target.value)} />
+            <div className="grid md:grid-cols-2 gap-4">
+              <Panel title={`Operación · ${proto.name}`} desc={proto.label}>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Protocolo">
+                    <select
+                      className={inputCls}
+                      value={config.protocol}
+                      onChange={(e) => {
+                        const code = e.target.value;
+                        const len = protocolInfo(code).authDigits ?? 6;
+                        setConfig((c) => ({ ...c, protocol: code, authCode: c.authCode.slice(0, len) }));
+                      }}
+                    >
+                      {PROTOCOLS.map(pc => <option key={pc} value={pc}>{protocolInfo(pc).label}</option>)}
+                    </select>
+                  </Field>
+                  <Field label={`Cód. autorización (${authLen} díg.)`}>
+                    <input className={inputCls} value={config.authCode} onChange={(e) => set("authCode", e.target.value.replace(/\D/g, "").slice(0, authLen))} placeholder="Auto" />
+                  </Field>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Monto (directo)">
+                    <input
+                      className={inputCls} type="number" min={0} step="0.01" value={amount || ""}
+                      onChange={(e) => setAmountDigits(e.target.value ? String(Math.round(parseFloat(e.target.value) * 100)) : "")}
+                    />
+                  </Field>
+                  <Field label="Propina %">
+                    <input className={inputCls} type="number" min={0} max={30} value={config.tipPercent} onChange={(e) => set("tipPercent", Math.max(0, Math.min(30, Number(e.target.value) || 0)))} />
+                  </Field>
+                </div>
+                <Toggle checked={config.forceDecline} onChange={(v) => set("forceDecline", v)} label="Forzar declinación" />
+              </Panel>
+
+              <Panel title="Tarjeta de prueba">
+                <Field label="Número">
+                  <input className={inputCls} value={config.cardNumber} onChange={(e) => set("cardNumber", e.target.value.replace(/\D/g, "").slice(0, 16))} />
                 </Field>
-                <Field label="Expira">
-                  <input className={inputCls} value={config.expDate} onChange={(e) => set("expDate", e.target.value)} placeholder="MM/AA" />
-                </Field>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Protocolo">
-                  <select
-                    className={inputCls}
-                    value={config.protocol}
-                    onChange={(e) => {
-                      const code = e.target.value;
-                      const len = protocolInfo(code).authDigits ?? 6;
-                      setConfig((c) => ({ ...c, protocol: code, authCode: c.authCode.slice(0, len) }));
-                    }}
-                  >
-                    {PROTOCOLS.map(pc => <option key={pc} value={pc}>{protocolInfo(pc).label}</option>)}
-                  </select>
-                </Field>
-                <Field label={`Cód. autorización (${authLen} díg.)`}>
-                  <input className={inputCls} value={config.authCode} onChange={(e) => set("authCode", e.target.value.replace(/\D/g, "").slice(0, authLen))} placeholder="Auto" />
-                </Field>
-              </div>
-              <p className="text-[10px] text-gray-400">
-                {proto.label} — requiere código de aprobación de {authLen} dígitos. Si el código manual no tiene {authLen} dígitos, el terminal autogenera uno válido.
-              </p>
-              <Toggle checked={config.forceDecline} onChange={(v) => set("forceDecline", v)} label="Forzar declinación" />
-            </Panel>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Titular">
+                    <input className={inputCls} value={config.holderName} onChange={(e) => set("holderName", e.target.value)} />
+                  </Field>
+                  <Field label="Expira">
+                    <input className={inputCls} value={config.expDate} onChange={(e) => set("expDate", e.target.value)} placeholder="MM/AA" />
+                  </Field>
+                </div>
+              </Panel>
+            </div>
 
             <Panel title="Hardware">
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <label className="text-xs font-medium text-gray-600">Brillo de pantalla</label>
-                  <span className="text-xs font-mono text-gray-400">{config.brightness}%</span>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <label className="text-xs font-medium text-gray-600">Brillo de pantalla</label>
+                    <span className="text-xs font-mono text-gray-400">{config.brightness}%</span>
+                  </div>
+                  <input type="range" className="w-full accent-[#c8322b]" value={config.brightness} onChange={(e) => set("brightness", Number(e.target.value))} min={10} max={100} />
                 </div>
-                <input type="range" className="w-full accent-[#c8322b]" value={config.brightness} onChange={(e) => set("brightness", Number(e.target.value))} min={10} max={100} />
-              </div>
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <label className="text-xs font-medium text-gray-600">Nivel de papel</label>
-                  <span className="text-xs font-mono text-gray-400">{config.paperLevel}%</span>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <label className="text-xs font-medium text-gray-600">Nivel de papel</label>
+                    <span className="text-xs font-mono text-gray-400">{config.paperLevel}%</span>
+                  </div>
+                  <input type="range" className="w-full accent-[#c8322b]" value={config.paperLevel} onChange={(e) => set("paperLevel", Number(e.target.value))} min={0} max={100} />
                 </div>
-                <input type="range" className="w-full accent-[#c8322b]" value={config.paperLevel} onChange={(e) => set("paperLevel", Number(e.target.value))} min={0} max={100} />
               </div>
-              <div className="border-t border-gray-100" />
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 gap-2 max-w-sm">
                 {([
                   ["wifi", "WiFi", Wifi],
                   ["gprs", "GPRS", Signal],
@@ -783,7 +909,7 @@ export default function App() {
               className="w-full flex items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
               onClick={() => { setConfig(DEFAULT_PARAMS); setScreen("IDLE"); setAmountDigits(""); setEntryMode(null); setTxn(null); setReport(null); }}
             >
-              <RotateCcw className="w-4 h-4" /> Restablecer valores
+              <RotateCcw className="w-4 h-4" /> Restablecer valores de fábrica
             </button>
           </div>
         </div>

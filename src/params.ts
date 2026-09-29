@@ -51,6 +51,9 @@ export const FEATURE_FLAGS = [
   "LEALTAD MEDA",
   "GIFTCARD",
   "ACTIVADO SSL",
+  "VALIDAR PROTOCOLO",
+  "AUTH REQUERIDO",
+  "PROTO 101.1",
 ] as const;
 
 export const PROTOCOLS = ["101.1", "101.2", "201.1", "201.2", "301.1", "401.1", "1643"];
@@ -121,6 +124,9 @@ export const DEFAULT_PARAMS: TerminalParams = {
     "LEALTAD MEDA": false,
     "GIFTCARD": false,
     "ACTIVADO SSL": true,
+    "VALIDAR PROTOCOLO": true,
+    "AUTH REQUERIDO": true,
+    "PROTO 101.1": true,
   },
 };
 
