@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import {
   FEATURE_FLAGS, PROTOCOLS,
-  SUPERVISOR_PASSWORD, DEFAULT_PARAMS, loadParams, saveParams,
+  SUPERVISOR_PASSWORD, DEFAULT_PARAMS, loadParams, saveParams, protocolInfo,
 } from "./params";
 import type { TerminalParams, TerminalModel, CommMode } from "./params";
 
@@ -129,6 +129,8 @@ export default function App() {
   const amount = digitsToAmount(amountDigits);
   const tip = amount * (config.tipPercent / 100);
   const total = amount + tip;
+  const proto = protocolInfo(config.protocol);
+  const authLen = proto.authDigits ?? 6;
   const style = MODEL_STYLES[config.model];
   const isLight = config.model === "E280S";
   const screenDark = config.model !== "VX520";
@@ -185,7 +187,9 @@ export default function App() {
       "──────────────────────────",
       ...FEATURE_FLAGS.map((f) => `${f.padEnd(16, ".")} ${config.flags[f] ? "SI" : "NO"}`),
       "──────────────────────────",
-      `MONEDA: ${config.currency} · PROTO: ${config.protocol}`,
+      `MONEDA: ${config.currency}`,
+      `PROTOCOLO: ${config.protocol} ${proto.name}`,
+      `AUTH REQUERIDO: ${proto.authDigits ?? "N/A"} DÍGITOS`,
       new Date().toLocaleString("es-MX", { timeZone: "America/Mexico_City", hour12: false }),
     ];
     return lines;
@@ -298,8 +302,11 @@ export default function App() {
   function runAuthorization() {
     setScreen("PROCESANDO");
     setTimeout(() => {
+      // 101.1 exige código de aprobación de 4 dígitos: el manual solo se
+      // acepta si cumple la longitud del protocolo; si no, se autogenera.
+      const manual = config.authCode.trim();
+      const code = manual.length === authLen ? manual : randNum(authLen);
       const approved = !config.forceDecline;
-      const code = config.authCode.trim() || randNum(6);
       setTxn({
         code,
         ref: `VF${randNum(10)}`,
@@ -310,7 +317,7 @@ export default function App() {
       });
       setReceiptKind("venta");
       setScreen(approved ? "APROBADO" : "DECLINADO");
-      if (approved) setToast(`Venta aprobada · Auth ${code} · ${config.currency} $${fmt(total)}`);
+      if (approved) setToast(`${proto.name} aprobada · Auth ${code} · ${config.currency} $${fmt(total)}`);
     }, 1600);
   }
 
@@ -354,7 +361,10 @@ export default function App() {
       case "MONTO":
         return (
           <div className="flex flex-col h-full justify-between">
-            <p className={`text-[9px] font-bold ${s}`}>VENTA · PROTOCOLO {config.protocol}</p>
+            <div>
+              <p className={`text-[9px] font-bold ${s}`}>{proto.kind} · PROTOCOLO {config.protocol}</p>
+              <p className={`text-[8px] ${s}`}>{proto.name} · REQUIERE AUTH {authLen} DÍGITOS</p>
+            </div>
             <div className="text-right">
               <p className={`text-[9px] ${s}`}>MONTO {config.currency}</p>
               <p className={`text-2xl font-bold font-mono ${p}`}>$ {fmt(amount)}</p>
@@ -369,6 +379,7 @@ export default function App() {
         return (
           <div className="flex flex-col items-center justify-center h-full gap-1">
             <p className={`text-[10px] font-bold ${p}`}>INSERTE / ACERQUE TARJETA</p>
+            <p className={`text-[8px] ${s}`}>{proto.name} · {config.protocol}</p>
             <p className={`text-xl font-mono font-bold ${p}`}>$ {fmt(total)}</p>
             <div className="flex gap-2 mt-2">
               <button onClick={() => setEntryMode("CHIP")} className={`px-2 py-0.5 rounded text-[8px] font-bold border ${entryMode === "CHIP" ? "bg-white/25" : ""} ${p}`}>CHIP</button>
@@ -386,7 +397,7 @@ export default function App() {
             <p className={`text-[10px] font-bold ${p} animate-pulse`}>PROCESANDO...</p>
             <p className={`text-[8px] ${s}`}>CONECTANDO CON AUTORIZADOR</p>
             <p className={`text-[8px] font-mono ${s}`}>{config.commMode} · {config.host}:{config.port} {config.ssl ? "SSL" : ""}</p>
-            <p className={`text-[8px] font-mono ${s}`}>ISO 8583 · 0200 · {config.protocol}</p>
+            <p className={`text-[8px] font-mono ${s}`}>ISO 8583 · MTI 0200 · DE3 {proto.processingCode} · {config.protocol}</p>
           </div>
         );
       case "APROBADO":
@@ -394,9 +405,10 @@ export default function App() {
           <div className="flex flex-col items-center justify-center h-full gap-1">
             <CheckCircle className={`w-6 h-6 ${p}`} />
             <p className={`text-sm font-bold ${p}`}>APROBADA</p>
+            <p className={`text-[8px] font-bold ${s}`}>{proto.name}</p>
             <p className={`text-[9px] font-mono ${s}`}>AUTH: {txn?.code}</p>
             <p className={`text-[9px] font-mono ${s}`}>REF: {txn?.ref}</p>
-            <p className={`text-[8px] mt-1 ${s}`}>ENTER PARA NUEVA VENTA</p>
+            <p className={`text-[8px] mt-1 ${s}`}>ENTER PARA NUEVA OPERACIÓN</p>
           </div>
         );
       case "DECLINADO":
@@ -604,6 +616,7 @@ export default function App() {
                     <p className="text-center font-bold">{config.merchant}</p>
                     <p className="text-center">TERMINAL: {config.terminalId}</p>
                     <p className="text-center">{style.label.toUpperCase()} · {config.protocol}</p>
+                    <p className="text-center font-bold">** {proto.name} **</p>
                     <div className="border-t border-dashed border-gray-300 my-2" />
                     <p>TARJETA: {maskCard(config.cardNumber)}</p>
                     <p>TITULAR: {config.holderName.toUpperCase()}</p>
@@ -711,14 +724,25 @@ export default function App() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Protocolo">
-                  <select className={inputCls} value={config.protocol} onChange={(e) => set("protocol", e.target.value)}>
-                    {PROTOCOLS.map(p => <option key={p} value={p}>{p}</option>)}
+                  <select
+                    className={inputCls}
+                    value={config.protocol}
+                    onChange={(e) => {
+                      const code = e.target.value;
+                      const len = protocolInfo(code).authDigits ?? 6;
+                      setConfig((c) => ({ ...c, protocol: code, authCode: c.authCode.slice(0, len) }));
+                    }}
+                  >
+                    {PROTOCOLS.map(pc => <option key={pc} value={pc}>{protocolInfo(pc).label}</option>)}
                   </select>
                 </Field>
-                <Field label="Cód. autorización">
-                  <input className={inputCls} value={config.authCode} onChange={(e) => set("authCode", e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="Auto" />
+                <Field label={`Cód. autorización (${authLen} díg.)`}>
+                  <input className={inputCls} value={config.authCode} onChange={(e) => set("authCode", e.target.value.replace(/\D/g, "").slice(0, authLen))} placeholder="Auto" />
                 </Field>
               </div>
+              <p className="text-[10px] text-gray-400">
+                {proto.label} — requiere código de aprobación de {authLen} dígitos. Si el código manual no tiene {authLen} dígitos, el terminal autogenera uno válido.
+              </p>
               <Toggle checked={config.forceDecline} onChange={(v) => set("forceDecline", v)} label="Forzar declinación" />
             </Panel>
 

@@ -55,6 +55,32 @@ export const FEATURE_FLAGS = [
 
 export const PROTOCOLS = ["101.1", "101.2", "201.1", "201.2", "301.1", "401.1", "1643"];
 
+// Reglas de operación por protocolo (espejo de la tabla del POS Virtual Banxico).
+export interface ProtocolInfo {
+  code: string;
+  label: string;          // etiqueta larga para selectores
+  name: string;           // nombre corto para pantalla/ticket
+  kind: string;           // tipo de operación
+  authDigits: number | null; // dígitos requeridos del código de aprobación
+  processingCode: string; // ISO 8583 DE3
+}
+
+export const PROTOCOL_INFO: Record<string, ProtocolInfo> = {
+  "101.1": { code: "101.1", label: "101.1 — Basic Transfer / Transferencia básica",       name: "TRANSFERENCIA BÁSICA",      kind: "TRANSFERENCIA", authDigits: 4,    processingCode: "400000" },
+  "101.2": { code: "101.2", label: "101.2 — Validated Transfer / Transferencia validada", name: "TRANSFERENCIA VALIDADA",    kind: "TRANSFERENCIA", authDigits: 6,    processingCode: "400000" },
+  "201.1": { code: "201.1", label: "201.1 — Domestic Payment / Pago nacional",            name: "PAGO NACIONAL",             kind: "PAGO",          authDigits: 6,    processingCode: "000000" },
+  "201.2": { code: "201.2", label: "201.2 — International Payment / Pago internacional",  name: "PAGO INTERNACIONAL",        kind: "PAGO",          authDigits: 6,    processingCode: "000000" },
+  "301.1": { code: "301.1", label: "301.1 — Account Deposit / Depósito cuenta",           name: "DEPÓSITO CUENTA",           kind: "DEPÓSITO",      authDigits: 6,    processingCode: "210000" },
+  "401.1": { code: "401.1", label: "401.1 — ATM Withdrawal / Retiro ATM",                 name: "RETIRO ATM",                kind: "RETIRO",        authDigits: 6,    processingCode: "010000" },
+  "1643":  { code: "1643",  label: "1643 — Venta manual",                                 name: "VENTA MANUAL",              kind: "VENTA MANUAL", authDigits: 4,    processingCode: "000000" },
+};
+
+export function protocolInfo(code: string): ProtocolInfo {
+  return PROTOCOL_INFO[code] ?? {
+    code, label: code, name: `PROTOCOLO ${code}`, kind: "OPERACIÓN", authDigits: 6, processingCode: "000000",
+  };
+}
+
 export const SUPERVISOR_PASSWORD = "166831";
 
 export const DEFAULT_PARAMS: TerminalParams = {
