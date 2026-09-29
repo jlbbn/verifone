@@ -5,7 +5,7 @@ import {
   Lock, ChevronUp, ChevronDown, Send, Download, Upload,
 } from "lucide-react";
 import {
-  FEATURE_FLAGS, PROTOCOLS,
+  FEATURE_FLAGS, PROTOCOLS, EMV_AIDS,
   SUPERVISOR_PASSWORD, DEFAULT_PARAMS, loadParams, saveParams, protocolInfo,
   loadQueue, saveQueue,
 } from "./params";
@@ -15,7 +15,7 @@ import type { TerminalParams, TerminalModel, CommMode, QueuedTxn } from "./param
 type Screen =
   | "IDLE" | "MONTO" | "TARJETA" | "PROCESANDO" | "APROBADO" | "DECLINADO" | "ERROR_RED"
   | "PWD" | "SYSMENU" | "SYS_REPORTE" | "SYS_COMMS" | "SYS_CONFIG" | "SYS_CARGA" | "SYS_ACERCA"
-  | "SYS_LOTE";
+  | "SYS_LOTE" | "SYS_ECHO";
 
 type EntryMode = "CHIP" | "CTLS" | "BANDA";
 
@@ -41,6 +41,7 @@ const FUNCIONES = [
   "CARGA PARAM",
   "ACERCA DE",
   "CIERRE DE LOTE",
+  "PRUEBA DE CONEXIÓN",
 ] as const;
 
 const COMM_MODES: CommMode[] = ["ETHERNET", "DIAL", "GPRS"];
@@ -53,6 +54,16 @@ function digitsToAmount(digits: string) {
 }
 function randNum(n: number) {
   return Array.from({ length: n }, () => Math.floor(Math.random() * 10).toString()).join("");
+}
+function randHex(n: number) {
+  return Array.from({ length: n }, () => Math.floor(Math.random() * 16).toString(16).toUpperCase()).join("");
+}
+function detectBrand(cardNumber: string): string {
+  const c = cardNumber.replace(/\D/g, "");
+  if (c.startsWith("4")) return "VISA";
+  if (/^(5[1-5]|2[2-7])/.test(c)) return "MASTERCARD";
+  if (/^3[47]/.test(c)) return "AMEX";
+  return "CARNET";
 }
 function maskCard(s: string) {
   const c = s.replace(/\D/g, "");
@@ -109,6 +120,9 @@ export default function App() {
   const [receiptKind, setReceiptKind] = useState<"venta" | "reporte" | "lote">("venta");
   const [queue, setQueue] = useState<QueuedTxn[]>(loadQueue);
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
+  const [echoResult, setEchoResult] = useState<{ ok: boolean; detail: string } | null>(null);
+  const [aidError, setAidError] = useState<string | null>(null);
+  const [idleNotice, setIdleNotice] = useState<string | null>(null);
   const [clock, setClock] = useState(new Date());
   const [toast, setToast] = useState<string | null>(null);
   // Modo sistema
@@ -205,6 +219,7 @@ export default function App() {
           ...DEFAULT_PARAMS,
           ...obj,
           flags: { ...DEFAULT_PARAMS.flags, ...(obj.flags ?? {}) },
+          emvAids: { ...DEFAULT_PARAMS.emvAids, ...(obj.emvAids ?? {}) },
         });
         setToast(`Perfil importado desde ${file.name}`);
         log("info", `Perfil JSON importado: ${file.name}`);
@@ -249,6 +264,7 @@ export default function App() {
       }
       case "ACERCA DE": setScreen("SYS_ACERCA"); break;
       case "CIERRE DE LOTE": settleBatch(); break;
+      case "PRUEBA DE CONEXIÓN": echoTest(); break;
     }
   }
 
@@ -342,7 +358,7 @@ export default function App() {
         else if (portEdit !== null) setPortEdit(null);
         else setScreen("SYSMENU");
         break;
-      case "SYS_CONFIG": case "SYS_ACERCA": setScreen("SYSMENU"); break;
+      case "SYS_CONFIG": case "SYS_ACERCA": case "SYS_ECHO": setScreen("SYSMENU"); break;
       default: break;
     }
   }
@@ -365,7 +381,7 @@ export default function App() {
         }
         setScreen("TARJETA");
         break;
-      case "TARJETA": if (entryMode) runAuthorization(); break;
+      case "TARJETA": if (entryMode && !aidError) runAuthorization(); break;
       case "APROBADO": case "DECLINADO":
         setScreen("IDLE"); setAmountDigits(""); setEntryMode(null); break;
       case "PWD":
@@ -380,7 +396,7 @@ export default function App() {
       case "SYSMENU": openFunction(menuIndex); break;
       case "SYS_COMMS": commEnter(); break;
       case "SYS_CONFIG": toggleFlag(FEATURE_FLAGS[flagIndex]); break;
-      case "SYS_ACERCA": setScreen("SYSMENU"); break;
+      case "SYS_ACERCA": case "SYS_ECHO": setScreen("SYSMENU"); break;
       default: break;
     }
   }
@@ -409,9 +425,37 @@ export default function App() {
     setConfig((c) => ({ ...c, flags: { ...c.flags, [flag]: !c.flags[flag] } }));
   }
 
+  // Selección de modo de lectura con validaciones EMV / fallback
+  function selectEntryMode(mode: EntryMode) {
+    if (mode === "BANDA") {
+      if (!config.flags["MAGSTRIPE FALLBACK"]) {
+        log("err", "OPERACIÓN RESTRINGIDA: banda magnética deshabilitada (MAGSTRIPE FALLBACK = NO)");
+        setScreen("IDLE");
+        setAmountDigits("");
+        setEntryMode(null);
+        setIdleNotice("OPERACIÓN RESTRINGIDA — USE CHIP");
+        setTimeout(() => setIdleNotice(null), 2500);
+        return;
+      }
+      setAidError(null);
+      setEntryMode(mode);
+      return;
+    }
+    // CHIP / CTLS: validar AID de la marca contra los perfiles EMV habilitados
+    const brand = detectBrand(config.cardNumber);
+    if (!config.emvAids[brand]) {
+      setEntryMode(mode);
+      setAidError(`AID NO HABILITADO: ${brand} — USE OTRA TARJETA`);
+      log("err", `EMV: AID ${brand} no habilitado en esta terminal`);
+      return;
+    }
+    setAidError(null);
+    setEntryMode(mode);
+  }
+
   // ── Network layer: autorización contra el motor central ─────────────────────
   function buildSaleBody(): Record<string, unknown> {
-    return {
+    const body: Record<string, unknown> = {
       mti: "0200",
       processingCode: proto.processingCode,
       protocol: config.protocol,
@@ -424,9 +468,17 @@ export default function App() {
       serial: config.serial,
       cardNumber: maskCard(config.cardNumber),
       cardholder: config.holderName.toUpperCase(),
+      cardBrand: detectBrand(config.cardNumber),
       entryMode,
       timestamp: new Date().toISOString(),
     };
+    // Si hay llaves inyectadas, el mensaje viaja "encriptado" (pinBlock + MAC)
+    if (config.ksn.trim()) {
+      body.crypto = { scheme: config.cryptoScheme, ksn: config.ksn };
+      body.pinBlock = randHex(16);
+      body.mac = randHex(8);
+    }
+    return body;
   }
 
   function localAuthCode(): string | null {
@@ -436,7 +488,24 @@ export default function App() {
     return manualOk ? manual : randNum(authLen);
   }
 
-  function enqueueSale(body: Record<string, unknown>, baseTxn: { ref: string; time: string; total: number; mode: EntryMode | null }) {
+  function declineOffline(reason: string, baseTxn: { ref: string; time: string; total: number; mode: EntryMode | null }) {
+    setDeclineReason(reason);
+    log("err", `VENTA OFFLINE RECHAZADA: ${reason} ($${fmt(total)})`);
+    setTxn({ ...baseTxn, code: null, approved: false });
+    setReceiptKind("venta");
+    setScreen("DECLINADO");
+  }
+
+  // Venta forzada con controles de riesgo offline (floor limits)
+  function attemptForcedSale(body: Record<string, unknown>, baseTxn: { ref: string; time: string; total: number; mode: EntryMode | null }) {
+    if (total > config.offlineMaxAmount) {
+      declineOffline(`EXCEDE LÍMITE OFFLINE (TOPE $${fmt(config.offlineMaxAmount)})`, baseTxn);
+      return;
+    }
+    if (queue.length >= config.offlineMaxQueue) {
+      declineOffline("MEMORIA LLENA — HAGA CIERRE DE LOTE", baseTxn);
+      return;
+    }
     const item: QueuedTxn = {
       id: `Q${Date.now()}${randNum(3)}`,
       body,
@@ -445,7 +514,7 @@ export default function App() {
     };
     setQueue((q) => {
       const next = [...q, item];
-      log("info", `VENTA FORZADA guardada en cola offline (${next.length} pendiente${next.length > 1 ? "s" : ""}) — se enviará en CIERRE DE LOTE`);
+      log("info", `VENTA FORZADA guardada en cola offline (${next.length}/${config.offlineMaxQueue}) — se enviará en CIERRE DE LOTE`);
       return next;
     });
     setTxn({ ...baseTxn, code: localAuthCode(), approved: true, queued: true });
@@ -469,7 +538,7 @@ export default function App() {
     // Modo offline: el POS no se bloquea — aprueba como venta forzada y encola
     if (config.offlineMode) {
       log("info", `MODO OFFLINE — venta forzada local (${proto.name} $${fmt(total)})`);
-      setTimeout(() => enqueueSale(body, baseTxn), 1200);
+      setTimeout(() => attemptForcedSale(body, baseTxn), 1200);
       return;
     }
 
@@ -523,7 +592,57 @@ export default function App() {
       // aprueba como venta forzada y guarda en la cola para el cierre de lote
       const isTimeout = e instanceof DOMException && e.name === "AbortError";
       log("err", `[NETWORK FATAL ERROR] ${isTimeout ? "Timeout de 8s excedido" : String(e)} — posible CORS, host inalcanzable o puerto cerrado (${url})`);
-      enqueueSale(body, baseTxn);
+      attemptForcedSale(body, baseTxn);
+    }
+  }
+
+  // ── Prueba de conexión (Logon / Echo · MTI 0800) ────────────────────────────
+  async function echoTest() {
+    setScreen("SYS_ECHO");
+    setEchoResult(null);
+    const url = `${config.ssl ? "https" : "http"}://${config.host}:${config.port}/api/engine/echo`;
+    if (config.offlineMode) {
+      log("info", "ECHO (MTI 0800): modo offline activo — no se prueba la red");
+      setEchoResult({ ok: false, detail: "MODO OFFLINE ACTIVO" });
+      return;
+    }
+    const body = {
+      mti: "0800",
+      networkMgmt: "LOGON",
+      terminalId: config.terminalId,
+      serial: config.serial,
+      crypto: config.ksn.trim() ? { scheme: config.cryptoScheme, ksn: config.ksn } : null,
+      timestamp: new Date().toISOString(),
+    };
+    log("tx", `→ POST ${url} (ECHO · MTI 0800)`);
+    log("tx", `  Body: ${JSON.stringify(body)}`);
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 6000);
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        signal: ctrl.signal,
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${config.authToken}`,
+        },
+        body: JSON.stringify(body),
+      });
+      clearTimeout(timeout);
+      log("rx", `← HTTP ${res.status} ${res.statusText} (ECHO)`);
+      const rawText = await res.text();
+      if (rawText) log("rx", `  ${rawText}`);
+      if (res.status === 200 || res.status === 201) {
+        setEchoResult({ ok: true, detail: `HTTP ${res.status} · LLAVES Y TOKEN OK` });
+      } else if (res.status === 401) {
+        setEchoResult({ ok: false, detail: "HTTP 401 · TOKEN INVÁLIDO" });
+      } else {
+        setEchoResult({ ok: false, detail: `HTTP ${res.status} · RECHAZO DE RED` });
+      }
+    } catch (e) {
+      clearTimeout(timeout);
+      log("err", `[NETWORK FATAL ERROR] ${String(e)} (ECHO) — host inalcanzable o CORS (${url})`);
+      setEchoResult({ ok: false, detail: "SIN RESPUESTA DEL HOST" });
     }
   }
 
@@ -620,6 +739,7 @@ export default function App() {
             {queue.length > 0 && (
               <p className={`text-[9px] font-bold mt-1 ${p} animate-pulse`}>[⬆ {queue.length} PENDIENTE{queue.length > 1 ? "S" : ""}]</p>
             )}
+            {idleNotice && <p className={`text-[9px] font-bold ${p}`}>{idleNotice}</p>}
             <p className={`text-[8px] mt-1 ${s}`}>F = MENU SISTEMA</p>
           </div>
         );
@@ -652,13 +772,14 @@ export default function App() {
             <p className={`text-[8px] ${s}`}>{proto.name} · {config.protocol}</p>
             <p className={`text-xl font-mono font-bold ${p}`}>$ {fmt(total)}</p>
             <div className="flex gap-2 mt-2">
-              <button onClick={() => setEntryMode("CHIP")} className={`px-2 py-0.5 rounded text-[8px] font-bold border ${entryMode === "CHIP" ? "bg-white/25" : ""} ${p}`}>CHIP</button>
+              <button onClick={() => selectEntryMode("CHIP")} className={`px-2 py-0.5 rounded text-[8px] font-bold border ${entryMode === "CHIP" ? "bg-white/25" : ""} ${p}`}>CHIP</button>
               {config.contactless && (
-                <button onClick={() => setEntryMode("CTLS")} className={`px-2 py-0.5 rounded text-[8px] font-bold border ${entryMode === "CTLS" ? "bg-white/25" : ""} ${p}`}>CTLS</button>
+                <button onClick={() => selectEntryMode("CTLS")} className={`px-2 py-0.5 rounded text-[8px] font-bold border ${entryMode === "CTLS" ? "bg-white/25" : ""} ${p}`}>CTLS</button>
               )}
-              <button onClick={() => setEntryMode("BANDA")} className={`px-2 py-0.5 rounded text-[8px] font-bold border ${entryMode === "BANDA" ? "bg-white/25" : ""} ${p}`}>BANDA</button>
+              <button onClick={() => selectEntryMode("BANDA")} className={`px-2 py-0.5 rounded text-[8px] font-bold border ${entryMode === "BANDA" ? "bg-white/25" : ""} ${p}`}>BANDA</button>
             </div>
-            {entryMode && <p className={`text-[8px] mt-1 ${s}`}>{maskCard(config.cardNumber)} · ENTER PARA AUTORIZAR</p>}
+            {aidError && <p className={`text-[8px] font-bold mt-1 ${p}`}>{aidError}</p>}
+            {entryMode && !aidError && <p className={`text-[8px] mt-1 ${s}`}>{maskCard(config.cardNumber)} · ENTER PARA AUTORIZAR</p>}
           </div>
         );
       case "PROCESANDO":
@@ -778,6 +899,32 @@ export default function App() {
               <div className="h-full bg-current transition-all" style={{ width: `${cargaProgress}%` }} />
             </div>
             <p className={`text-[9px] font-mono ${p}`}>{cargaProgress}%</p>
+          </div>
+        );
+      case "SYS_ECHO":
+        return (
+          <div className="flex flex-col items-center justify-center h-full gap-2">
+            {echoResult === null ? (
+              <>
+                <Signal className={`w-5 h-5 ${p} animate-pulse`} />
+                <p className={`text-[10px] font-bold ${p}`}>PROBANDO CONEXIÓN...</p>
+                <p className={`text-[8px] font-mono ${s}`}>MTI 0800 · {config.host}:{config.port}</p>
+              </>
+            ) : echoResult.ok ? (
+              <>
+                <CheckCircle className={`w-6 h-6 ${p}`} />
+                <p className={`text-sm font-bold ${p}`}>CONEXIÓN EXITOSA</p>
+                <p className={`text-[8px] font-mono ${s}`}>{echoResult.detail}</p>
+                <p className={`text-[8px] mt-1 ${s}`}>ENTER/X = VOLVER</p>
+              </>
+            ) : (
+              <>
+                <XCircle className={`w-6 h-6 ${p}`} />
+                <p className={`text-sm font-bold ${p}`}>FALLA DE RED</p>
+                <p className={`text-[8px] font-mono ${s}`}>{echoResult.detail}</p>
+                <p className={`text-[8px] mt-1 ${s}`}>ENTER/X = VOLVER</p>
+              </>
+            )}
           </div>
         );
       case "SYS_LOTE":
@@ -915,6 +1062,7 @@ export default function App() {
                 ) : txn ? (
                   <div className="bg-[#fdfaf3] border border-gray-200 rounded p-3 font-mono text-[10px] leading-relaxed text-gray-800">
                     <p className="text-center font-bold">{config.merchant}</p>
+                    <p className="text-center">{config.merchantAddress}</p>
                     <p className="text-center">TERMINAL: {config.terminalId}</p>
                     <p className="text-center">{style.label.toUpperCase()} · {config.protocol}</p>
                     <p className="text-center font-bold">** {proto.name} **</p>
@@ -931,6 +1079,9 @@ export default function App() {
                     {txn.queued && <p className="font-bold">** VENTA FORZADA **</p>}
                     {txn.queued && <p>PENDIENTE DE ENVÍO AL MOTOR</p>}
                     <p>REF: {txn.ref}</p>
+                    <div className="border-t border-dashed border-gray-300 my-2" />
+                    <p>{config.legalText}</p>
+                    <p className="text-center mt-2">{config.receiptFooter}</p>
                     <p>{txn.time}</p>
                   </div>
                 ) : (
@@ -1043,7 +1194,72 @@ export default function App() {
               </Panel>
             </div>
 
-            <Panel title="Banderas de Operación (Feature Flags)" desc="Las mismas del menú CONFIG TERMINAL del POS — sincronizadas en ambas direcciones. PROTO 101.1, VALIDAR PROTOCOLO y AUTH REQUERIDO impactan directo el flujo de venta.">
+            <div className="grid md:grid-cols-2 gap-4">
+              <Panel title="Límites de Riesgo Offline" desc="Floor limits: reglas anti-fraude para ventas forzadas sin red.">
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Tope por venta offline">
+                    <input className={inputCls} type="number" min={0} value={config.offlineMaxAmount} onChange={(e) => set("offlineMaxAmount", Math.max(0, Number(e.target.value) || 0))} />
+                  </Field>
+                  <Field label="Máx. transacciones en cola">
+                    <input className={inputCls} type="number" min={1} value={config.offlineMaxQueue} onChange={(e) => set("offlineMaxQueue", Math.max(1, Number(e.target.value) || 1))} />
+                  </Field>
+                </div>
+                <p className="text-[10px] text-gray-400">
+                  Una venta forzada que exceda ${fmt(config.offlineMaxAmount)} se declina con EXCEDE LÍMITE OFFLINE; al llenar la cola ({config.offlineMaxQueue}) se exige CIERRE DE LOTE.
+                </p>
+              </Panel>
+
+              <Panel title="Recibo (ticket)" desc="Personalización legal del comprobante impreso.">
+                <Field label="Dirección del comercio">
+                  <input className={inputCls} value={config.merchantAddress} onChange={(e) => set("merchantAddress", e.target.value.toUpperCase())} />
+                </Field>
+                <Field label="Texto legal (pagaré)">
+                  <input className={inputCls} value={config.legalText} onChange={(e) => set("legalText", e.target.value.toUpperCase())} />
+                </Field>
+                <Field label="Mensaje footer">
+                  <input className={inputCls} value={config.receiptFooter} onChange={(e) => set("receiptFooter", e.target.value.toUpperCase())} />
+                </Field>
+              </Panel>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-4">
+              <Panel title="Seguridad Criptográfica" desc="Inyección de llaves — sin esto la terminal no puede operar en frío.">
+                <Field label="Esquema de encriptación">
+                  <select className={inputCls} value={config.cryptoScheme} onChange={(e) => set("cryptoScheme", e.target.value as "DUKPT" | "MKS")}>
+                    <option value="DUKPT">DUKPT (Derived Unique Key Per Transaction)</option>
+                    <option value="MKS">Master/Session Key</option>
+                  </select>
+                </Field>
+                <Field label="KSN Inicial (Key Serial Number)">
+                  <input className={`${inputCls} font-mono`} value={config.ksn} onChange={(e) => set("ksn", e.target.value.toUpperCase().replace(/[^0-9A-F]/g, "").slice(0, 20))} placeholder="FFFF9876543210E00008" />
+                </Field>
+                <Field label="BDK / TMK (Clave Maestra)">
+                  <input className={`${inputCls} font-mono`} type="password" value={config.bdk} onChange={(e) => set("bdk", e.target.value.toUpperCase().replace(/[^0-9A-F]/g, "").slice(0, 32))} />
+                </Field>
+                <p className="text-[10px] text-gray-400">
+                  Con KSN inyectado, los mensajes MTI 0200 viajan con pinBlock y MAC ({config.cryptoScheme}).
+                </p>
+              </Panel>
+
+              <Panel title="Perfiles EMV (AIDs)" desc="Marcas habilitadas para lectura CHIP / contactless.">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                  {EMV_AIDS.map((aid) => (
+                    <Toggle
+                      key={aid}
+                      compact
+                      checked={config.emvAids[aid]}
+                      onChange={() => setConfig((c) => ({ ...c, emvAids: { ...c.emvAids, [aid]: !c.emvAids[aid] } }))}
+                      label={aid}
+                    />
+                  ))}
+                </div>
+                <p className="text-[10px] text-gray-400">
+                  La marca se detecta por BIN de la tarjeta de prueba. Si el AID está apagado, CHIP/CTLS se bloquean con AID NO HABILITADO.
+                </p>
+              </Panel>
+            </div>
+
+            <Panel title="Banderas de Operación (Feature Flags)" desc="Las mismas del menú CONFIG TERMINAL del POS — sincronizadas en ambas direcciones. PROTO 101.1, VALIDAR PROTOCOLO, AUTH REQUERIDO y MAGSTRIPE FALLBACK impactan directo el flujo de venta.">
               <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2">
                 {FEATURE_FLAGS.map((f) => (
                   <Toggle key={f} compact checked={config.flags[f]} onChange={() => toggleFlag(f)} label={f} />

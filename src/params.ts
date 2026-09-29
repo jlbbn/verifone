@@ -20,6 +20,19 @@ export interface TerminalParams {
   tmsId: string;
   authToken: string;
   offlineMode: boolean;
+  // Riesgo offline (floor limits)
+  offlineMaxAmount: number;
+  offlineMaxQueue: number;
+  // Recibo
+  merchantAddress: string;
+  receiptFooter: string;
+  legalText: string;
+  // Seguridad criptográfica
+  cryptoScheme: "DUKPT" | "MKS";
+  ksn: string;
+  bdk: string;
+  // Perfiles EMV (AIDs habilitados)
+  emvAids: Record<string, boolean>;
   // Venta
   currency: "MXN" | "USD";
   tipPercent: number;
@@ -56,7 +69,11 @@ export const FEATURE_FLAGS = [
   "VALIDAR PROTOCOLO",
   "AUTH REQUERIDO",
   "PROTO 101.1",
+  "MAGSTRIPE FALLBACK",
 ] as const;
+
+// Perfiles EMV (AIDs) soportados por la terminal
+export const EMV_AIDS = ["VISA", "MASTERCARD", "AMEX", "CARNET"] as const;
 
 export const PROTOCOLS = ["101.1", "101.2", "201.1", "201.2", "301.1", "401.1", "1643"];
 
@@ -102,6 +119,20 @@ export const DEFAULT_PARAMS: TerminalParams = {
   tmsId: "TMS-0007",
   authToken: "",
   offlineMode: false,
+  offlineMaxAmount: 5000,
+  offlineMaxQueue: 50,
+  merchantAddress: "AV. INSURGENTES SUR 1234, CDMX",
+  receiptFooter: "GRACIAS POR SU COMPRA",
+  legalText: "PAGARE NEGOCIABLE — AUTORIZO EL CARGO A ESTA TARJETA POR EL MONTO INDICADO",
+  cryptoScheme: "DUKPT",
+  ksn: "FFFF9876543210E00008",
+  bdk: "0123456789ABCDEFFEDCBA9876543210",
+  emvAids: {
+    "VISA": true,
+    "MASTERCARD": true,
+    "AMEX": true,
+    "CARNET": false,
+  },
   currency: "MXN",
   tipPercent: 0,
   protocol: "101.1",
@@ -131,6 +162,7 @@ export const DEFAULT_PARAMS: TerminalParams = {
     "VALIDAR PROTOCOLO": true,
     "AUTH REQUERIDO": true,
     "PROTO 101.1": true,
+    "MAGSTRIPE FALLBACK": true,
   },
 };
 
@@ -163,7 +195,12 @@ export function loadParams(): TerminalParams {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_PARAMS;
     const parsed = JSON.parse(raw);
-    return { ...DEFAULT_PARAMS, ...parsed, flags: { ...DEFAULT_PARAMS.flags, ...(parsed.flags ?? {}) } };
+    return {
+      ...DEFAULT_PARAMS,
+      ...parsed,
+      flags: { ...DEFAULT_PARAMS.flags, ...(parsed.flags ?? {}) },
+      emvAids: { ...DEFAULT_PARAMS.emvAids, ...(parsed.emvAids ?? {}) },
+    };
   } catch {
     return DEFAULT_PARAMS;
   }
