@@ -135,6 +135,28 @@ export const DEFAULT_PARAMS: TerminalParams = {
 };
 
 const STORAGE_KEY = "verifone-params";
+const QUEUE_KEY = "verifone-queue";
+
+// Transacción forzada guardada localmente pendiente de envío al motor.
+export interface QueuedTxn {
+  id: string;
+  body: Record<string, unknown>;
+  total: number;
+  time: string;
+}
+
+export function loadQueue(): QueuedTxn[] {
+  try {
+    const raw = localStorage.getItem(QUEUE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveQueue(q: QueuedTxn[]) {
+  localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
+}
 
 export function loadParams(): TerminalParams {
   try {

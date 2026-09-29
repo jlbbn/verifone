@@ -7,18 +7,21 @@ import {
 import {
   FEATURE_FLAGS, PROTOCOLS,
   SUPERVISOR_PASSWORD, DEFAULT_PARAMS, loadParams, saveParams, protocolInfo,
+  loadQueue, saveQueue,
 } from "./params";
-import type { TerminalParams, TerminalModel, CommMode } from "./params";
+import type { TerminalParams, TerminalModel, CommMode, QueuedTxn } from "./params";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type Screen =
   | "IDLE" | "MONTO" | "TARJETA" | "PROCESANDO" | "APROBADO" | "DECLINADO" | "ERROR_RED"
-  | "PWD" | "SYSMENU" | "SYS_REPORTE" | "SYS_COMMS" | "SYS_CONFIG" | "SYS_CARGA" | "SYS_ACERCA";
+  | "PWD" | "SYSMENU" | "SYS_REPORTE" | "SYS_COMMS" | "SYS_CONFIG" | "SYS_CARGA" | "SYS_ACERCA"
+  | "SYS_LOTE";
 
 type EntryMode = "CHIP" | "CTLS" | "BANDA";
 
 interface TxnReceipt {
   code: string | null; ref: string; time: string; total: number; approved: boolean; mode: EntryMode | null;
+  queued?: boolean;
 }
 
 interface LogEntry {
@@ -37,6 +40,7 @@ const FUNCIONES = [
   "CONFIG TERMINAL",
   "CARGA PARAM",
   "ACERCA DE",
+  "CIERRE DE LOTE",
 ] as const;
 
 const COMM_MODES: CommMode[] = ["ETHERNET", "DIAL", "GPRS"];
@@ -102,7 +106,9 @@ export default function App() {
   const [entryMode, setEntryMode] = useState<EntryMode | null>(null);
   const [txn, setTxn] = useState<TxnReceipt | null>(null);
   const [report, setReport] = useState<string[] | null>(null);
-  const [receiptKind, setReceiptKind] = useState<"venta" | "reporte">("venta");
+  const [receiptKind, setReceiptKind] = useState<"venta" | "reporte" | "lote">("venta");
+  const [queue, setQueue] = useState<QueuedTxn[]>(loadQueue);
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
   const [clock, setClock] = useState(new Date());
   const [toast, setToast] = useState<string | null>(null);
   // Modo sistema
@@ -116,7 +122,6 @@ export default function App() {
   const [cargaProgress, setCargaProgress] = useState(0);
   const [printing, setPrinting] = useState(false);
   const [declineReason, setDeclineReason] = useState<string | null>(null);
-  const [commError, setCommError] = useState<string | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const logId = useRef(0);
   const consoleRef = useRef<HTMLDivElement>(null);
@@ -128,6 +133,7 @@ export default function App() {
   }, []);
 
   useEffect(() => { saveParams(config); }, [config]);
+  useEffect(() => { saveQueue(queue); }, [queue]);
 
   useEffect(() => {
     if (!toast) return;
@@ -242,6 +248,7 @@ export default function App() {
         break;
       }
       case "ACERCA DE": setScreen("SYS_ACERCA"); break;
+      case "CIERRE DE LOTE": settleBatch(); break;
     }
   }
 
@@ -403,41 +410,8 @@ export default function App() {
   }
 
   // ── Network layer: autorización contra el motor central ─────────────────────
-  async function runAuthorization() {
-    setScreen("PROCESANDO");
-    setDeclineReason(null);
-
-    const baseTxn = {
-      ref: `VF${randNum(10)}`,
-      time: new Date().toLocaleString("es-MX", { timeZone: "America/Mexico_City", hour12: false }),
-      total,
-      mode: entryMode,
-    };
-
-    // Modo simulación (sin red): comportamiento local original
-    if (config.offlineMode) {
-      log("info", `MODO SIMULACIÓN — no se envía petición de red (${proto.name} $${fmt(total)})`);
-      setTimeout(() => {
-        let code: string | null;
-        if (!authRequired) code = null;
-        else {
-          const manual = config.authCode.trim();
-          const manualOk = validateProto ? manual.length === authLen : manual.length > 0;
-          code = manualOk ? manual : randNum(authLen);
-        }
-        const approved = !config.forceDecline;
-        if (!approved) setDeclineReason("RESP: 05 · NO AUTORIZADA");
-        setTxn({ ...baseTxn, code, approved });
-        setReceiptKind("venta");
-        setScreen(approved ? "APROBADO" : "DECLINADO");
-        if (approved) setToast(`${proto.name} aprobada · Auth ${code ?? "NO REQUERIDO"} · ${config.currency} $${fmt(total)}`);
-      }, 1600);
-      return;
-    }
-
-    // Petición real: URL y esquema se construyen con los parámetros de red
-    const url = `${config.ssl ? "https" : "http"}://${config.host}:${config.port}/api/engine/sales/forced`;
-    const body = {
+  function buildSaleBody(): Record<string, unknown> {
+    return {
       mti: "0200",
       processingCode: proto.processingCode,
       protocol: config.protocol,
@@ -453,6 +427,54 @@ export default function App() {
       entryMode,
       timestamp: new Date().toISOString(),
     };
+  }
+
+  function localAuthCode(): string | null {
+    if (!authRequired) return null;
+    const manual = config.authCode.trim();
+    const manualOk = validateProto ? manual.length === authLen : manual.length > 0;
+    return manualOk ? manual : randNum(authLen);
+  }
+
+  function enqueueSale(body: Record<string, unknown>, baseTxn: { ref: string; time: string; total: number; mode: EntryMode | null }) {
+    const item: QueuedTxn = {
+      id: `Q${Date.now()}${randNum(3)}`,
+      body,
+      total,
+      time: baseTxn.time,
+    };
+    setQueue((q) => {
+      const next = [...q, item];
+      log("info", `VENTA FORZADA guardada en cola offline (${next.length} pendiente${next.length > 1 ? "s" : ""}) — se enviará en CIERRE DE LOTE`);
+      return next;
+    });
+    setTxn({ ...baseTxn, code: localAuthCode(), approved: true, queued: true });
+    setReceiptKind("venta");
+    setScreen("APROBADO");
+    setToast(`${proto.name} forzada offline · ${config.currency} $${fmt(total)} · pendiente de envío`);
+  }
+
+  async function runAuthorization() {
+    setScreen("PROCESANDO");
+    setDeclineReason(null);
+
+    const baseTxn = {
+      ref: `VF${randNum(10)}`,
+      time: new Date().toLocaleString("es-MX", { timeZone: "America/Mexico_City", hour12: false }),
+      total,
+      mode: entryMode,
+    };
+    const body = buildSaleBody();
+
+    // Modo offline: el POS no se bloquea — aprueba como venta forzada y encola
+    if (config.offlineMode) {
+      log("info", `MODO OFFLINE — venta forzada local (${proto.name} $${fmt(total)})`);
+      setTimeout(() => enqueueSale(body, baseTxn), 1200);
+      return;
+    }
+
+    // Petición real: URL y esquema se construyen con los parámetros de red
+    const url = `${config.ssl ? "https" : "http"}://${config.host}:${config.port}/api/engine/sales/forced`;
     const ctrl = new AbortController();
     const timeout = setTimeout(() => ctrl.abort(), 8000);
     log("tx", `→ POST ${url}`);
@@ -479,7 +501,7 @@ export default function App() {
           const data = JSON.parse(rawText);
           serverCode = data.authCode ?? data.auth_code ?? data.authorization ?? null;
         } catch { /* respuesta sin cuerpo JSON */ }
-        const code = serverCode ?? (authRequired ? randNum(authLen) : null);
+        const code = serverCode ?? localAuthCode();
         setTxn({ ...baseTxn, code, approved: true });
         setReceiptKind("venta");
         setScreen("APROBADO");
@@ -497,18 +519,84 @@ export default function App() {
       }
     } catch (e) {
       clearTimeout(timeout);
+      // Sin red (CORS / host caído / timeout): comportamiento de POS real —
+      // aprueba como venta forzada y guarda en la cola para el cierre de lote
       const isTimeout = e instanceof DOMException && e.name === "AbortError";
       log("err", `[NETWORK FATAL ERROR] ${isTimeout ? "Timeout de 8s excedido" : String(e)} — posible CORS, host inalcanzable o puerto cerrado (${url})`);
-      setCommError(isTimeout ? "TIMEOUT DE RED" : "ERROR DE COMUNICACIÓN");
-      setScreen("ERROR_RED");
-      // Rollback a IDLE sin imprimir comprobante
-      setTimeout(() => {
-        setScreen("IDLE");
-        setAmountDigits("");
-        setEntryMode(null);
-        setCommError(null);
-      }, 2500);
+      enqueueSale(body, baseTxn);
     }
+  }
+
+  // ── Cierre de lote: vacía la cola offline contra el motor ───────────────────
+  async function settleBatch() {
+    if (queue.length === 0) {
+      log("info", "CIERRE DE LOTE: cola vacía, nada que enviar");
+      setToast("Lote vacío — no hay ventas forzadas pendientes");
+      setScreen("SYSMENU");
+      return;
+    }
+    const items = [...queue];
+    const url = `${config.ssl ? "https" : "http"}://${config.host}:${config.port}/api/engine/sales/forced`;
+    setScreen("SYS_LOTE");
+    setBatchProgress({ current: 0, total: items.length });
+    log("info", `CIERRE DE LOTE: enviando ${items.length} transacción(es) a ${url}`);
+
+    let sent = 0;
+    let sentTotal = 0;
+    const failed: QueuedTxn[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const q = items[i];
+      setBatchProgress({ current: i + 1, total: items.length });
+      log("tx", `→ POST ${url} [LOTE ${i + 1}/${items.length}]`);
+      log("tx", `  Body: ${JSON.stringify(q.body)}`);
+      const ctrl = new AbortController();
+      const timeout = setTimeout(() => ctrl.abort(), 8000);
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          signal: ctrl.signal,
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${config.authToken}`,
+          },
+          body: JSON.stringify(q.body),
+        });
+        clearTimeout(timeout);
+        log("rx", `← HTTP ${res.status} ${res.statusText} [LOTE ${i + 1}/${items.length}]`);
+        if (res.status === 200 || res.status === 201) {
+          sent++;
+          sentTotal += q.total;
+        } else {
+          failed.push(q);
+        }
+      } catch (e) {
+        clearTimeout(timeout);
+        log("err", `[NETWORK FATAL ERROR] ${String(e)} [LOTE ${i + 1}/${items.length}]`);
+        failed.push(q);
+      }
+      // Ritmo visible para la telemetría
+      await new Promise((r) => setTimeout(r, 200));
+    }
+
+    setQueue(failed);
+    const failedTotal = failed.reduce((acc, q) => acc + q.total, 0);
+    setReport([
+      "*** TICKET DE CIERRE DE LOTE ***",
+      `TERMINAL: ${config.terminalId}`,
+      `LOTE: ${Date.now() % 100000}`,
+      "──────────────────────────",
+      `RECIBIDAS: ${items.length}`,
+      `ENVIADAS:  ${sent}  $ ${fmt(sentTotal)}`,
+      `FALLIDAS:  ${failed.length}  $ ${fmt(failedTotal)}`,
+      `PENDIENTES EN COLA: ${failed.length}`,
+      "──────────────────────────",
+      new Date().toLocaleString("es-MX", { timeZone: "America/Mexico_City", hour12: false }),
+    ]);
+    setReceiptKind("lote");
+    setBatchProgress(null);
+    setScreen("SYSMENU");
+    log("info", `CIERRE DE LOTE terminado: ${sent}/${items.length} enviadas · $${fmt(sentTotal)} ${config.currency}${failed.length ? ` · ${failed.length} quedan en cola` : " · cola vacía"}`);
+    setToast(`Cierre de lote: ${sent}/${items.length} enviadas`);
   }
 
   const screenText = useMemo(() => ({
@@ -529,6 +617,9 @@ export default function App() {
             <p className={`text-[9px] ${s}`}>TERMINAL {config.terminalId}</p>
             <p className={`text-xs font-bold mt-2 ${p}`}>BIENVENIDO</p>
             <p className={`text-[9px] ${s}`}>INGRESE MONTO PARA INICIAR</p>
+            {queue.length > 0 && (
+              <p className={`text-[9px] font-bold mt-1 ${p} animate-pulse`}>[⬆ {queue.length} PENDIENTE{queue.length > 1 ? "S" : ""}]</p>
+            )}
             <p className={`text-[8px] mt-1 ${s}`}>F = MENU SISTEMA</p>
           </div>
         );
@@ -586,6 +677,7 @@ export default function App() {
             <CheckCircle className={`w-6 h-6 ${p}`} />
             <p className={`text-sm font-bold ${p}`}>APROBADA</p>
             <p className={`text-[8px] font-bold ${s}`}>{proto.name}</p>
+            {txn?.queued && <p className={`text-[8px] font-bold ${p}`}>** VENTA FORZADA · PENDIENTE ENVÍO **</p>}
             <p className={`text-[9px] font-mono ${s}`}>AUTH: {txn?.code ?? "NO REQUERIDO"}</p>
             <p className={`text-[9px] font-mono ${s}`}>REF: {txn?.ref}</p>
             <p className={`text-[8px] mt-1 ${s}`}>ENTER PARA NUEVA OPERACIÓN</p>
@@ -598,16 +690,6 @@ export default function App() {
             <p className={`text-sm font-bold ${p}`}>DECLINADA</p>
             <p className={`text-[9px] font-mono ${s}`}>{declineReason ?? "RESP: 05 · NO AUTORIZADA"}</p>
             <p className={`text-[8px] mt-1 ${s}`}>ENTER PARA REINTENTAR</p>
-          </div>
-        );
-      case "ERROR_RED":
-        return (
-          <div className="flex flex-col items-center justify-center h-full gap-2">
-            <XCircle className={`w-6 h-6 ${p}`} />
-            <p className={`text-sm font-bold ${p}`}>{commError ?? "ERROR DE COMUNICACIÓN"}</p>
-            <p className={`text-[8px] font-mono ${s}`}>{config.commMode} · {config.host}:{config.port}</p>
-            <p className={`text-[8px] ${s}`}>REVISE PARAMETROS DE RED</p>
-            <p className={`text-[8px] mt-1 ${s} animate-pulse`}>REGRESANDO...</p>
           </div>
         );
       case "PWD":
@@ -696,6 +778,22 @@ export default function App() {
               <div className="h-full bg-current transition-all" style={{ width: `${cargaProgress}%` }} />
             </div>
             <p className={`text-[9px] font-mono ${p}`}>{cargaProgress}%</p>
+          </div>
+        );
+      case "SYS_LOTE":
+        return (
+          <div className="flex flex-col items-center justify-center h-full gap-2">
+            <p className={`text-[10px] font-bold ${p}`}>CIERRE DE LOTE</p>
+            <p className={`text-[8px] ${s}`}>ENVIANDO VENTAS FORZADAS</p>
+            <div className="w-3/4 h-2 rounded bg-black/20 overflow-hidden">
+              <div
+                className="h-full bg-current transition-all"
+                style={{ width: batchProgress ? `${(batchProgress.current / batchProgress.total) * 100}%` : "0%" }}
+              />
+            </div>
+            <p className={`text-[9px] font-mono ${p}`}>
+              {batchProgress ? `${batchProgress.current}/${batchProgress.total}` : "..."}
+            </p>
           </div>
         );
       case "SYS_ACERCA":
@@ -800,7 +898,9 @@ export default function App() {
               <div className="px-4 pt-3 pb-2 border-b border-gray-100">
                 <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
                   <Receipt className="w-4 h-4 text-[#c8322b]" />
-                  {receiptKind === "reporte" && report ? "Reporte de parámetros" : "Último comprobante"}
+                  {receiptKind === "lote" && report ? "Ticket de cierre de lote"
+                    : receiptKind === "reporte" && report ? "Reporte de parámetros"
+                    : "Último comprobante"}
                 </h3>
                 <p className="text-xs text-gray-500 flex items-center gap-1.5 mt-0.5">
                   <Printer className="w-3 h-3" /> Papel: {config.paperLevel}%
@@ -808,7 +908,7 @@ export default function App() {
                 </p>
               </div>
               <div className="p-4">
-                {receiptKind === "reporte" && report ? (
+                {(receiptKind === "reporte" || receiptKind === "lote") && report ? (
                   <div className="bg-[#fdfaf3] border border-gray-200 rounded p-3 font-mono text-[10px] leading-relaxed text-gray-800 whitespace-pre-wrap">
                     {report.join("\n")}
                   </div>
@@ -828,6 +928,8 @@ export default function App() {
                     <p className="font-bold">TOTAL {config.currency}: $ {fmt(txn.total)}</p>
                     <div className="border-t border-dashed border-gray-300 my-2" />
                     <p className="font-bold">{txn.approved ? "APROBADA" : "DECLINADA"} · AUTH: {txn.code ?? "NO REQUERIDO"}</p>
+                    {txn.queued && <p className="font-bold">** VENTA FORZADA **</p>}
+                    {txn.queued && <p>PENDIENTE DE ENVÍO AL MOTOR</p>}
                     <p>REF: {txn.ref}</p>
                     <p>{txn.time}</p>
                   </div>
@@ -1070,7 +1172,7 @@ export default function App() {
 
             <button
               className="w-full flex items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-              onClick={() => { setConfig(DEFAULT_PARAMS); setScreen("IDLE"); setAmountDigits(""); setEntryMode(null); setTxn(null); setReport(null); }}
+              onClick={() => { setConfig(DEFAULT_PARAMS); setScreen("IDLE"); setAmountDigits(""); setEntryMode(null); setTxn(null); setReport(null); setQueue([]); }}
             >
               <RotateCcw className="w-4 h-4" /> Restablecer valores de fábrica
             </button>
