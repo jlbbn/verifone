@@ -17,6 +17,8 @@ import NewTransactionPage from "@/pages/new-transaction";
 import CajaPage from "@/pages/caja";
 import POSPage from "@/pages/pos";
 import POSVirtualPage from "@/pages/pos-virtual";
+import VerifoneDevPage from "@/pages/verifone-dev";
+import EnginePage from "@/pages/engine";
 import RegistrosPage from "@/pages/registros";
 import ExchangePage from "@/pages/exchange";
 import ClavesPage from "@/pages/claves";
@@ -155,6 +157,14 @@ function Router() {
 
       <Route path="/pos-virtual">
         <AppLayout><POSVirtualPage /></AppLayout>
+      </Route>
+
+      <Route path="/verifone-dev">
+        <AppLayout><VerifoneDevPage /></AppLayout>
+      </Route>
+
+      <Route path="/engine">
+        <AppLayout><EnginePage /></AppLayout>
       </Route>
       
       <Route path="/registros">

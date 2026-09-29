@@ -1,6 +1,7 @@
 import {
   LayoutDashboard,
   RefreshCw,
+  Terminal,
   Wallet,
   Store,
   FileText,
@@ -26,6 +27,7 @@ import {
   TrendingUp,
   FlaskConical,
   Landmark,
+  Cpu,
 } from "lucide-react";
 import { SiDropbox, SiReplit, SiGithub } from "react-icons/si";
 import {
@@ -49,6 +51,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
+import type { ComponentType } from "react";
 
 function initials(name: string) {
   return name
@@ -60,12 +63,21 @@ function initials(name: string) {
     .toUpperCase();
 }
 
-const menuItems = [
+interface MenuItem {
+  title: string;
+  url: string;
+  icon: React.ComponentType<{ className?: string }>;
+  requiresEngineAccess?: boolean;
+}
+
+const menuItems: MenuItem[] = [
   { title: "Dashboard",             url: "/dashboard",        icon: LayoutDashboard },
   { title: "Transacciones",         url: "/transacciones",    icon: RefreshCw },
   { title: "Caja",                  url: "/caja",             icon: Wallet },
   { title: "Enrutamiento POS",      url: "/pos",              icon: Store },
   { title: "POS Virtual",           url: "/pos-virtual",      icon: MonitorSmartphone },
+  { title: "Verifone Dev",          url: "/verifone-dev",     icon: Terminal },
+  { title: "Motor USD/TRON",        url: "/engine",           icon: Cpu,             requiresEngineAccess: true },
   { title: "Decision Intelligence", url: "/pos-intelligence", icon: Zap },
   { title: "Transactions",          url: "/registros",        icon: FileText },
   { title: "Exchange Crypto",       url: "/exchange",         icon: Bitcoin },
@@ -104,11 +116,16 @@ export function AppSidebar() {
     queryKey: ["/api/subscription"],
     enabled: !!user && !isAdmin && !isBusinessPartner,
   });
+  const { data: userPerms } = useQuery<{ paymentEngineAccess: boolean; posFullAccess: boolean }>({
+    queryKey: ["/api/user/permissions"],
+    enabled: !!user,
+  });
   const isRestricted = !isAdmin && !isBusinessPartner && !!(subData?.restricted);
+  const hasEngineAccess = isAdmin || !!userPerms?.paymentEngineAccess;
 
   const visibleMenuItems = isRestricted
     ? menuItems.filter(item => ALLOWED_RESTRICTED.includes(item.url))
-    : menuItems;
+    : menuItems.filter(item => !item.requiresEngineAccess || hasEngineAccess);
 
   return (
     <div
