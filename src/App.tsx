@@ -137,7 +137,7 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null);
   // Swift Ledger · PosLink (estado global compartido POS ↔ Ledger)
   const [view, setView] = useState<"POS" | "LEDGER">("POS");
-  const [posMirror, setPosMirror] = useState(true);
+  const [posMirror, setPosMirror] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 768);
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>(loadLedger);
   const [settlements, setSettlements] = useState<SettlementReport[]>(loadSettlements);
   const [registry, setRegistry] = useState<Record<string, DeviceRecord>>(loadRegistry);
