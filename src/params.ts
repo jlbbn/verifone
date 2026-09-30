@@ -1,8 +1,61 @@
 // Parámetros internos del terminal — la "verdad" del POS.
 // Todo (pantalla, tickets, menús de sistema, panel web) lee/escribe aquí.
 
-export type TerminalModel = "VX520" | "P400" | "E280S";
+export type TerminalModel = "VX520" | "P400" | "E280S" | "SUNMI_V3" | "SUNMI_V3_PLUS" | "SUNMI_V3_MIX";
 export type CommMode = "ETHERNET" | "DIAL" | "GPRS";
+
+// Ficha técnica por modelo — alimenta ACERCA DE y los defaults de OS/APP al cambiar de modelo
+export interface ModelProfile {
+  label: string;
+  os: string;           // OS por defecto al seleccionar el modelo
+  app: string;          // paquete de aplicación por defecto
+  hwCode: string;       // código de hardware de fábrica (p. ej. T5F1A en SUNMI V3)
+  screen: string;
+  printer: string;
+  scanner: string;
+  payments: string;
+  connectivity: string;
+  memory: string;
+}
+
+export const MODEL_PROFILES: Record<TerminalModel, ModelProfile> = {
+  VX520: {
+    label: "Verifone VX520", os: "Verix V 4.3.2", app: "QT520440-A", hwCode: "—",
+    screen: '2.8" QVGA monocromo', printer: "Térmica 58 mm",
+    scanner: "—", payments: "CHIP / BANDA / CTLS",
+    connectivity: "ETHERNET / DIAL", memory: "—",
+  },
+  P400: {
+    label: "Verifone P400", os: "VOS 2.8.0", app: "PP400-A3", hwCode: "—",
+    screen: '2.8" QVGA color', printer: "Térmica 58 mm",
+    scanner: "—", payments: "CHIP / BANDA / CTLS",
+    connectivity: "ETHERNET / Wi-Fi", memory: "—",
+  },
+  E280S: {
+    label: "Verifone e280s", os: "VOS 3.1.2", app: "E280-STD", hwCode: "—",
+    screen: '2.4" color', printer: "—",
+    scanner: "—", payments: "CTLS / BANDA",
+    connectivity: "Wi-Fi / BT", memory: "—",
+  },
+  SUNMI_V3: {
+    label: "SUNMI V3", os: "SUNMI OS 4.5.8 (Android 13)", app: "SUNMI-PSP-3.0", hwCode: "T5F1A",
+    screen: '6.75" HD+ 720x1600 · 420 nits', printer: "Térmica 58 mm (etiquetas)",
+    scanner: "Láser 2D (opcional)", payments: "NFC SoftPOS · CTLS",
+    connectivity: "Wi-Fi 6E dual band / 4G LTE", memory: "3/32 GB · 4/64 GB",
+  },
+  SUNMI_V3_PLUS: {
+    label: "SUNMI V3 PLUS", os: "SUNMI OS 4.0 (Android 13)", app: "SUNMI-PSP-3.0+", hwCode: "—",
+    screen: '6.75" HD+ 720x1600 · 420 nits', printer: "Térmica 58/80 mm · 100 mm/s",
+    scanner: "Láser 2D (opcional)", payments: "NFC SoftPOS · CTLS",
+    connectivity: "Wi-Fi 6E dual band / 4G LTE", memory: "4/64 GB",
+  },
+  SUNMI_V3_MIX: {
+    label: "SUNMI V3 MIX", os: "SUNMI OS 4.0 (Android 13)", app: "SUNMI-PSP-3.0 MIX", hwCode: "—",
+    screen: '10.1" Full HD táctil', printer: "Térmica 80 mm",
+    scanner: "—", payments: "NFC SoftPOS · CTLS",
+    connectivity: "Wi-Fi 6E / 4G LTE", memory: "4/64 GB",
+  },
+};
 
 export interface TerminalParams {
   // Identidad
@@ -107,9 +160,9 @@ export const SUPERVISOR_PASSWORD = "166831";
 
 export const DEFAULT_PARAMS: TerminalParams = {
   model: "VX520",
-  merchant: "BANXICO PLUS DEMO",
+  merchant: "BANXICO PLUS",
   terminalId: "VF-88421056",
-  serial: "266-340-812",
+  serial: "VA24261Q40112",
   osVersion: "Verix V 4.3.2",
   appVersion: "QT520440-A",
   commMode: "ETHERNET",
@@ -139,7 +192,7 @@ export const DEFAULT_PARAMS: TerminalParams = {
   authCode: "",
   forceDecline: false,
   cardNumber: "4040310011384895",
-  holderName: "CLIENTE DEMO",
+  holderName: "CLIENTE GENERICO",
   expDate: "02/27",
   brightness: 80,
   paperLevel: 65,
@@ -166,7 +219,6 @@ export const DEFAULT_PARAMS: TerminalParams = {
   },
 };
 
-const STORAGE_KEY = "verifone-params";
 const QUEUE_KEY = "verifone-queue";
 
 // Transacción forzada guardada localmente pendiente de envío al motor.
@@ -175,6 +227,8 @@ export interface QueuedTxn {
   body: Record<string, unknown>;
   total: number;
   time: string;
+  ref?: string;            // BankReference (máx. 12) — sellada al encolar
+  authCode?: string | null; // AuthCode local — sellado al encolar
 }
 
 export function loadQueue(): QueuedTxn[] {
@@ -188,24 +242,4 @@ export function loadQueue(): QueuedTxn[] {
 
 export function saveQueue(q: QueuedTxn[]) {
   localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
-}
-
-export function loadParams(): TerminalParams {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_PARAMS;
-    const parsed = JSON.parse(raw);
-    return {
-      ...DEFAULT_PARAMS,
-      ...parsed,
-      flags: { ...DEFAULT_PARAMS.flags, ...(parsed.flags ?? {}) },
-      emvAids: { ...DEFAULT_PARAMS.emvAids, ...(parsed.emvAids ?? {}) },
-    };
-  } catch {
-    return DEFAULT_PARAMS;
-  }
-}
-
-export function saveParams(p: TerminalParams) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
 }

@@ -3,13 +3,20 @@ import {
   Wifi, Signal, Nfc, Battery, Printer, CreditCard, Terminal,
   Delete, RotateCcw, FlaskConical, Receipt, CheckCircle, XCircle,
   Lock, ChevronUp, ChevronDown, Send, Download, Upload,
+  Landmark, Database, Plus, ArrowRightLeft, FileText, Smartphone,
 } from "lucide-react";
 import {
   FEATURE_FLAGS, PROTOCOLS, EMV_AIDS,
-  SUPERVISOR_PASSWORD, DEFAULT_PARAMS, loadParams, saveParams, protocolInfo,
-  loadQueue, saveQueue,
+  SUPERVISOR_PASSWORD, protocolInfo, loadQueue, saveQueue, MODEL_PROFILES,
 } from "./params";
+import { loadConfig, saveConfig, resetConfig, parseConfigFile } from "./config";
+import {
+  MERCHANT_REF_MAX, nowMx, normalizeMerchantRef, parseToCents,
+  loadLedger, saveLedgerEntries, loadSettlements, saveSettlements,
+  loadRegistry, saveRegistry, loadDeviceId, parseSettlement, computeNetworkStatus,
+} from "./ledger";
 import type { TerminalParams, TerminalModel, CommMode, QueuedTxn } from "./params";
+import type { NetworkStatus, LedgerEntry, LedgerStatus, LedgerSource, SettlementReport, DeviceRecord } from "./ledger";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type Screen =
@@ -29,9 +36,12 @@ interface LogEntry {
 }
 
 const MODEL_STYLES: Record<TerminalModel, { body: string; edge: string; screen: string; label: string }> = {
-  VX520: { body: "bg-gradient-to-b from-[#3a4250] to-[#23282f]", edge: "border-[#14171c]", screen: "bg-[#b8d94e]", label: "Verifone VX520" },
-  P400:  { body: "bg-gradient-to-b from-[#1c1e24] to-[#0c0d10]", edge: "border-[#000000]", screen: "bg-[#0d2237]", label: "Verifone P400" },
-  E280S: { body: "bg-gradient-to-b from-[#e6e8ec] to-[#c9ccd4]", edge: "border-[#9aa0ab]", screen: "bg-[#123a2a]", label: "Verifone e280s" },
+  VX520:       { body: "bg-gradient-to-b from-[#3a4250] to-[#23282f]", edge: "border-[#14171c]", screen: "bg-[#b8d94e]", label: "Verifone VX520" },
+  P400:        { body: "bg-gradient-to-b from-[#1c1e24] to-[#0c0d10]", edge: "border-[#000000]", screen: "bg-[#0d2237]", label: "Verifone P400" },
+  E280S:       { body: "bg-gradient-to-b from-[#e6e8ec] to-[#c9ccd4]", edge: "border-[#9aa0ab]", screen: "bg-[#123a2a]", label: "Verifone e280s" },
+  SUNMI_V3:      { body: "bg-gradient-to-b from-[#1d2733] to-[#0b1018]", edge: "border-[#05080c]", screen: "bg-[#0e1a26]", label: "SUNMI V3" },
+  SUNMI_V3_PLUS: { body: "bg-gradient-to-b from-[#22303f] to-[#0d141d]", edge: "border-[#060a0f]", screen: "bg-[#10202f]", label: "SUNMI V3 PLUS" },
+  SUNMI_V3_MIX:  { body: "bg-gradient-to-b from-[#2b3540] to-[#141b23]", edge: "border-[#0a0e13]", screen: "bg-[#122334]", label: "SUNMI V3 MIX" },
 };
 
 const FUNCIONES = [
@@ -111,7 +121,7 @@ function Toggle({ checked, onChange, label, compact }: { checked: boolean; onCha
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 export default function App() {
-  const [config, setConfig] = useState<TerminalParams>(loadParams);
+  const [config, setConfig] = useState<TerminalParams>(loadConfig);
   const [screen, setScreen] = useState<Screen>("IDLE");
   const [amountDigits, setAmountDigits] = useState("");
   const [entryMode, setEntryMode] = useState<EntryMode | null>(null);
@@ -125,6 +135,13 @@ export default function App() {
   const [idleNotice, setIdleNotice] = useState<string | null>(null);
   const [clock, setClock] = useState(new Date());
   const [toast, setToast] = useState<string | null>(null);
+  // Swift Ledger · PosLink (estado global compartido POS ↔ Ledger)
+  const [view, setView] = useState<"POS" | "LEDGER">("POS");
+  const [posMirror, setPosMirror] = useState(true);
+  const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>(loadLedger);
+  const [settlements, setSettlements] = useState<SettlementReport[]>(loadSettlements);
+  const [registry, setRegistry] = useState<Record<string, DeviceRecord>>(loadRegistry);
+  const [deviceId] = useState(loadDeviceId);
   // Modo sistema
   const [pwdDigits, setPwdDigits] = useState("");
   const [pwdError, setPwdError] = useState(false);
@@ -146,8 +163,11 @@ export default function App() {
     return () => clearInterval(t);
   }, []);
 
-  useEffect(() => { saveParams(config); }, [config]);
+  useEffect(() => { saveConfig(config); }, [config]);
   useEffect(() => { saveQueue(queue); }, [queue]);
+  useEffect(() => { saveLedgerEntries(ledgerEntries); }, [ledgerEntries]);
+  useEffect(() => { saveSettlements(settlements); }, [settlements]);
+  useEffect(() => { saveRegistry(registry); }, [registry]);
 
   useEffect(() => {
     if (!toast) return;
@@ -177,9 +197,127 @@ export default function App() {
   const validateProto = config.flags["VALIDAR PROTOCOLO"];
   const proto101Enabled = config.flags["PROTO 101.1"];
   const style = MODEL_STYLES[config.model];
+  const modelProfile = MODEL_PROFILES[config.model];
   const isLight = config.model === "E280S";
   const screenDark = config.model !== "VX520";
   const dim = config.brightness / 100;
+
+  // ── PosLink: vinculación dispositivo ↔ registry (obligatoria para despachar) ──
+  // computeNetworkStatus une el registry (capa ledger) con offlineMode (capa config)
+  const deviceAuthorized = registry[deviceId]?.authorized === true;
+  const networkStatus: NetworkStatus = computeNetworkStatus({
+    deviceAuthorized,
+    offlineMode: config.offlineMode,
+    echoOk: echoResult ? echoResult.ok : null,
+  });
+
+  // Balances fiat derivados del ledger (centavos) — jamás se editan a mano
+  const fiatBalances = useMemo(() => {
+    const acc: Record<string, { pendingCents: number; settledCents: number }> = {};
+    for (const e of ledgerEntries) {
+      const b = (acc[e.currency] ??= { pendingCents: 0, settledCents: 0 });
+      if (e.status === "PENDING") b.pendingCents += e.amountCents;
+      else b.settledCents += e.amountCents;
+    }
+    return acc;
+  }, [ledgerEntries]);
+  const ledgerPending = ledgerEntries.reduce((n, e) => n + (e.status === "PENDING" ? 1 : 0), 0);
+
+  // ── Ledger: altas y conciliación ────────────────────────────────────────────
+  // Cap de 300 entradas: se recortan primero las SETTLED más viejas; una PENDING
+  // jamás se tumba aquí — espeja la cola offline y los balances fiat.
+  function addLedgerEntry(entry: LedgerEntry) {
+    setLedgerEntries((prev) => {
+      const next = [...prev, entry];
+      if (next.length <= 300) return next;
+      const oldestSettled = next.findIndex((e) => e.status === "SETTLED");
+      if (oldestSettled >= 0) next.splice(oldestSettled, 1);
+      return next;
+    });
+    log("info", `SWIFT LEDGER ← ${entry.source} · ${entry.ref} · ${entry.currency} ${entry.amountCents}¢ [${entry.status}]`);
+  }
+
+  // Captura manual / por voz (Offline FiatLedger) — valida ref ≤ 12 y monto en centavos
+  function addManualEntry(input: { amount: string; ref: string; source: "MANUAL" | "VOICE"; note: string }): string | null {
+    const normalizedRef = normalizeMerchantRef(input.ref);
+    if (input.ref.trim() && !normalizedRef) return "Referencia inválida — alfanumérica, máx. 12 caracteres";
+    const amountCents = parseToCents(input.amount);
+    if (amountCents === null) return "Monto inválido — usa formato 0.00 (se almacena en centavos)";
+    const ref = normalizedRef || `MAN${randNum(9)}`;
+    // Auth telefónica: solo dígitos, máx. 6 — el resto de la nota es detalle
+    const authDigits = input.note.replace(/\D/g, "").slice(0, 6);
+    addLedgerEntry({
+      id: `M${Date.now()}${randNum(3)}`,
+      ref,
+      authCode: authDigits || null,
+      time: nowMx(),
+      amountCents,
+      currency: config.currency,
+      source: input.source,
+      status: "PENDING",
+      detail: input.note.trim() || (input.source === "VOICE" ? "Venta por voz · auth telefónica" : "Venta manual · proto 1643"),
+    });
+    setToast(`Ledger: ${input.source === "VOICE" ? "venta por voz" : "venta manual"} ${ref} · ${config.currency} $${fmt(amountCents / 100)}`);
+    return null;
+  }
+
+  // Conciliación: cruza el reporte contra los PENDING por referencia (o monto exacto en centavos)
+  function importSettlement(file: File) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const { records, rejected } = parseSettlement(String(reader.result), file.name);
+        if (records.length === 0 && rejected === 0) throw new Error("sin registros");
+        const next = [...ledgerEntries];
+        let matched = 0;
+        let mismatched = 0;
+        let totalCents = 0;
+        for (const r of records) {
+          const idx = next.findIndex((e) =>
+            e.status === "PENDING" && (r.ref ? e.ref === r.ref : r.amountCents !== null && e.amountCents === r.amountCents)
+          );
+          // Integridad contable: si el reporte trae ref Y monto, ambos deben coincidir —
+          // una liquidación por referencia con monto distinto se rechaza, nunca se concilia a medias
+          if (idx >= 0 && r.ref && r.amountCents !== null && next[idx].amountCents !== r.amountCents) {
+            log("err", `SWIFT LEDGER: ${file.name} ref ${r.ref} — ${r.amountCents}¢ del reporte no coincide con ${next[idx].amountCents}¢ pendiente · RECHAZADA`);
+            mismatched++;
+            continue;
+          }
+          if (idx >= 0) {
+            next[idx] = { ...next[idx], status: "SETTLED", detail: `${next[idx].detail} · conciliada (${file.name})` };
+            matched++;
+            totalCents += next[idx].amountCents;
+          }
+        }
+        setLedgerEntries(next);
+        setSettlements((prev) => [...prev.slice(-49), {
+          id: `ST${Date.now()}`, fileName: file.name, time: nowMx(),
+          records: records.length + rejected, matched, rejected: rejected + mismatched, totalCents,
+        }]);
+        log("info", `SWIFT LEDGER: liquidación ${file.name} — ${matched} conciliadas · ${rejected + mismatched} rechazadas${mismatched ? ` (${mismatched} por mismatch de monto)` : ""} · $${fmt(totalCents / 100)}`);
+        setToast(`Liquidación ${file.name}: ${matched} conciliadas${rejected + mismatched ? ` · ${rejected + mismatched} rechazadas` : ""}`);
+      } catch {
+        log("err", `SWIFT LEDGER: ${file.name} no es un reporte JSON/CSV válido`);
+        setToast("Error: reporte de liquidación inválido");
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  // Vincular / desvincular el dispositivo actual contra el registry PosLink
+  function setDeviceLink(authorized: boolean) {
+    setRegistry((prev) => ({
+      ...prev,
+      [deviceId]: {
+        deviceId,
+        label: `${MODEL_STYLES[config.model].label} · ${config.terminalId}`,
+        authorized,
+        linkedAt: nowMx(),
+      },
+    }));
+    log(authorized ? "info" : "err", `POSLINK REGISTRY: ${deviceId} ${authorized ? "VINCULADO/AUTORIZADO" : "DESVINCULADO — terminal pasa a TERMINAL_UNCONFIGURED"}`);
+    setToast(authorized ? "Dispositivo vinculado al registry PosLink" : "Dispositivo desvinculado — TERMINAL_UNCONFIGURED");
+  }
 
   // ── Consola TMS: Push / Export / Import ─────────────────────────────────────
   function pushToTerminal() {
@@ -192,6 +330,8 @@ export default function App() {
       setCargaProgress(pct);
       if (pct >= 100) {
         clearInterval(iv);
+        // El aprovisionamiento TMS vincula el dispositivo PosLink (sale de TERMINAL_UNCONFIGURED)
+        if (!deviceAuthorized) setDeviceLink(true);
         setToast("Configuración inyectada al terminal");
         setTimeout(() => setScreen("IDLE"), 600);
       }
@@ -213,16 +353,10 @@ export default function App() {
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const obj = JSON.parse(String(reader.result));
-        if (typeof obj !== "object" || obj === null) throw new Error("formato inválido");
-        setConfig({
-          ...DEFAULT_PARAMS,
-          ...obj,
-          flags: { ...DEFAULT_PARAMS.flags, ...(obj.flags ?? {}) },
-          emvAids: { ...DEFAULT_PARAMS.emvAids, ...(obj.emvAids ?? {}) },
-        });
+        const obj = parseConfigFile(String(reader.result));
+        setConfig(obj);
         setToast(`Perfil importado desde ${file.name}`);
-        log("info", `Perfil JSON importado: ${file.name}`);
+        log("info", `Perfil JSON importado: ${file.name} (validado por la capa de config)`);
       } catch {
         setToast("Error: el archivo no es un perfil válido");
         log("err", `Error al importar ${file.name}: no es un perfil JSON válido`);
@@ -255,7 +389,7 @@ export default function App() {
           setCargaProgress(pct);
           if (pct >= 100) {
             clearInterval(iv);
-            setConfig(DEFAULT_PARAMS);
+            setConfig(resetConfig());
             setToast("Parámetros descargados desde TMS");
             setTimeout(() => setScreen("SYSMENU"), 600);
           }
@@ -506,18 +640,35 @@ export default function App() {
       declineOffline("MEMORIA LLENA — HAGA CIERRE DE LOTE", baseTxn);
       return;
     }
+    // Metadatos Store & Forward: AuthCode + BankReference + Timestamp quedan sellados en el registro local
+    const authCode = localAuthCode();
+    const ref = normalizeMerchantRef(baseTxn.ref);
     const item: QueuedTxn = {
       id: `Q${Date.now()}${randNum(3)}`,
       body,
       total,
       time: baseTxn.time,
+      ref,
+      authCode,
     };
     setQueue((q) => {
       const next = [...q, item];
       log("info", `VENTA FORZADA guardada en cola offline (${next.length}/${config.offlineMaxQueue}) — se enviará en CIERRE DE LOTE`);
       return next;
     });
-    setTxn({ ...baseTxn, code: localAuthCode(), approved: true, queued: true });
+    // Store & Forward → el Ledger refleja la venta como PENDING desde este instante
+    addLedgerEntry({
+      id: item.id,
+      ref,
+      authCode,
+      time: baseTxn.time,
+      amountCents: Math.round(total * 100),
+      currency: config.currency,
+      source: "POS_OFFLINE",
+      status: "PENDING",
+      detail: `${proto.name} forzada offline · ${baseTxn.mode ?? "—"} · ${maskCard(config.cardNumber)}`,
+    });
+    setTxn({ ...baseTxn, code: authCode, approved: true, queued: true });
     setReceiptKind("venta");
     setScreen("APROBADO");
     setToast(`${proto.name} forzada offline · ${config.currency} $${fmt(total)} · pendiente de envío`);
@@ -534,6 +685,13 @@ export default function App() {
       mode: entryMode,
     };
     const body = buildSaleBody();
+
+    // PosLink: sin vínculo autorizado en el registry NO hay despacho remoto — solo store & forward
+    if (!deviceAuthorized) {
+      log("err", `TERMINAL_UNCONFIGURED — ${deviceId} no está enlazado/autorizado en el PosLink registry; despacho remoto bloqueado`);
+      setTimeout(() => attemptForcedSale(body, baseTxn), 1200);
+      return;
+    }
 
     // Modo offline: el POS no se bloquea — aprueba como venta forzada y encola
     if (config.offlineMode) {
@@ -654,20 +812,57 @@ export default function App() {
       setScreen("SYSMENU");
       return;
     }
+    // PosLink: un lote ES despacho remoto — prohibido sin vínculo autorizado. La cola se conserva intacta.
+    if (!deviceAuthorized) {
+      log("err", `CIERRE DE LOTE BLOQUEADO — TERMINAL_UNCONFIGURED (${deviceId} no autorizado en PosLink registry)`);
+      setToast("TERMINAL_UNCONFIGURED — vincula el dispositivo (TMS Push o Device registry)");
+      setScreen("SYSMENU");
+      return;
+    }
     const items = [...queue];
+    // Payload estructurado idéntico al que espera el Ledger del servidor (montos en centavos)
+    const batchPayload = {
+      batchId: `B${Date.now()}`,
+      deviceId,
+      terminalId: config.terminalId,
+      merchant: config.merchant,
+      currency: config.currency,
+      count: items.length,
+      totalCents: items.reduce((a, q) => a + Math.round(q.total * 100), 0),
+      items: items.map((q) => ({
+        queueId: q.id,
+        ref: q.ref ?? normalizeMerchantRef(String(q.body.ref ?? q.id)),
+        authCode: q.authCode ?? null,
+        amountCents: Math.round(q.total * 100),
+        timestamp: q.body.timestamp ?? q.time,
+        entryMode: q.body.entryMode ?? null,
+        card: q.body.cardNumber ?? null,
+      })),
+    };
     const url = `${config.ssl ? "https" : "http"}://${config.host}:${config.port}/api/engine/sales/forced`;
     setScreen("SYS_LOTE");
     setBatchProgress({ current: 0, total: items.length });
-    log("info", `CIERRE DE LOTE: enviando ${items.length} transacción(es) a ${url}`);
+    log("info", `CIERRE DE LOTE ${batchPayload.batchId}: enviando ${items.length} transacción(es) · ${batchPayload.totalCents}¢ a ${url}`);
+    log("tx", `  Settlement payload: ${JSON.stringify(batchPayload)}`);
 
     let sent = 0;
-    let sentTotal = 0;
     const failed: QueuedTxn[] = [];
     for (let i = 0; i < items.length; i++) {
       const q = items[i];
       setBatchProgress({ current: i + 1, total: items.length });
+      if (config.offlineMode) {
+        // Simulación: el host acepta localmente el mismo payload estructurado
+        log("tx", `→ [SIMULACIÓN] ${batchPayload.batchId} item ${i + 1}/${items.length} · ${q.ref ?? q.id} · ${Math.round(q.total * 100)}¢`);
+        log("rx", `← 200 OK (host simulado) [LOTE ${i + 1}/${items.length}]`);
+        sent++;
+        await new Promise((r) => setTimeout(r, 200));
+        continue;
+      }
+      // El wire lleva el body original enriquecido con los metadatos Store & Forward,
+      // idénticos a los del item del Settlement payload que loguea arriba
+      const wire = { ...q.body, ref: q.ref ?? null, authCode: q.authCode ?? null, amountCents: Math.round(q.total * 100) };
       log("tx", `→ POST ${url} [LOTE ${i + 1}/${items.length}]`);
-      log("tx", `  Body: ${JSON.stringify(q.body)}`);
+      log("tx", `  Body: ${JSON.stringify(wire)}`);
       const ctrl = new AbortController();
       const timeout = setTimeout(() => ctrl.abort(), 8000);
       try {
@@ -678,13 +873,12 @@ export default function App() {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${config.authToken}`,
           },
-          body: JSON.stringify(q.body),
+          body: JSON.stringify(wire),
         });
         clearTimeout(timeout);
         log("rx", `← HTTP ${res.status} ${res.statusText} [LOTE ${i + 1}/${items.length}]`);
         if (res.status === 200 || res.status === 201) {
           sent++;
-          sentTotal += q.total;
         } else {
           failed.push(q);
         }
@@ -697,12 +891,31 @@ export default function App() {
       await new Promise((r) => setTimeout(r, 200));
     }
 
+    const sentIds = new Set(items.filter((q) => !failed.includes(q)).map((q) => q.id));
     setQueue(failed);
+    // Traspaso de estado garantizado: cada item enviado del payload actualiza el Ledger (PENDING → SETTLED).
+    // Ninguna transacción encolada se pierde: las fallidas permanecen PENDING y en cola.
+    setLedgerEntries((prev) =>
+      prev.map((e) => sentIds.has(e.id) && e.status === "PENDING"
+        ? { ...e, status: "SETTLED" as LedgerStatus, detail: `${e.detail} · liquidada en ${batchPayload.batchId}` }
+        : e)
+    );
+    const sentTotal = items.filter((q) => sentIds.has(q.id)).reduce((a, q) => a + q.total, 0);
+    setSettlements((prev) => [...prev.slice(-49), {
+      id: batchPayload.batchId,
+      fileName: `CIERRE DE LOTE POS · ${batchPayload.batchId}`,
+      time: nowMx(),
+      records: items.length,
+      matched: sent,
+      rejected: 0,
+      totalCents: Math.round(sentTotal * 100),
+    }]);
     const failedTotal = failed.reduce((acc, q) => acc + q.total, 0);
     setReport([
       "*** TICKET DE CIERRE DE LOTE ***",
       `TERMINAL: ${config.terminalId}`,
-      `LOTE: ${Date.now() % 100000}`,
+      `DISPOSITIVO: ${deviceId}`,
+      `LOTE: ${batchPayload.batchId}`,
       "──────────────────────────",
       `RECIBIDAS: ${items.length}`,
       `ENVIADAS:  ${sent}  $ ${fmt(sentTotal)}`,
@@ -714,7 +927,7 @@ export default function App() {
     setReceiptKind("lote");
     setBatchProgress(null);
     setScreen("SYSMENU");
-    log("info", `CIERRE DE LOTE terminado: ${sent}/${items.length} enviadas · $${fmt(sentTotal)} ${config.currency}${failed.length ? ` · ${failed.length} quedan en cola` : " · cola vacía"}`);
+    log("info", `CIERRE DE LOTE terminado: ${sent}/${items.length} enviadas · $${fmt(sentTotal)} ${config.currency}${failed.length ? ` · ${failed.length} quedan en cola` : " · cola vacía"} · Ledger actualizado`);
     setToast(`Cierre de lote: ${sent}/${items.length} enviadas`);
   }
 
@@ -951,6 +1164,11 @@ export default function App() {
             <p className={`text-[9px] font-mono ${s}`}>OS: {config.osVersion}</p>
             <p className={`text-[9px] font-mono ${s}`}>APP: {config.appVersion}</p>
             <p className={`text-[9px] font-mono ${s}`}>TID: {config.terminalId}</p>
+            <p className={`text-[8px] mt-1 ${s}`}>HW: {modelProfile.hwCode}</p>
+            <p className={`text-[8px] ${s}`}>PANTALLA: {modelProfile.screen}</p>
+            <p className={`text-[8px] ${s}`}>IMPRESORA: {modelProfile.printer}</p>
+            <p className={`text-[8px] ${s}`}>PAGOS: {modelProfile.payments}</p>
+            <p className={`text-[8px] ${s}`}>RED: {modelProfile.connectivity}</p>
             <p className={`text-[8px] mt-2 ${s}`}>ENTER/X = VOLVER</p>
           </div>
         );
@@ -983,11 +1201,37 @@ export default function App() {
               <p className="text-xs text-gray-500">Consola TMS + terminal configurable desde adentro</p>
             </div>
           </div>
-          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 border border-amber-300 bg-amber-50 rounded-full px-3 py-1">
-            <FlaskConical className="w-3 h-3" /> Entorno de desarrollo
-          </span>
+          <div className="flex items-center gap-3">
+            <div className="flex rounded-lg border border-gray-300 bg-white p-0.5 shadow-sm">
+              {([["POS", "TMS / POS"], ["LEDGER", "Swift Ledger · PosLink"]] as const).map(([v, label]) => (
+                <button
+                  key={v}
+                  onClick={() => setView(v)}
+                  className={`flex items-center px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${view === v ? "bg-[#c8322b] text-white" : "text-gray-500 hover:text-gray-800"}`}
+                >
+                  {label}
+                  {v === "LEDGER" && ledgerPending > 0 && (
+                    <span className={`ml-1.5 inline-flex items-center justify-center rounded-full px-1.5 text-[9px] font-bold ${view === "LEDGER" ? "bg-white text-[#c8322b]" : "bg-amber-500 text-black"}`}>
+                      {ledgerPending}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setPosMirror((m) => !m)}
+              title="Espejo en vivo del POS físico (adb)"
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${posMirror ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-gray-300 bg-white text-gray-500 hover:text-gray-800"}`}
+            >
+              <Smartphone className="w-3 h-3" /> POS físico
+            </button>
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 border border-amber-300 bg-amber-50 rounded-full px-3 py-1">
+              <FlaskConical className="w-3 h-3" /> Entorno de desarrollo
+            </span>
+          </div>
         </div>
 
+        {view === "POS" ? (
         <div className="grid grid-cols-1 xl:grid-cols-[400px_1fr] gap-6 items-start">
           {/* ── Terminal visual (al lado, como confirmación) ── */}
           <div className="flex flex-col items-center gap-6 xl:sticky xl:top-6">
@@ -1036,7 +1280,7 @@ export default function App() {
                 {keyBtn("F", pressF, "!bg-[#274472] hover:!bg-[#1d3559] !text-white")}
                 {keyBtn("0", () => pressDigit("0"))}
                 {keyBtn("00", pressDotOrDoubleZero)}
-                {keyBtn(<RotateCcw className="w-4 h-4 mx-auto" />, () => { setConfig(DEFAULT_PARAMS); setScreen("IDLE"); setAmountDigits(""); setEntryMode(null); setTxn(null); setReport(null); })}
+                {keyBtn(<RotateCcw className="w-4 h-4 mx-auto" />, () => { setConfig(resetConfig()); setScreen("IDLE"); setAmountDigits(""); setEntryMode(null); setTxn(null); setReport(null); })}
               </div>
             </div>
 
@@ -1135,10 +1379,21 @@ export default function App() {
             <div className="grid md:grid-cols-2 gap-4">
               <Panel title="Identidad">
                 <Field label="Modelo">
-                  <select className={inputCls} value={config.model} onChange={(e) => set("model", e.target.value as TerminalModel)}>
+                  <select
+                    className={inputCls}
+                    value={config.model}
+                    onChange={(e) => {
+                      const m = e.target.value as TerminalModel;
+                      // Al cambiar de familia, el OS/APP por defecto siguen la ficha del modelo
+                      setConfig((c) => ({ ...c, model: m, osVersion: MODEL_PROFILES[m].os, appVersion: MODEL_PROFILES[m].app }));
+                    }}
+                  >
                     <option value="VX520">Verifone VX520</option>
                     <option value="P400">Verifone P400</option>
                     <option value="E280S">Verifone e280s</option>
+                    <option value="SUNMI_V3">SUNMI V3</option>
+                    <option value="SUNMI_V3_PLUS">SUNMI V3 PLUS</option>
+                    <option value="SUNMI_V3_MIX">SUNMI V3 MIX</option>
                   </select>
                 </Field>
                 <Field label="Nombre del comercio">
@@ -1388,12 +1643,27 @@ export default function App() {
 
             <button
               className="w-full flex items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-              onClick={() => { setConfig(DEFAULT_PARAMS); setScreen("IDLE"); setAmountDigits(""); setEntryMode(null); setTxn(null); setReport(null); setQueue([]); }}
+              onClick={() => { setConfig(resetConfig()); setScreen("IDLE"); setAmountDigits(""); setEntryMode(null); setTxn(null); setReport(null); setQueue([]); }}
             >
               <RotateCcw className="w-4 h-4" /> Restablecer valores de fábrica
             </button>
           </div>
         </div>
+        ) : (
+          <LedgerView
+            entries={ledgerEntries}
+            settlements={settlements}
+            balances={fiatBalances}
+            registry={registry}
+            deviceId={deviceId}
+            deviceAuthorized={deviceAuthorized}
+            networkStatus={networkStatus}
+            config={config}
+            onAddManual={addManualEntry}
+            onImportSettlement={importSettlement}
+            onSetDeviceLink={setDeviceLink}
+          />
+        )}
       </div>
 
       {/* Toast */}
@@ -1402,6 +1672,367 @@ export default function App() {
           <CheckCircle className="w-4 h-4 text-emerald-400" /> {toast}
         </div>
       )}
+
+      {/* Espejo en vivo del POS físico */}
+      {posMirror && <PosLivePanel serial={config.serial} />}
+    </div>
+  );
+}
+
+// ─── Swift Ledger · PosLink (vista NOC oscura y densa) ───────────────────────
+const LEDGER_STATUS_STYLE: Record<LedgerStatus, string> = {
+  PENDING: "text-amber-300 border-amber-500/40 bg-amber-500/10",
+  SETTLED: "text-emerald-300 border-emerald-500/40 bg-emerald-500/10",
+};
+
+const LEDGER_SOURCE_STYLE: Record<LedgerSource, string> = {
+  POS_OFFLINE: "text-sky-300",
+  MANUAL: "text-violet-300",
+  VOICE: "text-pink-300",
+};
+
+const NETWORK_STATUS_STYLE: Record<NetworkStatus, { dot: string; text: string; label: string }> = {
+  TERMINAL_UNCONFIGURED: { dot: "bg-red-500", text: "text-red-400", label: "TERMINAL_UNCONFIGURED" },
+  STORE_AND_FORWARD: { dot: "bg-amber-400", text: "text-amber-300", label: "STORE & FORWARD" },
+  LINK_DOWN: { dot: "bg-red-500", text: "text-red-400", label: "LINK DOWN" },
+  CONNECTED: { dot: "bg-emerald-400", text: "text-emerald-300", label: "CONNECTED" },
+};
+
+const ledgerInputCls = "w-full rounded border border-[#2a3242] bg-[#0a0c10] px-2 py-1.5 text-[11px] font-mono text-gray-200 focus:outline-none focus:border-emerald-500/60";
+
+function LedgerPanel({ title, right, children, className = "" }: { title: string; right?: React.ReactNode; children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`rounded-md border border-[#1e2530] bg-[#10131a] ${className}`}>
+      <div className="flex items-center justify-between px-3 py-2 border-b border-[#1e2530]">
+        <h3 className="text-[10px] font-bold tracking-widest text-gray-500 uppercase">{title}</h3>
+        {right}
+      </div>
+      <div className="p-3">{children}</div>
+    </div>
+  );
+}
+
+interface LedgerViewProps {
+  entries: LedgerEntry[];
+  settlements: SettlementReport[];
+  balances: Record<string, { pendingCents: number; settledCents: number }>;
+  registry: Record<string, DeviceRecord>;
+  deviceId: string;
+  deviceAuthorized: boolean;
+  networkStatus: NetworkStatus;
+  config: TerminalParams;
+  onAddManual: (input: { amount: string; ref: string; source: "MANUAL" | "VOICE"; note: string }) => string | null;
+  onImportSettlement: (file: File) => void;
+  onSetDeviceLink: (authorized: boolean) => void;
+}
+
+function LedgerView({
+  entries, settlements, balances, registry, deviceId, networkStatus, config,
+  onAddManual, onImportSettlement, onSetDeviceLink,
+}: LedgerViewProps) {
+  const [mAmount, setMAmount] = useState("");
+  const [mRef, setMRef] = useState("");
+  const [mSource, setMSource] = useState<"MANUAL" | "VOICE">("MANUAL");
+  const [mNote, setMNote] = useState("");
+  const [mError, setMError] = useState<string | null>(null);
+  const settleInputRef = useRef<HTMLInputElement>(null);
+  const net = NETWORK_STATUS_STYLE[networkStatus];
+  const pendingCount = entries.reduce((n, e) => n + (e.status === "PENDING" ? 1 : 0), 0);
+  const currencies = Object.keys(balances);
+  const devices = Object.values(registry);
+
+  function submitManual() {
+    const err = onAddManual({ amount: mAmount, ref: mRef, source: mSource, note: mNote });
+    setMError(err);
+    if (!err) { setMAmount(""); setMRef(""); setMNote(""); }
+  }
+
+  return (
+    <div className="rounded-xl border border-[#1e2530] bg-[#0a0c10] p-4 font-mono text-[11px] text-gray-300 space-y-4 shadow-2xl">
+      {/* Cabecera NOC */}
+      <div className="flex items-center justify-between flex-wrap gap-2 border-b border-[#1e2530] pb-3">
+        <div className="flex items-center gap-2">
+          <Landmark className="w-4 h-4 text-emerald-400" />
+          <div>
+            <p className="text-xs font-bold tracking-widest text-gray-100">SWIFT LEDGER · POSLINK</p>
+            <p className="text-[9px] text-gray-500">conciliación fiat · store &amp; forward · TMS {config.tmsId} · {config.host}:{config.port}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-[9px] text-gray-500 hidden md:inline">{deviceId}</span>
+          <span className={`inline-flex items-center gap-1.5 rounded-full border border-[#2a3242] px-2.5 py-1 text-[9px] font-bold ${net.text}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${net.dot} animate-pulse`} /> {net.label}
+          </span>
+        </div>
+      </div>
+
+      {networkStatus === "TERMINAL_UNCONFIGURED" && (
+        <div className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-[10px] text-red-300">
+          TERMINAL_UNCONFIGURED — el dispositivo {deviceId} no está enlazado/autorizado en el registry.
+          El POS bloquea el despacho remoto de transacciones y el cierre de lote (store &amp; forward local sigue activo).
+        </div>
+      )}
+
+      {/* Fiat balances */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {(currencies.length ? currencies : [config.currency]).map((cur) => {
+          const b = balances[cur] ?? { pendingCents: 0, settledCents: 0 };
+          return (
+            <div key={cur} className="rounded-md border border-[#1e2530] bg-[#10131a] p-3">
+              <p className="text-[9px] tracking-widest text-gray-500 uppercase">Fiat balance · {cur}</p>
+              <p className="text-xl font-bold text-gray-100 mt-1">$ {fmt((b.pendingCents + b.settledCents) / 100)}</p>
+              <div className="flex justify-between mt-2 text-[10px]">
+                <span className="text-amber-300">PENDING $ {fmt(b.pendingCents / 100)}</span>
+                <span className="text-emerald-300">AVAILABLE $ {fmt(b.settledCents / 100)}</span>
+              </div>
+            </div>
+          );
+        })}
+        <div className="rounded-md border border-[#1e2530] bg-[#10131a] p-3">
+          <p className="text-[9px] tracking-widest text-gray-500 uppercase">Store &amp; Forward</p>
+          <p className="text-xl font-bold text-gray-100 mt-1">{pendingCount} <span className="text-[10px] text-gray-500 font-normal">pendientes</span></p>
+          <div className="flex justify-between mt-2 text-[10px]">
+            <span className="text-gray-400">{entries.length} movimientos</span>
+            <span className="text-gray-400">{settlements.length} liquidaciones</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {/* Device registry */}
+        <LedgerPanel title="Device registry · PosLink" right={<Database className="w-3.5 h-3.5 text-gray-600" />}>
+          <table className="w-full text-[10px]">
+            <thead>
+              <tr className="text-left text-gray-600 border-b border-[#1e2530]">
+                <th className="py-1 pr-2 font-medium">DISPOSITIVO</th>
+                <th className="py-1 pr-2 font-medium">ALIAS</th>
+                <th className="py-1 pr-2 font-medium">ESTADO</th>
+                <th className="py-1 font-medium text-right">ACCIÓN</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#141a24]">
+              {devices.map((d) => (
+                <tr key={d.deviceId} className={d.deviceId === deviceId ? "bg-emerald-500/5" : ""}>
+                  <td className="py-1.5 pr-2 text-gray-300 break-all max-w-[180px]">
+                    {d.deviceId}
+                    {d.deviceId === deviceId && <span className="ml-1 text-[8px] text-emerald-400 font-bold">← ESTA TERMINAL</span>}
+                  </td>
+                  <td className="py-1.5 pr-2 text-gray-500">{d.label}</td>
+                  <td className="py-1.5 pr-2">
+                    <span className={`inline-block rounded border px-1.5 py-px text-[8px] font-bold ${d.authorized ? "text-emerald-300 border-emerald-500/40 bg-emerald-500/10" : "text-red-300 border-red-500/40 bg-red-500/10"}`}>
+                      {d.authorized ? "AUTHORIZED" : "UNLINKED"}
+                    </span>
+                  </td>
+                  <td className="py-1.5 text-right">
+                    {d.deviceId === deviceId && (
+                      <button
+                        onClick={() => onSetDeviceLink(!d.authorized)}
+                        className={`rounded border px-2 py-0.5 text-[9px] font-bold transition-colors ${d.authorized ? "border-red-500/40 text-red-300 hover:bg-red-500/10" : "border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"}`}
+                      >
+                        {d.authorized ? "DESVINCULAR" : "VINCULAR"}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {!devices.some((d) => d.deviceId === deviceId) && (
+                <tr className="bg-red-500/5">
+                  <td className="py-1.5 pr-2 text-red-300 break-all max-w-[180px]">
+                    {deviceId} <span className="ml-1 text-[8px] font-bold">← ESTA TERMINAL</span>
+                  </td>
+                  <td className="py-1.5 pr-2 text-gray-500">sin registro</td>
+                  <td className="py-1.5 pr-2">
+                    <span className="inline-block rounded border px-1.5 py-px text-[8px] font-bold text-red-300 border-red-500/40 bg-red-500/10">UNLINKED</span>
+                  </td>
+                  <td className="py-1.5 text-right">
+                    <button
+                      onClick={() => onSetDeviceLink(true)}
+                      className="rounded border border-emerald-500/40 text-emerald-300 px-2 py-0.5 text-[9px] font-bold hover:bg-emerald-500/10 transition-colors"
+                    >
+                      VINCULAR
+                    </button>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+          <p className="mt-2 text-[9px] text-gray-600">
+            La red de la terminal solo existe contra el registry: sin AUTHORIZED el POS opera en TERMINAL_UNCONFIGURED
+            (store &amp; forward local, sin despacho remoto ni cierres de lote). El TMS Push también vincula el dispositivo.
+          </p>
+        </LedgerPanel>
+
+        {/* Offline FiatLedger · captura manual */}
+        <LedgerPanel title="Offline FiatLedger · captura manual / voz" right={<Plus className="w-3.5 h-3.5 text-gray-600" />}>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[9px] text-gray-500">MONTO ({config.currency}) · se guarda en centavos</label>
+              <input className={ledgerInputCls} inputMode="decimal" value={mAmount} onChange={(e) => setMAmount(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="0.00" />
+            </div>
+            <div>
+              <label className="text-[9px] text-gray-500">REF. COMERCIANTE (máx. {MERCHANT_REF_MAX})</label>
+              <input className={ledgerInputCls} value={mRef} onChange={(e) => setMRef(e.target.value.slice(0, MERCHANT_REF_MAX))} placeholder="AUTO" />
+            </div>
+            <div>
+              <label className="text-[9px] text-gray-500">ORIGEN</label>
+              <select className={ledgerInputCls} value={mSource} onChange={(e) => setMSource(e.target.value as "MANUAL" | "VOICE")}>
+                <option value="MANUAL">VENTA MANUAL (1643)</option>
+                <option value="VOICE">VENTA POR VOZ</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[9px] text-gray-500">NOTA / AUTH TELEFÓNICA</label>
+              <input className={ledgerInputCls} value={mNote} onChange={(e) => setMNote(e.target.value)} placeholder="—" />
+            </div>
+          </div>
+          {mError && <p className="mt-2 text-[10px] text-red-300">{mError}</p>}
+          <button
+            onClick={submitManual}
+            disabled={!mAmount.trim()}
+            className="mt-2 w-full rounded border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-bold text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-40 transition-colors"
+          >
+            REGISTRAR EN LEDGER (PENDING)
+          </button>
+        </LedgerPanel>
+      </div>
+
+      {/* Offline sale history */}
+      <LedgerPanel
+        title={`Offline sale history · ${entries.length}`}
+        right={pendingCount > 0 ? <span className="text-[9px] font-bold text-amber-300">{pendingCount} PENDING</span> : undefined}
+      >
+        <div className="max-h-60 overflow-y-auto">
+          <table className="w-full text-[10px]">
+            <thead>
+              <tr className="text-left text-gray-600 border-b border-[#1e2530]">
+                <th className="py-1 pr-2 font-medium">HORA</th>
+                <th className="py-1 pr-2 font-medium">REF</th>
+                <th className="py-1 pr-2 font-medium">AUTH</th>
+                <th className="py-1 pr-2 font-medium">ORIGEN</th>
+                <th className="py-1 pr-2 font-medium text-right">MONTO</th>
+                <th className="py-1 pr-2 font-medium">ESTADO</th>
+                <th className="py-1 font-medium">DETALLE</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#141a24]">
+              {entries.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-6 text-center text-gray-600">
+                    sin movimientos — cobra en el POS (offline o sin vínculo PosLink) o captura una venta manual
+                  </td>
+                </tr>
+              ) : [...entries].reverse().map((e) => (
+                <tr key={e.id}>
+                  <td className="py-1 pr-2 text-gray-500 whitespace-nowrap">{e.time}</td>
+                  <td className="py-1 pr-2 text-gray-200">{e.ref}</td>
+                  <td className="py-1 pr-2 text-gray-400">{e.authCode ?? "—"}</td>
+                  <td className={`py-1 pr-2 font-bold ${LEDGER_SOURCE_STYLE[e.source]}`}>{e.source}</td>
+                  <td className="py-1 pr-2 text-right text-gray-100 whitespace-nowrap">{e.currency} $ {fmt(e.amountCents / 100)}</td>
+                  <td className="py-1 pr-2">
+                    <span className={`inline-block rounded border px-1.5 py-px text-[8px] font-bold ${LEDGER_STATUS_STYLE[e.status]}`}>{e.status}</span>
+                  </td>
+                  <td className="py-1 text-gray-500 truncate max-w-[220px]">{e.detail}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </LedgerPanel>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {/* Conciliación: subir reporte */}
+        <LedgerPanel title="Conciliación · reporte de liquidación" right={<ArrowRightLeft className="w-3.5 h-3.5 text-gray-600" />}>
+          <button
+            onClick={() => settleInputRef.current?.click()}
+            className="w-full rounded border border-dashed border-[#2a3242] px-3 py-4 text-center text-[10px] text-gray-400 hover:border-emerald-500/50 hover:text-emerald-300 transition-colors"
+          >
+            <Upload className="w-4 h-4 mx-auto mb-1" />
+            SUBIR REPORTE JSON / CSV — concilia contra los PENDING; si el registro trae referencia y monto, ambos deben coincidir
+          </button>
+          <input
+            ref={settleInputRef}
+            type="file"
+            accept=".json,.csv,application/json,text/csv"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) onImportSettlement(f);
+              e.target.value = "";
+            }}
+          />
+          <p className="mt-2 text-[9px] text-gray-600">
+            JSON: [&#123;"ref":"VF123","amountCents":12345&#125;] · CSV: ref,amount_cents por línea. Ref alfanumérica máx. {MERCHANT_REF_MAX} —
+            los registros mal formados se rechazan y quedan contados en el reporte.
+          </p>
+        </LedgerPanel>
+
+        {/* Settlement reports */}
+        <LedgerPanel title={`Settlement reports · ${settlements.length}`} right={<FileText className="w-3.5 h-3.5 text-gray-600" />}>
+          <div className="max-h-44 overflow-y-auto space-y-1">
+            {settlements.length === 0 ? (
+              <p className="py-4 text-center text-gray-600">
+                sin liquidaciones — un CIERRE DE LOTE en el POS se registra aquí automáticamente
+              </p>
+            ) : [...settlements].reverse().map((s) => (
+              <div key={s.id} className="flex items-center justify-between rounded border border-[#1e2530] bg-[#0a0c10] px-2 py-1.5">
+                <div>
+                  <p className="text-[10px] text-gray-200">{s.fileName}</p>
+                  <p className="text-[9px] text-gray-600">{s.time} · {s.records} registros</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] text-emerald-300">{s.matched} conciliadas · $ {fmt(s.totalCents / 100)}</p>
+                  <p className={`text-[9px] ${s.rejected > 0 ? "text-red-400" : "text-gray-600"}`}>
+                    {s.records - s.matched - s.rejected} sin match · {s.rejected} rechazadas
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </LedgerPanel>
+      </div>
+    </div>
+  );
+}
+
+// ─── Espejo en vivo del POS físico ───────────────────────────────────────────
+// La imagen la sirve /api/pos/screen.png (plugin posMirrorPlugin en vite.config.ts),
+// que ejecuta `adb exec-out screencap -p` en cada request.
+function PosLivePanel({ serial }: { serial: string }) {
+  const [tick, setTick] = useState(0);
+  const [online, setOnline] = useState(true);
+
+  useEffect(() => {
+    const iv = setInterval(() => setTick((t) => t + 1), 1500);
+    return () => clearInterval(iv);
+  }, []);
+
+  return (
+    <div className="fixed bottom-4 right-4 z-50 w-[300px] rounded-xl border border-gray-300 bg-white shadow-2xl overflow-hidden">
+      <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-gray-200 bg-gray-50">
+        <p className="text-[10px] font-bold tracking-wider text-gray-600">POS FÍSICO · {serial}</p>
+        <span className={`w-1.5 h-1.5 rounded-full ${online ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
+      </div>
+      {online ? (
+        <img
+          src={`/api/pos/screen.png?t=${tick}`}
+          alt="Pantalla del POS físico"
+          className="w-full max-h-[560px] object-contain bg-black"
+          onLoad={() => setOnline(true)}
+          onError={() => setOnline(false)}
+        />
+      ) : (
+        <div className="px-3 py-5 text-center">
+          <p className="text-[10px] font-semibold text-gray-600">POS no detectado</p>
+          <p className="text-[9px] text-gray-400 mt-0.5">conecta el USB-C y acepta el aviso RSA</p>
+          <button
+            onClick={() => { setOnline(true); setTick((t) => t + 1); }}
+            className="mt-2 rounded border border-gray-300 px-2 py-0.5 text-[9px] font-semibold text-gray-500 hover:bg-gray-100"
+          >
+            REINTENTAR
+          </button>
+        </div>
+      )}
+      <p className="px-2.5 py-1 text-[8px] text-gray-400">espejo adb · actualiza cada 1.5 s</p>
     </div>
   );
 }
