@@ -7,6 +7,7 @@ export type CommMode = "ETHERNET" | "DIAL" | "GPRS";
 // Ficha técnica por modelo — alimenta ACERCA DE y los defaults de OS/APP al cambiar de modelo
 export interface ModelProfile {
   label: string;
+  modelId: string;      // ro.product.model real del equipo (p. ej. "V3" leído vía adb)
   os: string;           // OS por defecto al seleccionar el modelo
   app: string;          // paquete de aplicación por defecto
   hwCode: string;       // código de hardware de fábrica (p. ej. T5F1A en SUNMI V3)
@@ -20,37 +21,39 @@ export interface ModelProfile {
 
 export const MODEL_PROFILES: Record<TerminalModel, ModelProfile> = {
   VX520: {
-    label: "Verifone VX520", os: "Verix V 4.3.2", app: "QT520440-A", hwCode: "—",
+    label: "Verifone VX520", modelId: "VX520", os: "Verix V 4.3.2", app: "QT520440-A", hwCode: "—",
     screen: '2.8" QVGA monocromo', printer: "Térmica 58 mm",
     scanner: "—", payments: "CHIP / BANDA / CTLS",
     connectivity: "ETHERNET / DIAL", memory: "—",
   },
   P400: {
-    label: "Verifone P400", os: "VOS 2.8.0", app: "PP400-A3", hwCode: "—",
+    label: "Verifone P400", modelId: "P400", os: "VOS 2.8.0", app: "PP400-A3", hwCode: "—",
     screen: '2.8" QVGA color', printer: "Térmica 58 mm",
     scanner: "—", payments: "CHIP / BANDA / CTLS",
     connectivity: "ETHERNET / Wi-Fi", memory: "—",
   },
   E280S: {
-    label: "Verifone e280s", os: "VOS 3.1.2", app: "E280-STD", hwCode: "—",
+    label: "Verifone e280s", modelId: "E280S", os: "VOS 3.1.2", app: "E280-STD", hwCode: "—",
     screen: '2.4" color', printer: "—",
     scanner: "—", payments: "CTLS / BANDA",
     connectivity: "Wi-Fi / BT", memory: "—",
   },
   SUNMI_V3: {
-    label: "SUNMI V3", os: "SUNMI OS 4.5.8 (Android 13)", app: "SUNMI-PSP-3.0", hwCode: "T5F1A",
+    // Valores verificados vía adb contra el equipo físico (serial VA24261Q40112):
+    // ro.product.model=V3 · ro.fac.cfg.CFG_VER=V3_T5F1A_S23_C01 · display.id=4.5.8 (Android 13)
+    label: "SUNMI V3", modelId: "V3", os: "SUNMI OS 4.5.8 (Android 13)", app: "SUNMI-PSP-3.0", hwCode: "T5F1A",
     screen: '6.75" HD+ 720x1600 · 420 nits', printer: "Térmica 58 mm (etiquetas)",
     scanner: "Láser 2D (opcional)", payments: "NFC SoftPOS · CTLS",
     connectivity: "Wi-Fi 6E dual band / 4G LTE", memory: "3/32 GB · 4/64 GB",
   },
   SUNMI_V3_PLUS: {
-    label: "SUNMI V3 PLUS", os: "SUNMI OS 4.0 (Android 13)", app: "SUNMI-PSP-3.0+", hwCode: "—",
+    label: "SUNMI V3 PLUS", modelId: "V3-PLUS", os: "SUNMI OS 4.0 (Android 13)", app: "SUNMI-PSP-3.0+", hwCode: "—",
     screen: '6.75" HD+ 720x1600 · 420 nits', printer: "Térmica 58/80 mm · 100 mm/s",
     scanner: "Láser 2D (opcional)", payments: "NFC SoftPOS · CTLS",
     connectivity: "Wi-Fi 6E dual band / 4G LTE", memory: "4/64 GB",
   },
   SUNMI_V3_MIX: {
-    label: "SUNMI V3 MIX", os: "SUNMI OS 4.0 (Android 13)", app: "SUNMI-PSP-3.0 MIX", hwCode: "—",
+    label: "SUNMI V3 MIX", modelId: "V3-MIX", os: "SUNMI OS 4.0 (Android 13)", app: "SUNMI-PSP-3.0 MIX", hwCode: "—",
     screen: '10.1" Full HD táctil', printer: "Térmica 80 mm",
     scanner: "—", payments: "NFC SoftPOS · CTLS",
     connectivity: "Wi-Fi 6E / 4G LTE", memory: "4/64 GB",
