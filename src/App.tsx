@@ -944,16 +944,28 @@ export default function App() {
     switch (screen) {
       case "IDLE":
         return (
-          <div className="flex flex-col items-center justify-center h-full gap-1">
-            <p className={`text-[10px] font-bold tracking-widest ${p}`}>{config.merchant}</p>
-            <p className={`text-[9px] ${s}`}>TERMINAL {config.terminalId}</p>
-            <p className={`text-xs font-bold mt-2 ${p}`}>BIENVENIDO</p>
-            <p className={`text-[9px] ${s}`}>INGRESE MONTO PARA INICIAR</p>
-            {queue.length > 0 && (
-              <p className={`text-[9px] font-bold mt-1 ${p} animate-pulse`}>[⬆ {queue.length} PENDIENTE{queue.length > 1 ? "S" : ""}]</p>
-            )}
-            {idleNotice && <p className={`text-[9px] font-bold ${p}`}>{idleNotice}</p>}
-            <p className={`text-[8px] mt-1 ${s}`}>F = MENU SISTEMA</p>
+          <div className="flex flex-col h-full">
+            <div className="flex items-start justify-between gap-1">
+              <div>
+                <p className={`text-[10px] font-bold tracking-widest ${p}`}>{config.merchant}</p>
+                <p className={`text-[9px] ${s}`}>TERMINAL {config.terminalId}</p>
+              </div>
+              <p className={`text-[8px] font-bold leading-tight text-right ${networkStatus === "TERMINAL_UNCONFIGURED" ? `${p} animate-pulse` : s}`}>
+                {networkStatus === "CONNECTED" && "■ EN LÍNEA"}
+                {networkStatus === "STORE_AND_FORWARD" && "▲ S&F"}
+                {networkStatus === "LINK_DOWN" && "■ SIN RED"}
+                {networkStatus === "TERMINAL_UNCONFIGURED" && "✕ NO VINCULADO"}
+              </p>
+            </div>
+            <div className="flex flex-col items-center justify-center flex-1 gap-1">
+              <p className={`text-xs font-bold mt-2 ${p}`}>BIENVENIDO</p>
+              <p className={`text-[9px] ${s}`}>INGRESE MONTO PARA INICIAR</p>
+              {queue.length > 0 && (
+                <p className={`text-[9px] font-bold mt-1 ${p} animate-pulse`}>[⬆ {queue.length} PENDIENTE{queue.length > 1 ? "S" : ""}]</p>
+              )}
+              {idleNotice && <p className={`text-[9px] font-bold ${p}`}>{idleNotice}</p>}
+            </div>
+            <p className={`text-[8px] ${s}`}>F = MENU SISTEMA</p>
           </div>
         );
       case "MONTO":
@@ -1674,7 +1686,7 @@ export default function App() {
       )}
 
       {/* Espejo en vivo del POS físico */}
-      {posMirror && <PosLivePanel serial={config.serial} />}
+      {posMirror && <PosLivePanel serial={config.serial} modelLabel={MODEL_STYLES[config.model].label} networkStatus={networkStatus} brightness={config.brightness} />}
     </div>
   );
 }
@@ -1997,7 +2009,8 @@ function LedgerView({
 // ─── Espejo en vivo del POS físico ───────────────────────────────────────────
 // La imagen la sirve /api/pos/screen.png (plugin posMirrorPlugin en vite.config.ts),
 // que ejecuta `adb exec-out screencap -p` en cada request.
-function PosLivePanel({ serial }: { serial: string }) {
+// El panel refleja la config activa: modelo, serie y estado PosLink de la red.
+function PosLivePanel({ serial, modelLabel, networkStatus, brightness }: { serial: string; modelLabel: string; networkStatus: NetworkStatus; brightness: number }) {
   const [tick, setTick] = useState(0);
   const [online, setOnline] = useState(true);
 
@@ -2006,24 +2019,30 @@ function PosLivePanel({ serial }: { serial: string }) {
     return () => clearInterval(iv);
   }, []);
 
+  const net = NETWORK_STATUS_STYLE[networkStatus];
+
   return (
     <div className="fixed bottom-4 right-4 z-50 w-[300px] rounded-xl border border-gray-300 bg-white shadow-2xl overflow-hidden">
       <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-gray-200 bg-gray-50">
-        <p className="text-[10px] font-bold tracking-wider text-gray-600">POS FÍSICO · {serial}</p>
-        <span className={`w-1.5 h-1.5 rounded-full ${online ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
+        <p className="text-[10px] font-bold tracking-wider text-gray-600">{modelLabel} · {serial}</p>
+        <span className={`w-1.5 h-1.5 rounded-full ${!online ? "bg-red-500" : net.dot} ${online && networkStatus === "CONNECTED" ? "animate-pulse" : ""}`} />
       </div>
+      {networkStatus === "TERMINAL_UNCONFIGURED" && online && (
+        <p className="px-2.5 py-1 text-[8px] font-bold text-red-500 bg-red-50 border-b border-red-100">SIN VÍNCULO POSLINK — SOLO STORE &amp; FORWARD</p>
+      )}
       {online ? (
         <img
           src={`/api/pos/screen.png?t=${tick}`}
           alt="Pantalla del POS físico"
           className="w-full max-h-[560px] object-contain bg-black"
+          style={{ filter: `brightness(${0.4 + (brightness / 100) * 0.6})` }}
           onLoad={() => setOnline(true)}
           onError={() => setOnline(false)}
         />
       ) : (
         <div className="px-3 py-5 text-center">
           <p className="text-[10px] font-semibold text-gray-600">POS no detectado</p>
-          <p className="text-[9px] text-gray-400 mt-0.5">conecta el USB-C y acepta el aviso RSA</p>
+          <p className="text-[9px] text-gray-400 mt-0.5">conecta el USB-C o corre adb connect &lt;IP&gt;:5555</p>
           <button
             onClick={() => { setOnline(true); setTick((t) => t + 1); }}
             className="mt-2 rounded border border-gray-300 px-2 py-0.5 text-[9px] font-semibold text-gray-500 hover:bg-gray-100"
@@ -2032,7 +2051,7 @@ function PosLivePanel({ serial }: { serial: string }) {
           </button>
         </div>
       )}
-      <p className="px-2.5 py-1 text-[8px] text-gray-400">espejo adb · actualiza cada 1.5 s</p>
+      <p className="px-2.5 py-1 text-[8px] text-gray-400">espejo adb · actualiza cada 1.5 s · red: <span className={`font-bold ${online ? net.text : "text-red-400"}`}>{online ? net.label : "LINK DOWN"}</span></p>
     </div>
   );
 }
