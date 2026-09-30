@@ -4,11 +4,30 @@ import { defineConfig, type Plugin } from 'vite'
 import { spawn } from 'node:child_process'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
-// Espejo en vivo del POS físico: sirve el screencap de adb como PNG bajo /api/pos/screen.png
+// Ejecuta un comando adb y resuelve con su stdout completo
+function run(args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const p = spawn('adb', args)
+    let out = ''
+    p.stdout.on('data', (d) => { out += d })
+    p.on('error', reject)
+    p.on('exit', (code) => (code === 0 ? resolve(out) : reject(new Error(`adb ${args.join(' ')} → exit ${code}`))))
+  })
+}
+
+// Espejo en vivo del POS físico: sirve el screencap de adb como PNG bajo /api/pos/screen.png.
+// Antes de capturar despierta el equipo si está dormido (screencap sobre pantalla apagada = negro).
 function posMirrorPlugin(): Plugin {
-  const handler = (_req: IncomingMessage, res: ServerResponse) => {
+  const handler = async (_req: IncomingMessage, res: ServerResponse) => {
     res.setHeader('Content-Type', 'image/png')
     res.setHeader('Cache-Control', 'no-store')
+    try {
+      const power = await run(['shell', 'dumpsys', 'power'])
+      if (!/mWakefulness=Awake/.test(power)) {
+        await run(['shell', 'input', 'keyevent', 'KEYCODE_WAKEUP'])
+        await new Promise((r) => setTimeout(r, 300))
+      }
+    } catch { /* sin wake seguimos: mejor capturar negro que no servir nada */ }
     const adb = spawn('adb', ['exec-out', 'screencap', '-p'])
     adb.stdout.pipe(res)
     adb.on('error', () => {
@@ -19,13 +38,38 @@ function posMirrorPlugin(): Plugin {
       if (code !== 0 && !res.writableEnded) res.end()
     })
   }
+
+  // Aplica el brillo configurado en el POS físico (settings nativo, 0-255).
+  // Solo escribe cuando el valor cambia — no spam de settings put en cada tick.
+  let lastBrightness = -1
+  const brightnessHandler = (req: IncomingMessage, res: ServerResponse) => {
+    const url = new URL(req.url ?? '', 'http://localhost')
+    const b = Math.min(100, Math.max(0, Math.round(Number(url.searchParams.get('b') ?? '80'))))
+    res.setHeader('Content-Type', 'application/json')
+    if (b === lastBrightness) {
+      res.end(JSON.stringify({ ok: true, applied: false, brightness: b }))
+      return
+    }
+    run(['shell', 'settings', 'put', 'system', 'screen_brightness', String(Math.round((b / 100) * 255))])
+      .then(() => {
+        lastBrightness = b
+        res.end(JSON.stringify({ ok: true, applied: true, brightness: b }))
+      })
+      .catch(() => {
+        res.statusCode = 502
+        res.end(JSON.stringify({ ok: false, applied: false, brightness: b }))
+      })
+  }
+
   return {
     name: 'pos-mirror',
     configureServer(server) {
       server.middlewares.use('/api/pos/screen.png', handler)
+      server.middlewares.use('/api/pos/brightness', brightnessHandler)
     },
     configurePreviewServer(server) {
       server.middlewares.use('/api/pos/screen.png', handler)
+      server.middlewares.use('/api/pos/brightness', brightnessHandler)
     },
   }
 }

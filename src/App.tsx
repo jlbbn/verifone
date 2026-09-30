@@ -2019,6 +2019,12 @@ function PosLivePanel({ serial, modelLabel, networkStatus, brightness }: { seria
     return () => clearInterval(iv);
   }, []);
 
+  // Aplica el brillo configurado al POS físico (settings nativo vía adb).
+  // Solo escribe cuando cambia el valor; silencioso si el equipo no responde.
+  useEffect(() => {
+    fetch(`/api/pos/brightness?b=${brightness}`).catch(() => { /* POS apagado/desconectado */ });
+  }, [brightness]);
+
   const net = NETWORK_STATUS_STYLE[networkStatus];
 
   return (
